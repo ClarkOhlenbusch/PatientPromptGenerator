@@ -77,7 +77,14 @@ export class MemStorage implements IStorage {
   // Patient Prompt methods
   async createPatientPrompt(insertPrompt: InsertPatientPrompt): Promise<PatientPrompt> {
     const id = this.currentPromptId++;
-    const prompt: PatientPrompt = { ...insertPrompt, id };
+    
+    // Ensure rawData is not undefined to satisfy PatientPrompt type
+    const prompt: PatientPrompt = { 
+      ...insertPrompt, 
+      id,
+      rawData: insertPrompt.rawData ?? null
+    };
+    
     this.patientPrompts.set(id, prompt);
     return prompt;
   }
