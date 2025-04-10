@@ -33,50 +33,21 @@ export default function Home() {
       return await response.json() as FileUploadResponse;
     },
     onSuccess: (data) => {
-      // Update processing steps
+      // Complete all steps at once when we receive a response - the API is actually doing all steps
       setProcessingSteps((prev) => {
-        const newSteps = [...prev];
-        newSteps[0].status = 'completed';
-        newSteps[1].status = 'processing';
-        return newSteps;
+        return prev.map(step => ({ ...step, status: 'completed' }));
       });
 
-      // Simulate processing time for extracting data
+      // Add short delay before redirect to show all steps completed
       setTimeout(() => {
-        setProcessingSteps((prev) => {
-          const newSteps = [...prev];
-          newSteps[1].status = 'completed';
-          newSteps[2].status = 'processing';
-          return newSteps;
+        // Redirect to results page
+        setIsProcessing(false);
+        setLocation(`/patient-prompts/${data.batchId}`);
+        toast({
+          title: "Success",
+          description: `Processed ${data.message} - View your patient prompts now!`,
         });
-
-        // Simulate processing time for generating prompts
-        setTimeout(() => {
-          setProcessingSteps((prev) => {
-            const newSteps = [...prev];
-            newSteps[2].status = 'completed';
-            newSteps[3].status = 'processing';
-            return newSteps;
-          });
-
-          // Simulate preparing results
-          setTimeout(() => {
-            setProcessingSteps((prev) => {
-              const newSteps = [...prev];
-              newSteps[3].status = 'completed';
-              return newSteps;
-            });
-
-            // Redirect to results page
-            setIsProcessing(false);
-            setLocation(`/patient-prompts/${data.batchId}`);
-            toast({
-              title: "Success",
-              description: "Patient prompts generated successfully!",
-            });
-          }, 1000);
-        }, 1500);
-      }, 1000);
+      }, 500);
     },
     onError: (error) => {
       setIsProcessing(false);

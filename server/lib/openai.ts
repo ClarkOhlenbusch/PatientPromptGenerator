@@ -11,13 +11,24 @@ interface PatientData {
   [key: string]: any;
 }
 
+// Use a cache to store generated prompts by condition type
+const promptCache = new Map<string, string>();
+
 export async function generatePrompt(patient: PatientData): Promise<string> {
   try {
     console.log(`Generating prompt for patient: ${patient.patientId}, ${patient.name}, age: ${patient.age}, condition: ${patient.condition}`);
     
+    // Check if we have a cached prompt for this condition type to speed things up
+    const cacheKey = `${patient.condition}`;
+    if (promptCache.has(cacheKey)) {
+      const cachedPrompt = promptCache.get(cacheKey);
+      // Personalize the cached prompt with patient name
+      return cachedPrompt!.replace(/\{name\}/g, patient.name).replace(/\{age\}/g, patient.age.toString());
+    }
+    
     // Skip OpenAI call if API key is not set
     if (!process.env.OPENAI_API_KEY) {
-      console.warn("OPENAI_API_KEY not set, returning mock response");
+      console.warn("OPENAI_API_KEY not set, returning fallback response");
       return generateFallbackPrompt(patient);
     }
     
@@ -27,8 +38,9 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
       .filter(([key]) => !['id', 'patientId', 'rawData'].includes(key))
       .map(([key, value]) => `${key}: ${value}`).join('\n');
 
+    // Use a fast response setting to speed up generation
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o", // Using the latest model
       messages: [
         {
           role: "system",
@@ -42,18 +54,26 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
           3. Lifestyle adjustments
           4. Medication adherence if applicable
           5. Follow-up and monitoring
-          Keep the tone warm and supportive, but professional. Make the prompt 2-3 paragraphs long.`
+          Keep the tone warm and supportive, but professional. Make the prompt 2-3 paragraphs long.
+          IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age,
+          so we can customize the prompt for different patients with similar conditions.`
         },
         {
           role: "user",
-          content: `Generate a personalized care prompt for this patient:\n${patientInfo}`
+          content: `Generate a personalized care prompt for a patient with this condition: "${patient.condition}". Use {name} as placeholder for patient name and {age} for age.`
         }
       ],
-      max_tokens: 500,
-      temperature: 0.7,
+      max_tokens: 400, // Reduced token count for faster response
+      temperature: 0.5, // Lower temperature for more predictable responses
     });
 
-    return response.choices[0].message.content || generateFallbackPrompt(patient);
+    const prompt = response.choices[0].message.content || generateFallbackPrompt(patient);
+    
+    // Store the templated prompt in the cache
+    promptCache.set(cacheKey, prompt);
+    
+    // Return a personalized version
+    return prompt.replace(/\{name\}/g, patient.name).replace(/\{age\}/g, patient.age.toString());
   } catch (error) {
     console.error("Error generating prompt with OpenAI:", error);
     return generateFallbackPrompt(patient);
