@@ -1,0 +1,83 @@
+                                            [ START: Website Entry ]
+                                                     │
+                                                     ▼
+                                      [ User Interface: Homepage ]
+                                                     │
+                                        ┌────────────┴─────────────┐
+                                        ▼                          ▼
+                           [ Option 1: Upload Excel ]   [ Option 2: View Previous Results ]
+                                        │
+                                        ▼
+                          [ File Upload Component ]
+                                        │
+                             ┌──────────┴───────────┐
+                             ▼                      ▼
+                [ Validate File Type/Size ]   [ If invalid, show error ]
+                             │
+                [ If valid, pass file to Back End ]
+                             │
+                             ▼
+          [ Back End: Excel File Parsing and Data Ingestion ]
+                             │
+            ┌────────────────┴─────────────────┐
+            ▼                                  ▼
+ [ Parse Excel using library (e.g., NodeJS-Papas, Python Pandas) ]
+            │
+            ▼
+ [ Data Extraction and Mapping: Identify Variables ]
+            │
+            ▼
+ [ Data Validation and Preprocessing ]
+            │
+            ▼
+[ Decision Node: Identify Key Health Variables ]
+            │
+            ├──► [Condition: Patient Overweight]
+            │         │
+            │         ▼
+            │    [ Evaluate Severity: BMI/Other metrics ]
+            │         │
+            │         ▼
+            │   [ Prepare GPT prompt segment: "Patient overweight.
+            │     Suggest gentle lifestyle changes in a
+            │     comprehensive manner" ]
+            │
+            ├──► [Condition: High Blood Pressure] 
+            │         │
+            │         ▼
+            │    [ Prepare GPT prompt segment: "Patient with high BP.
+            │       Provide evidence-based advice for management" ]
+            │
+            ├──► [Condition: Abnormal Lab Results ]
+            │         │
+            │         ▼
+            │    [ Prepare GPT prompt segment based on specific anomalies ]
+            │
+            └──► [ Condition: Other Relevant Variables ]
+                      │
+                      ▼
+             [ Map other variables to corresponding advice prompts ]
+                             │
+                             ▼
+             [ Construct Unified GPT API Query ]
+                             │
+                             ▼
+             [ API Integration: Call OpenAI GPT API ]
+                             │
+                             ▼
+         [ Receive and Process GPT Response for Each Condition ]
+                             │
+                             ▼
+[ Collate results into a consolidated, user-friendly summary ]
+                             │
+                             ▼
+          [ Back End sends response to Front End ]
+                             │
+                             ▼
+           [ Front End: Display Recommendations ]
+                             │
+                             ▼
+            [ Option: Save/Email the Report ]
+                             │
+                             ▼
+                         [ END: Response Displayed ]
