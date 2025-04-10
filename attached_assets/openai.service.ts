@@ -12,7 +12,7 @@ import { AlertifyService } from "./alertify.service";
 })
 export class OpenaiService {
   configuration = new Configuration({
-    apiKey: "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",
+    apiKey: process.env.OPENAI_API_KEY || "",
   });
   openai = new OpenAIApi(this.configuration);
   private chatCompletion: any;
