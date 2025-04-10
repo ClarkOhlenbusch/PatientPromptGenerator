@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Upload Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>File Upload Test</h1>
+  
+  <div class="form-group">
+    <form id="uploadForm">
+      <label for="file">Select Excel File:</label>
+      <input type="file" id="file" name="file" accept=".xlsx">
+      
+      <button type="submit">Upload</button>
+    </form>
+  </div>
+  
+  <div id="result"></div>
+  
+  <script>
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const fileInput = document.getElementById('file');
+      const resultDiv = document.getElementById('result');
+      
+      if (!fileInput.files.length) {
+        resultDiv.textContent = 'Please select a file first';
+        resultDiv.style.display = 'block';
+        return;
+      }
+      
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      
+      // Log what we're sending
+      console.log('Uploading file:', fileInput.files[0].name);
+      
+      try {
+        // First try the test endpoint
+        resultDiv.textContent = 'Uploading to test endpoint...';
+        resultDiv.style.display = 'block';
+        
+        const testResponse = await fetch('/api/test-upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const testResult = await testResponse.json();
+        resultDiv.textContent = 'Test result: ' + JSON.stringify(testResult, null, 2);
+        
+        // If test is successful, try the actual endpoint
+        resultDiv.textContent += '\n\nUploading to main endpoint...';
+        
+        const mainResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const mainResult = await mainResponse.json();
+        resultDiv.textContent += '\nMain result: ' + JSON.stringify(mainResult, null, 2);
+        
+      } catch (error) {
+        resultDiv.textContent = 'Error: ' + error.message;
+      }
+    });
+  </script>
+</body>
+</html>

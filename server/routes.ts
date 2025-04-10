@@ -24,6 +24,11 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Test route for direct file upload testing
+  app.get("/test-upload", (req, res) => {
+    res.sendFile("test-upload.html", { root: "public" });
+  });
+  
   // API endpoint for file upload
   // Add a debug route to test file upload
   app.post("/api/test-upload", upload.single("file"), (req, res) => {
