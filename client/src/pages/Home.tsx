@@ -23,6 +23,12 @@ export default function Home() {
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      // Log the form data for debugging
+      console.log("Uploading form data", { 
+        hasFile: formData.has('file'),
+        fileName: formData.get('file') instanceof File ? (formData.get('file') as File).name : 'No file'
+      });
+      
       const response = await apiRequest('POST', '/api/upload', null, { formData });
       return await response.json() as FileUploadResponse;
     },
