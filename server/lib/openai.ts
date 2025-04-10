@@ -13,11 +13,15 @@ interface PatientData {
 
 export async function generatePrompt(patient: PatientData): Promise<string> {
   try {
+    console.log(`Generating prompt for patient: ${patient.patientId}, ${patient.name}, age: ${patient.age}, condition: ${patient.condition}`);
+    
     // Skip OpenAI call if API key is not set
     if (!process.env.OPENAI_API_KEY) {
       console.warn("OPENAI_API_KEY not set, returning mock response");
       return generateFallbackPrompt(patient);
     }
+    
+    console.log("OPENAI_API_KEY is set, proceeding with OpenAI call");
 
     const patientInfo = Object.entries(patient)
       .filter(([key]) => !['id', 'patientId', 'rawData'].includes(key))

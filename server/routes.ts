@@ -53,6 +53,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       const batchId = nanoid();
       const timestamp = new Date().toISOString();
+      console.log("Processing file:", file.originalname, "size:", file.size);
 
       // Create a batch record
       await storage.createPatientBatch({
@@ -60,40 +61,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName: file.originalname,
         createdAt: timestamp,
       });
+      console.log("Created batch record with ID:", batchId);
 
-      // Process the Excel file and extract patient data
-      const patientData = await processExcelFile(file.buffer);
+      try {
+        // Process the Excel file and extract patient data
+        console.log("Starting Excel processing...");
+        const patientData = await processExcelFile(file.buffer);
+        console.log("Excel processing complete. Extracted patients:", patientData.length);
 
-      // Generate prompts for each patient and save to database
-      for (const patient of patientData) {
-        try {
-          const prompt = await generatePrompt(patient);
-          
-          await storage.createPatientPrompt({
-            batchId,
-            patientId: patient.patientId || `P${nanoid(6)}`,
-            name: patient.name,
-            age: patient.age,
-            condition: patient.condition,
-            prompt,
-            rawData: patient,
-          });
-        } catch (err) {
-          console.error(`Error generating prompt for patient ${patient.patientId}:`, err);
-          // Continue with other patients even if one fails
+        // Generate prompts for each patient and save to database
+        for (const patient of patientData) {
+          try {
+            const prompt = await generatePrompt(patient);
+            
+            await storage.createPatientPrompt({
+              batchId,
+              patientId: patient.patientId || `P${nanoid(6)}`,
+              name: patient.name,
+              age: patient.age,
+              condition: patient.condition,
+              prompt,
+              rawData: patient,
+            });
+          } catch (err) {
+            console.error(`Error generating prompt for patient ${patient.patientId}:`, err);
+            // Continue with other patients even if one fails
+          }
         }
-      }
 
-      res.status(200).json({
-        success: true,
-        batchId,
-        message: `Processed ${patientData.length} patients`,
-      });
+        res.status(200).json({
+          success: true,
+          batchId,
+          message: `Processed ${patientData.length} patients`,
+        });
+      } catch (err) {
+        console.error("Error in Excel processing:", err);
+        throw err; // Re-throw to be caught by the outer catch
+      }
     } catch (err) {
       console.error("Error processing upload:", err);
       res.status(500).json({
         success: false,
-        message: `Error processing file: ${err.message}`,
+        message: `Error processing file: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });
@@ -111,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(prompts);
     } catch (err) {
       console.error("Error fetching prompts:", err);
-      res.status(500).json({ message: `Error fetching prompts: ${err.message}` });
+      res.status(500).json({ message: `Error fetching prompts: ${err instanceof Error ? err.message : String(err)}` });
     }
   });
 
@@ -133,14 +142,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         condition: patientPrompt.condition
       };
       
-      const newPrompt = await generatePrompt(rawData);
+      const newPrompt = await generatePrompt(rawData as any); // Type assertion to avoid TypeScript error
       
       await storage.updatePatientPrompt(patientPrompt.id, { prompt: newPrompt });
       
       res.status(200).json({ message: "Prompt regenerated successfully" });
     } catch (err) {
       console.error("Error regenerating prompt:", err);
-      res.status(500).json({ message: `Error regenerating prompt: ${err.message}` });
+      res.status(500).json({ message: `Error regenerating prompt: ${err instanceof Error ? err.message : String(err)}` });
     }
   });
 
@@ -164,14 +173,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           condition: prompt.condition
         };
         
-        const newPrompt = await generatePrompt(rawData);
+        const newPrompt = await generatePrompt(rawData as any); // Type assertion to avoid TypeScript error
         await storage.updatePatientPrompt(prompt.id, { prompt: newPrompt });
       }));
       
       res.status(200).json({ message: "All prompts regenerated successfully" });
     } catch (err) {
       console.error("Error regenerating prompts:", err);
-      res.status(500).json({ message: `Error regenerating prompts: ${err.message}` });
+      res.status(500).json({ message: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}` });
     }
   });
 
@@ -212,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).send(csvContent);
     } catch (err) {
       console.error("Error exporting prompts:", err);
-      res.status(500).json({ message: `Error exporting prompts: ${err.message}` });
+      res.status(500).json({ message: `Error exporting prompts: ${err instanceof Error ? err.message : String(err)}` });
     }
   });
 
