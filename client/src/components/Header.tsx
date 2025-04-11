@@ -11,6 +11,11 @@ export default function Header() {
               src="/images/calicocare_logo.png" 
               alt="Calico Care Logo" 
               className="h-10 w-auto" 
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.onerror = null;
+                target.src = "https://storage.googleapis.com/replit/images/1744336824064_3ae04f58b02e3d41682f22b39bc35f51.png";
+              }}
             />
             <h1 className="ml-3 text-xl font-bold text-gray-800">Patient Prompt Generator</h1>
           </div>
