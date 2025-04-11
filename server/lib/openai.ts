@@ -16,8 +16,6 @@ const promptCache = new Map<string, string>();
 
 export async function generatePrompt(patient: PatientData): Promise<string> {
   try {
-    console.log(`Generating prompt for patient: ${patient.patientId}, ${patient.name}, age: ${patient.age}, condition: ${patient.condition}`);
-    
     // Handle the case where we have aggregated issues from multiple alerts
     const hasAggregatedIssues = patient.issues && patient.issues.length > 0;
     
@@ -34,11 +32,8 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
     
     // Skip OpenAI call if API key is not set
     if (!process.env.OPENAI_API_KEY) {
-      console.warn("OPENAI_API_KEY not set, returning fallback response");
       return generateFallbackPrompt(patient);
     }
-    
-    console.log("OPENAI_API_KEY is set, proceeding with OpenAI call");
 
     // Prepare content for the prompt
     let userContent = '';
@@ -64,7 +59,7 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
       IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age.`;
       
       // Format all issues as a bulleted list
-      const issuesList = patient.issues.map(issue => `• ${issue}`).join('\n');
+      const issuesList = patient.issues.map((issue: string) => `• ${issue}`).join('\n');
       
       userContent = `Generate a personalized care prompt for a patient with the following issues:
       
@@ -116,7 +111,7 @@ Use {name} as placeholder for patient name and {age} for age. Create ONE compreh
     
     // Return a personalized version
     return prompt.replace(/\{name\}/g, patient.name).replace(/\{age\}/g, patient.age.toString());
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error generating prompt with OpenAI:", error);
     return generateFallbackPrompt(patient);
   }

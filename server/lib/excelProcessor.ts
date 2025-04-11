@@ -63,8 +63,6 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
     if (nameCol === -1) nameCol = patientIdCol + 1; // Assume column after ID is name
     if (ageCol === -1) ageCol = nameCol + 1; // Assume column after name is age
     if (conditionCol === -1) conditionCol = ageCol + 1; // Assume column after age is condition/variable
-    
-    console.log(`Column mappings - PatientID: ${patientIdCol}, Name: ${nameCol}, Age: ${ageCol}, Condition: ${conditionCol}, IsAlert: ${isAlertCol}`);
 
     // S2: Prepare to iterate over rows
     const patientDataMap = new Map<string, AggregatedPatientData>();
@@ -145,8 +143,6 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
 
       // S4/S5: Process or skip based on alert status
       if (isAlert) {
-        console.log(`Alert found for patient ${rowData.patientId}, condition: ${rowData.condition}`);
-        
         // Generate issue description
         let issue = `Issue with ${rowData.condition}`;
         if (rowData.variables) {
@@ -186,16 +182,15 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
           patientData.rawData.push(rowData);
         }
       } else {
-        // S5: Skip non-alert rows
-        console.log(`Skipping non-alert row for patient ${rowData.patientId}`);
+        // S5: Skip non-alert rows - no action needed
       }
     });
 
     // S6: Aggregate data by unique PatientID
-    console.log("State S6: Aggregating data by unique PatientID");
     const aggregatedPatients: PatientData[] = [];
     
-    for (const [patientId, patientData] of patientDataMap.entries()) {
+    // Convert Map entries to array for safer iteration
+    Array.from(patientDataMap.entries()).forEach(([_, patientData]) => {
       // Create a consolidated patient record with all issues
       const aggregatedPatient: PatientData = {
         patientId: patientData.patientId,
@@ -206,7 +201,7 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
         // Store all issues
         issues: patientData.issues,
         // Store raw variables for reference
-        variables: patientData.variables.reduce((acc, vars) => ({ ...acc, ...vars }), {}),
+        variables: patientData.variables.reduce((acc: Record<string, any>, vars: Record<string, any>) => ({ ...acc, ...vars }), {}),
         // Store all raw data for reference
         rawData: patientData.rawData,
         // Combined alert reasons
@@ -214,15 +209,12 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
       };
       
       aggregatedPatients.push(aggregatedPatient);
-    }
+    });
 
-    // S7: Final output preparation - decide what to return based on needs
-    console.log("State S7-S8: Generating final output");
-    console.log(`Processed ${allPatientsData.length} total rows, found ${aggregatedPatients.length} patients with alerts`);
+    // S7-S8: Final output preparation
     
-    // For testing purposes, if no patients have alerts, return a limited set of all patients
+    // For testing purposes, if no patients have alerts, return a limited set
     if (aggregatedPatients.length === 0) {
-      console.log("No patients with alerts found, returning limited sample data for testing");
       // Group by patientId and take the first 20 unique patients
       const uniquePatients = new Map<string, PatientData>();
       for (const patient of allPatientsData) {
@@ -235,8 +227,9 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
     }
     
     return aggregatedPatients;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error processing Excel file:', error);
-    throw new Error(`Failed to process Excel file: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to process Excel file: ${errorMessage}`);
   }
 }
