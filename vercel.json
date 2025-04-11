@@ -5,11 +5,12 @@
   "installCommand": "npm install",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/$1" }
+    { "source": "/(.*)", "destination": "/_static" }
   ],
   "functions": {
     "api/**/*": {
-      "memory": 1024
+      "memory": 1024,
+      "maxDuration": 60
     }
   },
   "env": {
