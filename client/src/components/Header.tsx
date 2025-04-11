@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import CalicoCareLogoSVG from "@/assets/calicocare_logo";
 
 export default function Header() {
   return (
@@ -9,10 +8,9 @@ export default function Header() {
         <Link href="/">
           <div className="flex items-center cursor-pointer">
             <div className="flex items-center">
-              <CalicoCareLogoSVG className="h-12 w-auto" />
-              <div className="flex flex-col ml-1">
-                <span className="text-[#F5A443] font-bold text-lg leading-tight">calico</span>
-                <span className="text-[#3498DB] italic text-lg leading-tight">care</span>
+              <div className="flex items-baseline">
+                <span className="text-[#F5A443] font-bold text-2xl">calico</span>
+                <span className="text-[#3498DB] font-medium italic text-2xl">care</span>
               </div>
             </div>
             <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">Patient Prompt Generator</h1>
