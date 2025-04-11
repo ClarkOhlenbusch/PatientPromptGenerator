@@ -1,4 +1,3 @@
-import { SiOpenai } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
@@ -8,8 +7,12 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link href="/">
           <div className="flex items-center cursor-pointer">
-            <SiOpenai className="h-8 w-8 text-primary" />
-            <h1 className="ml-2 text-xl font-bold text-gray-800">Patient Prompt Generator</h1>
+            <img 
+              src="/images/calicocare_logo.png" 
+              alt="Calico Care Logo" 
+              className="h-10 w-auto" 
+            />
+            <h1 className="ml-3 text-xl font-bold text-gray-800">Patient Prompt Generator</h1>
           </div>
         </Link>
         
