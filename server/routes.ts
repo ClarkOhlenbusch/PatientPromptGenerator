@@ -28,7 +28,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/upload", upload.single("file"), async (req, res) => {
     try {
-      console.log("Upload endpoint called, file:", req.file);
       if (!req.file) {
         return res.status(400).json({ success: false, message: "No file uploaded" });
       }
@@ -36,7 +35,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       const batchId = nanoid();
       const timestamp = new Date().toISOString();
-      console.log("Processing file:", file.originalname, "size:", file.size);
 
       // Create a batch record
       await storage.createPatientBatch({
@@ -44,13 +42,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName: file.originalname,
         createdAt: timestamp,
       });
-      console.log("Created batch record with ID:", batchId);
 
       try {
         // Process the Excel file and extract patient data
-        console.log("Starting Excel processing...");
         const patientData = await processExcelFile(file.buffer);
-        console.log("Excel processing complete. Extracted patients:", patientData.length);
 
         // Limit the number of records to process to improve performance
         // Take only unique patient+condition combinations to reduce load
@@ -65,8 +60,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (uniquePatients.size >= MAX_PATIENTS) break;
           }
         }
-        
-        console.log(`Processing ${uniquePatients.size} unique patient-condition combinations out of ${patientData.length} total records`);
         
         // Generate prompts for each unique patient-condition combination
         for (const patient of Array.from(uniquePatients.values())) {
