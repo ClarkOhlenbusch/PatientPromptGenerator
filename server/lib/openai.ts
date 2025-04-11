@@ -18,8 +18,14 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
   try {
     console.log(`Generating prompt for patient: ${patient.patientId}, ${patient.name}, age: ${patient.age}, condition: ${patient.condition}`);
     
-    // Check if we have a cached prompt for this condition type to speed things up
-    const cacheKey = `${patient.condition}`;
+    // Handle the case where we have aggregated issues from multiple alerts
+    const hasAggregatedIssues = patient.issues && patient.issues.length > 0;
+    
+    // Create a unique cache key based on either the combined conditions or individual condition
+    const cacheKey = hasAggregatedIssues ? 
+      `aggregated_${patient.patientId}_${patient.issues?.length}` : 
+      `${patient.condition}`;
+    
     if (promptCache.has(cacheKey)) {
       const cachedPrompt = promptCache.get(cacheKey);
       // Personalize the cached prompt with patient name
@@ -34,9 +40,57 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
     
     console.log("OPENAI_API_KEY is set, proceeding with OpenAI call");
 
-    const patientInfo = Object.entries(patient)
-      .filter(([key]) => !['id', 'patientId', 'rawData'].includes(key))
-      .map(([key, value]) => `${key}: ${value}`).join('\n');
+    // Prepare content for the prompt
+    let userContent = '';
+    let systemContent = '';
+    
+    if (hasAggregatedIssues) {
+      // For aggregated patient data with multiple issues
+      console.log(`Processing aggregated data with ${patient.issues.length} issues for patient ${patient.patientId}`);
+      
+      systemContent = `You are a healthcare assistant that creates personalized patient care prompts. 
+      These prompts will be used to guide patients with multiple health issues or conditions that need attention.
+      Generate a comprehensive, personalized prompt that addresses ALL of the patient's specific conditions and issues together.
+      
+      The prompt should:
+      1. Acknowledge all of the patient's issues in a cohesive way
+      2. Provide actionable guidance for managing multiple conditions
+      3. Prioritize the most critical issues while addressing all concerns
+      4. Include age-appropriate recommendations
+      5. Suggest lifestyle adjustments that address multiple conditions at once
+      6. Recommend follow-up and monitoring for all conditions
+      
+      Keep the tone warm, supportive, and professional. Make the prompt 2-3 paragraphs long.
+      IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age.`;
+      
+      // Format all issues as a bulleted list
+      const issuesList = patient.issues.map(issue => `• ${issue}`).join('\n');
+      
+      userContent = `Generate a personalized care prompt for a patient with the following issues:
+      
+${issuesList}
+
+Patient has multiple conditions requiring attention: ${patient.condition}
+
+Use {name} as placeholder for patient name and {age} for age. Create ONE comprehensive prompt that addresses ALL issues together, not separate advice for each issue.`;
+    } else {
+      // For single condition patients (backward compatibility)
+      systemContent = `You are a healthcare assistant that creates personalized patient care prompts. 
+      These prompts will be used to guide patients with their specific medical conditions. 
+      Generate a detailed, personalized prompt that addresses the patient's specific condition, age, and any other relevant factors. 
+      The prompt should be informative, supportive, and provide actionable guidance.
+      Focus on:
+      1. Management of their specific condition
+      2. Age-appropriate recommendations
+      3. Lifestyle adjustments
+      4. Medication adherence if applicable
+      5. Follow-up and monitoring
+      Keep the tone warm and supportive, but professional. Make the prompt 2-3 paragraphs long.
+      IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age,
+      so we can customize the prompt for different patients with similar conditions.`;
+      
+      userContent = `Generate a personalized care prompt for a patient with this condition: "${patient.condition}". Use {name} as placeholder for patient name and {age} for age.`;
+    }
 
     // Use a fast response setting to speed up generation
     const response = await openai.chat.completions.create({
@@ -44,26 +98,14 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
       messages: [
         {
           role: "system",
-          content: `You are a healthcare assistant that creates personalized patient care prompts. 
-          These prompts will be used to guide patients with their specific medical conditions. 
-          Generate a detailed, personalized prompt that addresses the patient's specific condition, age, and any other relevant factors. 
-          The prompt should be informative, supportive, and provide actionable guidance.
-          Focus on:
-          1. Management of their specific condition
-          2. Age-appropriate recommendations
-          3. Lifestyle adjustments
-          4. Medication adherence if applicable
-          5. Follow-up and monitoring
-          Keep the tone warm and supportive, but professional. Make the prompt 2-3 paragraphs long.
-          IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age,
-          so we can customize the prompt for different patients with similar conditions.`
+          content: systemContent
         },
         {
           role: "user",
-          content: `Generate a personalized care prompt for a patient with this condition: "${patient.condition}". Use {name} as placeholder for patient name and {age} for age.`
+          content: userContent
         }
       ],
-      max_tokens: 400, // Reduced token count for faster response
+      max_tokens: 600, // Increased for aggregated issues
       temperature: 0.5, // Lower temperature for more predictable responses
     });
 
