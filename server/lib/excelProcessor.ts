@@ -30,7 +30,7 @@ interface AggregatedPatientData {
  */
 export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
   try {
-    console.log("State S0->S1: Starting Excel file processing");
+    // S0->S1: Start Excel file processing
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
 
@@ -45,8 +45,6 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
     headerRow.eachCell((cell, colNumber) => {
       headers[colNumber - 1] = cell.value?.toString() || `Column${colNumber}`;
     });
-
-    console.log("Extracted headers:", headers);
 
     // Find required column indices
     let patientIdCol = headers.findIndex(h => 
@@ -73,7 +71,6 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
     const allPatientsData: PatientData[] = [];
 
     // Process rows (skip header)
-    console.log("State S2: Iterating over each row");
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // Skip header row
 

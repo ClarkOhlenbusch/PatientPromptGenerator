@@ -24,24 +24,7 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Test route for direct file upload testing
-  app.get("/test-upload", (req, res) => {
-    res.sendFile("test-upload.html", { root: "public" });
-  });
-  
   // API endpoint for file upload
-  // Add a debug route to test file upload
-  app.post("/api/test-upload", upload.single("file"), (req, res) => {
-    console.log("Test upload received request:", {
-      body: req.body,
-      file: req.file,
-      headers: req.headers
-    });
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file uploaded in test" });
-    }
-    return res.status(200).json({ success: true, message: "File received in test", file: req.file.originalname });
-  });
 
   app.post("/api/upload", upload.single("file"), async (req, res) => {
     try {

@@ -117,6 +117,20 @@ This application is configured to be deployed on Replit.
    - Name: `OPENAI_API_KEY`
    - Value: your actual OpenAI API key
 3. Click the "Run" button to start the application
+4. Access the application at: Patient-Prompt-Generator.replit.app
+
+### Accessing the Live Demo
+
+The application is currently deployed and accessible at:
+- [Patient-Prompt-Generator.replit.app](https://Patient-Prompt-Generator.replit.app)
+
+#### Using the Demo
+
+1. Visit the deployed application
+2. Use the "Demo Data with PatientID.xlsx" file (included in the repository) to test the functionality
+3. Upload the file using the drag-and-drop interface
+4. View the generated prompts for each patient
+5. Regenerate prompts as needed or export to CSV
 
 ## Project Structure
 
@@ -158,6 +172,28 @@ The Excel processor follows an automata-style workflow:
 - Caching is implemented for condition-specific prompts to reduce API calls
 - Token length is optimized for faster OpenAI API responses
 - Data is filtered early in the process to focus only on relevant patients
+
+## Future Enhancements
+
+### Alexa Integration
+
+The next phase of this project will integrate with Amazon Alexa to enable voice-based delivery of patient prompts. The planned features include:
+
+1. **Alexa Calling Method Integration**: Automated calls to patients using Alexa's communication system
+2. **Voice Output**: Converting text prompts to natural-sounding voice responses
+3. **Patient Interaction**: Enabling patients to respond to prompts and ask follow-up questions
+4. **Scheduling System**: Setting up regular check-ins with patients based on their condition
+5. **Emergency Escalation**: Detecting urgent situations and escalating to healthcare providers
+
+This integration will make the patient prompts more accessible, especially for elderly patients or those with visual impairments, and provide a more personal touch to healthcare monitoring.
+
+### Database Integration
+
+While the current version uses in-memory storage for simplicity and demonstration purposes, future versions will integrate with PostgreSQL for persistent storage of:
+
+1. Patient records and historical prompt data
+2. Response analytics and effectiveness metrics
+3. Patient feedback and interaction history
 
 ## Contributing
 
