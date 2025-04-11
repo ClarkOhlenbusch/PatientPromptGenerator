@@ -80,7 +80,7 @@ export default function FAQ() {
           </p>
           <div className="mt-4">
             <Link href="/">
-              <a className="text-primary hover:underline">Return to Home</a>
+              <span className="text-primary hover:underline cursor-pointer">Return to Home</span>
             </Link>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import CalicoCareLogoSVG from "@/assets/calicocare_logo";
 
 export default function Header() {
   return (
@@ -7,22 +8,15 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link href="/">
           <div className="flex items-center cursor-pointer">
-            <img 
-              src="/images/calicocare_logo.png" 
-              alt="Calico Care Logo" 
-              className="h-10 w-auto" 
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.onerror = null;
-                target.src = "https://storage.googleapis.com/replit/images/1744336824064_3ae04f58b02e3d41682f22b39bc35f51.png";
-              }}
-            />
+            <CalicoCareLogoSVG className="h-10 w-auto" />
             <h1 className="ml-3 text-xl font-bold text-gray-800">Patient Prompt Generator</h1>
           </div>
         </Link>
         
         <div className="hidden md:flex items-center space-x-4">
-          <a href="#" className="text-gray-600 hover:text-primary text-sm font-medium transition-colors">Documentation</a>
+          <Link href="/faq">
+            <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
+          </Link>
           <a href="#" className="text-gray-600 hover:text-primary text-sm font-medium transition-colors">Support</a>
           <Button>
             Contact Us
