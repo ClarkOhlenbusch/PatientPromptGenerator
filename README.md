@@ -121,8 +121,8 @@ This application is configured to be deployed on Replit.
 ### Accessing the Live Demo
 
 The application is currently deployed and accessible at:
-- [Patient-Prompt-Generator.replit.app](https://Patient-Prompt-Generator.replit.app)
-
+- [[Patient-Prompt-Generator.replit.app](https://Patient-Prompt-Generator.replit.app)
+](https://calicocare-agent-response.replit.app/)
 #### Using the Demo
 
 1. Visit the deployed application
