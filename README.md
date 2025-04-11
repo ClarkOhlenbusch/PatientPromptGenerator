@@ -2,7 +2,6 @@
 
 A web application that transforms patient medical data from Excel files into AI-powered insights through intelligent processing and advanced analytics.
 
-![Calico Care Patient Prompt Generator](https://i.imgur.com/MsrUySM.png)
 
 ## Overview
 
