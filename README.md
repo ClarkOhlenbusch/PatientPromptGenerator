@@ -80,6 +80,9 @@ The Patient Prompt Generator is a specialized tool designed for healthcare profe
 1. On the results page, you can regenerate prompts for specific patients by clicking the "Regenerate" button
 2. To regenerate all prompts, use the "Regenerate All" button
 
+Customizing prompt:
+Find the openai.ts file under the server -> lib. Search for the prompt and make desiered changes.
+
 ### Exporting Data
 
 1. On the results page, click the "Export CSV" button
