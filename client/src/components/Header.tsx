@@ -1,7 +1,25 @@
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { LogOut, User, Loader2 } from "lucide-react";
 
 export default function Header() {
+  const { user, logoutMutation, isLoading } = useAuth();
+  const [location, navigate] = useLocation();
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
+
+  const handleLogin = () => {
+    navigate("/auth");
+  };
+
+  // Don't show the header on auth page
+  if (location === "/auth") {
+    return null;
+  }
+
   return (
     <header className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -21,10 +39,41 @@ export default function Header() {
           <Link href="/faq">
             <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
           </Link>
-          <a href="#" className="text-gray-600 hover:text-primary text-sm font-medium transition-colors">Support</a>
-          <Button>
-            Contact Us
-          </Button>
+          
+          {isLoading ? (
+            <Button disabled variant="outline" size="sm">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </Button>
+          ) : user ? (
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-medium text-gray-700 border rounded-full bg-gray-50 px-3 py-1 flex items-center">
+                <User className="mr-1 h-3 w-3" />
+                {user.username}
+              </div>
+              <Button 
+                onClick={handleLogout} 
+                variant="outline" 
+                size="sm"
+                disabled={logoutMutation.isPending}
+              >
+                {logoutMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="mr-2 h-4 w-4" />
+                )}
+                Logout
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              onClick={handleLogin}
+              variant="outline" 
+              size="sm"
+            >
+              Login
+            </Button>
+          )}
         </div>
         
         <button className="md:hidden text-gray-600 hover:text-gray-900">

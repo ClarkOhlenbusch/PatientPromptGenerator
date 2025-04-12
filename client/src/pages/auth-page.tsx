@@ -1,32 +1,34 @@
-import { useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { Redirect } from "wouter";
+
+// Form validation schema for login and registration
+const authSchema = z.object({
+  username: z.string().min(3, {
+    message: "Username must be at least 3 characters.",
+  }),
+  password: z.string().min(6, {
+    message: "Password must be at least 6 characters.",
+  }),
+});
 
 type AuthCredentials = {
   username: string;
   password: string;
 };
 
-const authSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
 export default function AuthPage() {
-  const [_, navigate] = useLocation();
-  const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  // Get auth context
+  const { user, loginMutation, registerMutation, isLoading } = useAuth();
   
   // Login form
   const loginForm = useForm<AuthCredentials>({
@@ -36,7 +38,7 @@ export default function AuthPage() {
       password: "",
     },
   });
-  
+
   // Register form
   const registerForm = useForm<AuthCredentials>({
     resolver: zodResolver(authSchema),
@@ -45,225 +47,197 @@ export default function AuthPage() {
       password: "",
     },
   });
-  
-  // Login mutation
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: AuthCredentials) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      if (data.success) {
-        toast({
-          title: "Login successful",
-          description: "You are now logged in.",
-        });
-        navigate("/");
-      } else {
-        toast({
-          title: "Login failed",
-          description: data.message || "Invalid username or password",
-          variant: "destructive",
-        });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Register mutation
-  const registerMutation = useMutation({
-    mutationFn: async (credentials: AuthCredentials) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      if (data.success) {
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created and you are now logged in.",
-        });
-        navigate("/");
-      } else {
-        toast({
-          title: "Registration failed",
-          description: data.message || "Username may already exist",
-          variant: "destructive",
-        });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Registration failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Form submission handlers
+
+  // Handle login form submission
   const onLoginSubmit = (data: AuthCredentials) => {
     loginMutation.mutate(data);
   };
-  
+
+  // Handle register form submission
   const onRegisterSubmit = (data: AuthCredentials) => {
     registerMutation.mutate(data);
   };
-  
+
+  // If already logged in, redirect to home page
+  if (user) {
+    return <Redirect to="/" />;
+  }
+
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
-      {/* Authentication Forms */}
-      <div className="w-full md:w-1/2 p-4 md:p-10 flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold">Welcome to Patient Prompt Generator</CardTitle>
-            <CardDescription>
-              Please log in to your account or register to get started.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "register")}>
-              <TabsList className="grid w-full grid-cols-2 mb-8">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
-              </TabsList>
-              
-              {/* Login Form */}
-              <TabsContent value="login">
-                <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-username">Username</Label>
-                    <Input
-                      id="login-username"
-                      type="text"
-                      placeholder="Enter your username"
-                      {...loginForm.register("username")}
-                    />
-                    {loginForm.formState.errors.username && (
-                      <p className="text-red-500 text-sm">{loginForm.formState.errors.username.message}</p>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Password</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="Enter your password"
-                      {...loginForm.register("password")}
-                    />
-                    {loginForm.formState.errors.password && (
-                      <p className="text-red-500 text-sm">{loginForm.formState.errors.password.message}</p>
-                    )}
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-                    {loginMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Logging in...
-                      </>
-                    ) : (
-                      "Login"
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-              
-              {/* Register Form */}
-              <TabsContent value="register">
-                <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="register-username">Username</Label>
-                    <Input
-                      id="register-username"
-                      type="text"
-                      placeholder="Choose a username"
-                      {...registerForm.register("username")}
-                    />
-                    {registerForm.formState.errors.username && (
-                      <p className="text-red-500 text-sm">{registerForm.formState.errors.username.message}</p>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password">Password</Label>
-                    <Input
-                      id="register-password"
-                      type="password"
-                      placeholder="Choose a password"
-                      {...registerForm.register("password")}
-                    />
-                    {registerForm.formState.errors.password && (
-                      <p className="text-red-500 text-sm">{registerForm.formState.errors.password.message}</p>
-                    )}
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
-                    {registerMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating Account...
-                      </>
-                    ) : (
-                      "Create Account"
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Left column - Form */}
+      <div className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
+        <div className="mx-auto w-full max-w-sm lg:w-96">
+          <div className="mb-8">
+            <div className="flex items-center">
+              <div className="flex items-baseline">
+                <span className="text-[#F5A443] font-bold text-3xl">calico</span>
+                <span className="text-[#3498DB] font-medium italic text-3xl">care</span>
+              </div>
+            </div>
+            <h2 className="mt-6 text-2xl font-bold tracking-tight text-gray-900">
+              Welcome to Patient Prompt Generator
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Sign in to your account or create a new one to get started.
+            </p>
+          </div>
+
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="login">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Login</CardTitle>
+                  <CardDescription>
+                    Enter your credentials to access your account.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...loginForm}>
+                    <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                      <FormField
+                        control={loginForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Username" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={loginForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="********" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full"
+                        disabled={loginMutation.isPending}
+                      >
+                        {loginMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Logging in...
+                          </>
+                        ) : (
+                          'Login'
+                        )}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="register">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create an account</CardTitle>
+                  <CardDescription>
+                    Enter your information to create a new account.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...registerForm}>
+                    <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                      <FormField
+                        control={registerForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Username" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={registerForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="********" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full"
+                        disabled={registerMutation.isPending}
+                      >
+                        {registerMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating account...
+                          </>
+                        ) : (
+                          'Create account'
+                        )}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
       
-      {/* Hero Section */}
-      <div className="w-full md:w-1/2 bg-gradient-to-r from-cyan-600 to-blue-800 text-white p-10 flex flex-col justify-center">
-        <div className="max-w-lg mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Generate Patient Prompts with AI</h1>
-          <p className="text-lg mb-8">
-            Transform medical data into personalized care prompts with our advanced AI tools. Streamline your workflow and
-            provide better patient care.
-          </p>
-          
-          <div className="space-y-4">
-            <div className="flex items-start">
-              <div className="bg-white/20 p-2 rounded-full mr-4">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+      {/* Right column - Hero section */}
+      <div className="relative hidden w-0 flex-1 lg:block">
+        <div className="absolute inset-0 h-full w-full bg-gradient-to-br from-[#3498DB] to-[#F5A443] flex flex-col justify-center items-center text-white p-12">
+          <div className="max-w-xl mx-auto text-center">
+            <h1 className="text-4xl font-bold mb-6">Patient Prompt Generator</h1>
+            <p className="text-xl mb-8">
+              Transform your medical data into personalized patient communication with AI-powered prompt generation.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">Upload Excel Data</h3>
+                <p className="opacity-90 text-sm">
+                  Easily import your patient data from Excel files for processing.
+                </p>
               </div>
-              <div>
-                <h3 className="font-semibold text-lg">Excel Data Processing</h3>
-                <p className="opacity-90">Upload and process patient data from Excel files with ease.</p>
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">AI-Powered Analysis</h3>
+                <p className="opacity-90 text-sm">
+                  Our system uses OpenAI to generate customized prompts for each patient.
+                </p>
               </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="bg-white/20 p-2 rounded-full mr-4">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">Secure Processing</h3>
+                <p className="opacity-90 text-sm">
+                  All patient data is processed securely and protected with authentication.
+                </p>
               </div>
-              <div>
-                <h3 className="font-semibold text-lg">AI-Powered Analysis</h3>
-                <p className="opacity-90">Generate customized prompts based on each patient's unique conditions.</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="bg-white/20 p-2 rounded-full mr-4">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">Secure and Private</h3>
-                <p className="opacity-90">Your patient data is kept secure with our authentication system.</p>
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">Export Results</h3>
+                <p className="opacity-90 text-sm">
+                  Download your generated prompts in CSV format for easy integration.
+                </p>
               </div>
             </div>
           </div>
