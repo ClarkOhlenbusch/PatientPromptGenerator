@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
 import { generatePrompt } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
+import { setupAuth } from "./auth";
 
 // Set up multer for file uploads
 const upload = multer({
@@ -24,6 +25,9 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication
+  setupAuth(app);
+  
   // API endpoint for file upload
 
   app.post("/api/upload", upload.single("file"), async (req, res) => {

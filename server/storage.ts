@@ -7,6 +7,7 @@ import {
   type InsertPatientPrompt 
 } from "@shared/schema";
 import session from "express-session";
+import createMemoryStore from "memorystore";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -29,6 +30,8 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
+const MemoryStore = createMemoryStore(session);
+
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private patientBatches: Map<string, PatientBatch>;
@@ -37,6 +40,8 @@ export class MemStorage implements IStorage {
   private currentUserId: number;
   private currentPromptId: number;
   private currentBatchId: number;
+  
+  public sessionStore: session.Store;
 
   constructor() {
     this.users = new Map();
@@ -46,6 +51,11 @@ export class MemStorage implements IStorage {
     this.currentUserId = 1;
     this.currentPromptId = 1;
     this.currentBatchId = 1;
+    
+    // Initialize session store
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    });
   }
 
   // User methods (kept from original)
