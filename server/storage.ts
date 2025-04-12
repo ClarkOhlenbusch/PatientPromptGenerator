@@ -6,6 +6,7 @@ import {
   type PatientPrompt, 
   type InsertPatientPrompt 
 } from "@shared/schema";
+import session from "express-session";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -23,6 +24,9 @@ export interface IStorage {
   getPatientPromptsByBatchId(batchId: string): Promise<PatientPrompt[]>;
   getPatientPromptByIds(batchId: string, patientId: string): Promise<PatientPrompt | undefined>;
   updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt>;
+  
+  // Session store
+  sessionStore: session.Store;
 }
 
 export class MemStorage implements IStorage {
