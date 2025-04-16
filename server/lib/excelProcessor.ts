@@ -342,6 +342,8 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
           patient.issues = [];
           // Add a note so we know this is a healthy patient
           patient.healthStatus = "healthy";
+          // Override the condition to show "Healthy" instead of the original condition
+          patient.condition = "Healthy";
           
           uniquePatients.set(patient.patientId, patient);
           if (uniquePatients.size >= 20) break;

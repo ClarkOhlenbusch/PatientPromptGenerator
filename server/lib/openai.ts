@@ -44,7 +44,7 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
     const hasAggregatedIssues = patient.issues && patient.issues.length > 0;
     
     // Check if the patient has no alerts/issues - positive health status
-    const hasNoIssues = ((!patient.issues || patient.issues.length === 0) && (!patient.isAlert || patient.isAlert === false)) 
+    const hasNoIssues = ((!patient.issues || patient.issues.length === 0) && (patient.isAlert === undefined || patient.isAlert === false)) 
                       || patient.healthStatus === "healthy";
     
     // Create a unique cache key based on health status
@@ -95,7 +95,7 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
     else if (hasAggregatedIssues) {
       // For aggregated patient data with multiple issues
       console.log(
-        `Processing aggregated data with ${patient.issues.length} issues for patient ${patient.patientId}`,
+        `Processing aggregated data with ${patient.issues?.length || 0} issues for patient ${patient.patientId}`,
       );
 
       systemContent = `You are a healthcare assistant that generates personalized patient care prompts using structured input data similar to our Demo Data. Each patient’s name field includes their full name and date of birth (e.g., "John Doe (MM/DD/YYYY)"). Use the Date and Time Stamp to calculate the patient’s age (ignore time of day). There is no separate age column. Your task is to:
@@ -116,9 +116,9 @@ IMPORTANT: Use {name} as a placeholder for the patient's name (without the DOB) 
 `;
 
       // Format all issues as a bulleted list
-      const issuesList = patient.issues
-        .map((issue: string) => `• ${issue}`)
-        .join("\n");
+      const issuesList = patient.issues && patient.issues.length > 0
+        ? patient.issues.map((issue: string) => `• ${issue}`).join("\n")
+        : "• No specific issues found";
 
       userContent = `Generate a personalized care prompt for a patient with the following issues:
       

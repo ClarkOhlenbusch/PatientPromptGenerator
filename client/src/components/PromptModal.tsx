@@ -53,7 +53,11 @@ export default function PromptModal({
               <dt className="text-sm font-medium text-gray-500">Conditions</dt>
               <dd className="mt-1 text-sm text-gray-900">
                 {patient.condition.split(', ').map((condition, index) => (
-                  <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 mr-2 mb-1">
+                  <span key={index} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mr-2 mb-1 ${
+                    condition === "Healthy" 
+                      ? "bg-green-100 text-green-800" 
+                      : "bg-indigo-100 text-indigo-800"
+                  }`}>
                     {condition}
                   </span>
                 ))}
