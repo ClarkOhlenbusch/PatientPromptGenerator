@@ -9,6 +9,7 @@ interface PatientData {
   isAlert?: boolean;
   variables?: { [key: string]: any };
   issues?: string[]; // Array to store all issues for a patient
+  healthStatus?: 'healthy' | 'alert'; // To mark patients explicitly as healthy
   [key: string]: any;
 }
 
@@ -323,16 +324,30 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
 
     // S7-S8: Final output preparation
     
-    // For testing purposes, if no patients have alerts, return a limited set
-    if (aggregatedPatients.length === 0) {
+    // For testing purposes, if no patients have alerts, or we want to include healthy patients
+    if (aggregatedPatients.length === 0 || aggregatedPatients.length < 5) {
       // Group by patientId and take the first 20 unique patients
       const uniquePatients = new Map<string, PatientData>();
+      
+      // First add all patients that have alerts
+      for (const patient of aggregatedPatients) {
+        uniquePatients.set(patient.patientId, patient);
+      }
+      
+      // Then add some patients without alerts (showing them as healthy)
       for (const patient of allPatientsData) {
         if (!uniquePatients.has(patient.patientId)) {
+          // Mark this patient as healthy (no issues)
+          patient.isAlert = false; 
+          patient.issues = [];
+          // Add a note so we know this is a healthy patient
+          patient.healthStatus = "healthy";
+          
           uniquePatients.set(patient.patientId, patient);
           if (uniquePatients.size >= 20) break;
         }
       }
+      
       return Array.from(uniquePatients.values());
     }
     

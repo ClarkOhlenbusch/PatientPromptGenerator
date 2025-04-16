@@ -9,6 +9,9 @@ interface PatientData {
   name: string;
   age: number;
   condition: string;
+  isAlert?: boolean;
+  healthStatus?: 'healthy' | 'alert';
+  issues?: string[];
   [key: string]: any;
 }
 
@@ -41,7 +44,8 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
     const hasAggregatedIssues = patient.issues && patient.issues.length > 0;
     
     // Check if the patient has no alerts/issues - positive health status
-    const hasNoIssues = (!patient.issues || patient.issues.length === 0) && (!patient.isAlert || patient.isAlert === false);
+    const hasNoIssues = ((!patient.issues || patient.issues.length === 0) && (!patient.isAlert || patient.isAlert === false)) 
+                      || patient.healthStatus === "healthy";
     
     // Create a unique cache key based on health status
     let cacheKey;
