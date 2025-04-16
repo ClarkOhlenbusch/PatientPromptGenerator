@@ -114,12 +114,57 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
 
       // Map specific columns to required fields
       rowData.patientId = String(row.getCell(patientIdCol + 1).value || `P${rowNumber - 1}`);
-      rowData.name = String(row.getCell(nameCol + 1).value || 'Unknown');
       
-      const ageValue = row.getCell(ageCol + 1).value;
-      rowData.age = typeof ageValue === 'number' ? ageValue : 
-                     typeof ageValue === 'string' ? parseInt(ageValue, 10) || 0 : 0;
+      // Get senior name with DOB from name field
+      const nameWithDOB = String(row.getCell(nameCol + 1).value || 'Unknown');
+      rowData.name = nameWithDOB;
       
+      // Extract age from DOB in the name field
+      try {
+        // Extract DOB from name field - Look for a date pattern in parentheses
+        const dobMatch = nameWithDOB.match(/\((\d{1,2}\/\d{1,2}\/\d{4})\)/);
+        if (dobMatch && dobMatch[1]) {
+          const dobString = dobMatch[1];
+          const dob = new Date(dobString);
+          
+          // Get date and time stamp field if it exists (for comparison)
+          const dateTimeStampHeader = headers.find(h => 
+            /date.*time/i.test(h) || /timestamp/i.test(h) || /recorded/i.test(h));
+          
+          let currentDate = new Date(); // Default to current date
+          
+          // If we have a date/time stamp column, use that instead
+          if (dateTimeStampHeader) {
+            const colIndex = headers.indexOf(dateTimeStampHeader);
+            if (colIndex !== -1) {
+              const dateTimeValue = row.getCell(colIndex + 1).value;
+              if (dateTimeValue instanceof Date) {
+                currentDate = dateTimeValue;
+              } else if (typeof dateTimeValue === 'string') {
+                const parsedDate = new Date(dateTimeValue);
+                if (!isNaN(parsedDate.getTime())) {
+                  currentDate = parsedDate;
+                }
+              }
+            }
+          }
+          
+          // Calculate age based on the difference between dates
+          const ageInYears = Math.floor((currentDate.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          rowData.age = ageInYears;
+          
+          // Extract just the name part (remove the DOB in parentheses)
+          rowData.name = nameWithDOB.replace(/\s*\(\d{1,2}\/\d{1,2}\/\d{4}\)\s*/, '').trim();
+        }
+      } catch (error) {
+        console.warn(`Failed to extract age from name '${nameWithDOB}':`, error);
+        // Fallback to any explicit age column if available
+        const ageValue = row.getCell(ageCol + 1).value;
+        rowData.age = typeof ageValue === 'number' ? ageValue : 
+                      typeof ageValue === 'string' ? parseInt(ageValue, 10) || 0 : 0;
+      }
+      
+      // Get the condition (variable)
       rowData.condition = String(row.getCell(conditionCol + 1).value || 'Unknown');
 
       // S3: Evaluate 'Is Alert' field 
@@ -144,11 +189,40 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
       // S4/S5: Process or skip based on alert status
       if (isAlert) {
         // Generate issue description
-        let issue = `Issue with ${rowData.condition}`;
+        // Find the Variable and Value fields in the data
+        let variableName = rowData.condition || '';
+        let variableValue = '';
+        
+        // Look for Value or Result field in the variables
         if (rowData.variables) {
-          // Add any relevant variable details to the issue
+          const valueField = Object.keys(rowData.variables).find(key => 
+            /value/i.test(key) || /result/i.test(key) || /reading/i.test(key));
+          
+          if (valueField) {
+            variableValue = rowData.variables[valueField];
+          }
+        }
+        
+        // Format the issue description based on available data
+        let issue = '';
+        if (variableName && variableValue) {
+          issue = `${variableName}: ${variableValue}`;
+        } else if (variableName) {
+          issue = `Issue with ${variableName}`;
+        } else {
+          issue = 'Unspecified health concern';
+        }
+        
+        // Add any other relevant variable details
+        if (rowData.variables) {
           const variableDetails = Object.entries(rowData.variables)
-            .filter(([key, _]) => key !== 'patientId' && key !== 'name' && key !== 'age')
+            .filter(([key, _]) => 
+              key !== 'patientId' && 
+              key !== 'name' && 
+              key !== 'age' && 
+              !/value/i.test(key) && 
+              !/variable/i.test(key) &&
+              !/condition/i.test(key))
             .map(([key, value]) => `${key}: ${value}`)
             .join(', ');
           
