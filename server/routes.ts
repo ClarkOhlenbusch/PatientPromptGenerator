@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
-import { generatePrompt } from "./lib/openai";
+import { generatePrompt, getTokenUsageStats } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
 import { setupAuth } from "./auth";
 
@@ -218,6 +218,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Error exporting prompts:", err);
       res.status(500).json({ message: `Error exporting prompts: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  });
+  
+  // Get token usage statistics - requires authentication
+  app.get("/api/token-usage", (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const stats = getTokenUsageStats();
+      
+      res.status(200).json({
+        success: true,
+        data: {
+          ...stats,
+          totalEstimatedCost: parseFloat(stats.totalEstimatedCost.toFixed(6)),
+          averageCostPerCall: parseFloat(stats.averageCostPerCall.toFixed(6)),
+          inputTokensPerCall: Math.round(stats.inputTokensPerCall),
+          outputTokensPerCall: Math.round(stats.outputTokensPerCall)
+        }
+      });
+    } catch (err) {
+      console.error("Error getting token usage stats:", err);
+      res.status(500).json({ 
+        success: false, 
+        message: `Error getting token usage stats: ${err instanceof Error ? err.message : String(err)}` 
+      });
     }
   });
 

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { logPromptCostEstimate, estimateSinglePromptUsage } from "./tokenUsageEstimator";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
@@ -13,6 +14,26 @@ interface PatientData {
 
 // Use a cache to store generated prompts by condition type
 const promptCache = new Map<string, string>();
+
+// Track token usage statistics
+let totalInputTokens = 0;
+let totalOutputTokens = 0;
+let totalApiCalls = 0;
+let totalEstimatedCost = 0;
+
+// Function to get token usage statistics
+export function getTokenUsageStats() {
+  return {
+    totalApiCalls,
+    totalInputTokens,
+    totalOutputTokens,
+    totalEstimatedCost,
+    averageCostPerCall: totalApiCalls > 0 ? totalEstimatedCost / totalApiCalls : 0,
+    inputTokensPerCall: totalApiCalls > 0 ? totalInputTokens / totalApiCalls : 0,
+    outputTokensPerCall: totalApiCalls > 0 ? totalOutputTokens / totalApiCalls : 0,
+    timestamp: new Date().toISOString()
+  };
+}
 
 export async function generatePrompt(patient: PatientData): Promise<string> {
   try {
@@ -95,6 +116,9 @@ Use {name} as placeholder for patient name and {age} for age. Create ONE compreh
       userContent = `Generate a personalized care prompt for a patient with this condition: "${patient.condition}". Use {name} as placeholder for patient name and {age} for age.`;
     }
 
+    // Calculate input tokens before API call
+    const fullInputText = systemContent + userContent;
+    
     // Use a fast response setting to speed up generation
     const response = await openai.chat.completions.create({
       model: "gpt-4o", // Using the latest model
@@ -114,6 +138,29 @@ Use {name} as placeholder for patient name and {age} for age. Create ONE compreh
 
     const prompt =
       response.choices[0].message.content || generateFallbackPrompt(patient);
+      
+    // Track usage
+    totalApiCalls++;
+    
+    // Estimate tokens and cost using our estimator
+    const usageData = estimateSinglePromptUsage(fullInputText, prompt);
+    totalInputTokens += usageData.inputTokens;
+    totalOutputTokens += usageData.outputTokens;
+    totalEstimatedCost += usageData.totalCost;
+    
+    // Log the token usage and cost for this request
+    logPromptCostEstimate(fullInputText, prompt);
+    
+    // Log cumulative usage statistics after every 5 calls
+    if (totalApiCalls % 5 === 0) {
+      console.log('\n=== Cumulative OpenAI API Usage ===');
+      console.log(`Total API calls: ${totalApiCalls}`);
+      console.log(`Total input tokens: ${totalInputTokens}`);
+      console.log(`Total output tokens: ${totalOutputTokens}`);
+      console.log(`Total estimated cost: $${totalEstimatedCost.toFixed(4)}`);
+      console.log(`Average cost per call: $${(totalEstimatedCost / totalApiCalls).toFixed(4)}`);
+      console.log('===================================\n');
+    }
 
     // Store the templated prompt in the cache
     promptCache.set(cacheKey, prompt);
