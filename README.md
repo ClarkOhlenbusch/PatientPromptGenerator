@@ -93,19 +93,20 @@ Find the openai.ts file under the server -> lib. Search for the prompt and make 
 The application expects Excel files with the following column structure:
 - Patient ID (unique identifier)
 - Name (patient name)
-- Age (patient age)
-- Condition (medical condition)
-- Is Alert (boolean flag indicating if prompt needs to be generated)
+- Date of Birth (patient age)
+- Date and Time Stamp (when data was collected)
+- Variable (i.e., Weight, Steps, Distance, Activity Calories, etc.)
+- Is Alert (boolean flag indicating if row data vitals are concerning)
 - Additional metrics and measurements (will be included in the prompt if relevant)
 
 ### Sample Data Row
 ```
-PatientID: "P12345"
-Name: "John Doe"
-Age: 65
-Condition: "Hypertension"
-Is Alert: TRUE
-Blood Pressure: "160/90"
+PatientID: "12345"
+Name: "John, Doe (11/12/1965)"
+Date and Time Stamp: 3/1/2025 3:03
+Variable: "Weight"
+Value: 195
+Is Alert: FALSE
 ```
 
 ## Deployment
@@ -196,14 +197,6 @@ While the current version uses in-memory storage for simplicity and demonstratio
 1. Patient records and historical prompt data
 2. Response analytics and effectiveness metrics
 3. Patient feedback and interaction history
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
