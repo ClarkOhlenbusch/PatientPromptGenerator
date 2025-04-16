@@ -133,8 +133,10 @@ export default function ResultsSection({
                     <TableCell className="whitespace-nowrap text-gray-500">
                       {patient.age}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-gray-500">
-                      {patient.condition}
+                    <TableCell className="text-gray-500 max-w-[200px]">
+                      <div className="line-clamp-2 whitespace-normal">
+                        {patient.condition}
+                      </div>
                     </TableCell>
                     <TableCell className="text-gray-500 max-w-md">
                       <div className="line-clamp-2">{patient.prompt}</div>

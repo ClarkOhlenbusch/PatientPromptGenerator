@@ -39,11 +39,19 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
   try {
     // Handle the case where we have aggregated issues from multiple alerts
     const hasAggregatedIssues = patient.issues && patient.issues.length > 0;
-
-    // Create a unique cache key based on either the combined conditions or individual condition
-    const cacheKey = hasAggregatedIssues
-      ? `aggregated_${patient.patientId}_${patient.issues?.length}`
-      : `${patient.condition}`;
+    
+    // Check if the patient has no alerts/issues - positive health status
+    const hasNoIssues = (!patient.issues || patient.issues.length === 0) && (!patient.isAlert || patient.isAlert === false);
+    
+    // Create a unique cache key based on health status
+    let cacheKey;
+    if (hasNoIssues) {
+      cacheKey = `healthy_${patient.patientId}`;
+    } else if (hasAggregatedIssues) {
+      cacheKey = `aggregated_${patient.patientId}_${patient.issues?.length}`;
+    } else {
+      cacheKey = `${patient.condition}`;
+    }
 
     if (promptCache.has(cacheKey)) {
       const cachedPrompt = promptCache.get(cacheKey);
@@ -55,14 +63,32 @@ export async function generatePrompt(patient: PatientData): Promise<string> {
 
     // Skip OpenAI call if API key is not set
     if (!process.env.OPENAI_API_KEY) {
+      if (hasNoIssues) {
+        return `Good news, {name}! Your health indicators are all within normal ranges. At {age} years old, it's important to continue your healthy lifestyle with regular exercise, balanced nutrition, and routine check-ups. Keep up the great work!`;
+      }
       return generateFallbackPrompt(patient);
     }
 
     // Prepare content for the prompt
     let userContent = "";
     let systemContent = "";
-
-    if (hasAggregatedIssues) {
+    
+    if (hasNoIssues) {
+      // Generate positive health message for patients with no alerts
+      systemContent = `You are a healthcare assistant that creates personalized positive health messages. 
+      These messages will be sent to patients who have no health alerts or concerns.
+      Generate an encouraging, uplifting message that:
+      1. Congratulates the patient on their good health status
+      2. Provides age-appropriate advice for maintaining health
+      3. Suggests preventive measures and healthy habits
+      4. Reminds them about the importance of regular check-ups
+      
+      Keep the tone warm, positive, and supportive. Make the message 1-2 paragraphs long.
+      IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age.`;
+      
+      userContent = `Generate a positive health message for a patient with no health concerns. The patient is {age} years old. Use {name} as a placeholder for the patient's name.`;
+    }
+    else if (hasAggregatedIssues) {
       // For aggregated patient data with multiple issues
       console.log(
         `Processing aggregated data with ${patient.issues.length} issues for patient ${patient.patientId}`,
