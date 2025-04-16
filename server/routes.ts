@@ -52,13 +52,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const patientData = await processExcelFile(file.buffer);
 
         // Limit the number of records to process to improve performance
-        // Take only unique patient+condition combinations to reduce load
+        // Take only unique patient IDs to reduce load, but preserve all conditions
         const uniquePatients = new Map();
-        const MAX_PATIENTS = 20; // Limit to 20 patient-condition combinations for demo
+        const MAX_PATIENTS = 20; // Limit to 20 patients for demo
         
-        // Group patients by unique patientId+condition
+        // Group patients by unique patientId only
         for (const patient of patientData) {
-          const key = `${patient.patientId}_${patient.condition}`;
+          // Only use patientId as the key to ensure we get all conditions for each patient
+          const key = patient.patientId;
+          
           if (!uniquePatients.has(key)) {
             uniquePatients.set(key, patient);
             if (uniquePatients.size >= MAX_PATIENTS) break;

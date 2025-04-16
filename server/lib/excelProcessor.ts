@@ -121,10 +121,38 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
       
       // Extract age from DOB in the name field
       try {
-        // Extract DOB from name field - Look for a date pattern in parentheses
-        const dobMatch = nameWithDOB.match(/\((\d{1,2}\/\d{1,2}\/\d{4})\)/);
+        // Extract DOB from name field - Try multiple date patterns that could be in the name
+        // First try standard pattern with parentheses (MM/DD/YYYY)
+        let dobMatch = nameWithDOB.match(/\((\d{1,2}\/\d{1,2}\/\d{4})\)/);
+        
+        // If not found, try without parentheses
+        if (!dobMatch) {
+          dobMatch = nameWithDOB.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+        }
+        
+        // Try alternate formats (YYYY-MM-DD)
+        if (!dobMatch) {
+          dobMatch = nameWithDOB.match(/\((\d{4}-\d{1,2}-\d{1,2})\)/);
+        }
+        
+        // Try without parentheses
+        if (!dobMatch) {
+          dobMatch = nameWithDOB.match(/(\d{4}-\d{1,2}-\d{1,2})/);
+        }
+        
+        // Try format MM-DD-YYYY
+        if (!dobMatch) {
+          dobMatch = nameWithDOB.match(/\((\d{1,2}-\d{1,2}-\d{4})\)/);
+        }
+        
+        // Without parentheses
+        if (!dobMatch) {
+          dobMatch = nameWithDOB.match(/(\d{1,2}-\d{1,2}-\d{4})/);
+        }
+        
         if (dobMatch && dobMatch[1]) {
           const dobString = dobMatch[1];
+          console.log(`Found DOB: ${dobString} in name: ${nameWithDOB}`);
           const dob = new Date(dobString);
           
           // Get date and time stamp field if it exists (for comparison)
@@ -154,7 +182,15 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
           rowData.age = ageInYears;
           
           // Extract just the name part (remove the DOB in parentheses)
-          rowData.name = nameWithDOB.replace(/\s*\(\d{1,2}\/\d{1,2}\/\d{4}\)\s*/, '').trim();
+          // Handle all the potential date formats we checked for
+          rowData.name = nameWithDOB
+            .replace(/\s*\(\d{1,2}\/\d{1,2}\/\d{4}\)\s*/, '') // MM/DD/YYYY in parentheses
+            .replace(/\s*\d{1,2}\/\d{1,2}\/\d{4}\s*/, '')     // MM/DD/YYYY without parentheses
+            .replace(/\s*\(\d{4}-\d{1,2}-\d{1,2}\)\s*/, '')   // YYYY-MM-DD in parentheses
+            .replace(/\s*\d{4}-\d{1,2}-\d{1,2}\s*/, '')       // YYYY-MM-DD without parentheses
+            .replace(/\s*\(\d{1,2}-\d{1,2}-\d{4}\)\s*/, '')   // MM-DD-YYYY in parentheses
+            .replace(/\s*\d{1,2}-\d{1,2}-\d{4}\s*/, '')       // MM-DD-YYYY without parentheses
+            .trim();
         }
       } catch (error) {
         console.warn(`Failed to extract age from name '${nameWithDOB}':`, error);
