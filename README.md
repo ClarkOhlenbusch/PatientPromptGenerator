@@ -5,7 +5,7 @@ A web application that transforms patient medical data from Excel files into AI-
 
 ## Overview
 
-The Patient Prompt Generator is a specialized tool designed for healthcare professionals at Calico Care. It processes patient data from Excel spreadsheets to generate tailored, AI-powered prompts for each patient based on their medical conditions and health indicators. 
+The Patient Prompt Generator is a specialized tool designed for healthcare professionals at Calico Care. It processes patient data from Excel spreadsheets to generate tailored and engaging, AI-powered prompts for each patient based on their medical conditions and health indicators. 
 
 ### Key Features
 
