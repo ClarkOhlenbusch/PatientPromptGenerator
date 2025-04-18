@@ -187,8 +187,17 @@ Let's discuss this at your next appointment.`
   // Triage methods using real data from uploaded patient file
   async getPatientAlerts(date: string): Promise<any[]> {
     try {
-      // Query database for all patient prompts
-      const allPatients = await db.select().from(patientPrompts);
+      // Query database for all patient prompts with just the columns we know exist
+      const allPatients = await db.select({
+        id: patientPrompts.id,
+        patientId: patientPrompts.patientId,
+        name: patientPrompts.name,
+        age: patientPrompts.age,
+        condition: patientPrompts.condition,
+        isAlert: patientPrompts.isAlert,
+        healthStatus: patientPrompts.healthStatus,
+        rawData: patientPrompts.rawData
+      }).from(patientPrompts);
       
       // Process each patient to check for alert conditions
       const alerts = [];
@@ -202,30 +211,26 @@ Let's discuss this at your next appointment.`
           isAlert = true;
         } 
         
-        // Check if there are issues listed (stored as JSON string in DB)
+        // Check if there are issues listed (stored in rawData)
         let issues = [];
         try {
-          // Get metadata from the patient record
-          // It might be stored in the raw data if it's not in the metadata field
-          let metadataStr = patient.metadata || '';
-          
-          // If no metadata field (for older records), try to extract from rawData
-          if (!metadataStr && patient.rawData) {
+          // Extract issues from rawData instead of metadata
+          if (patient.rawData) {
             const rawData = patient.rawData as any;
+            
+            // Check for issues array
             if (rawData.issues && Array.isArray(rawData.issues)) {
               issues = rawData.issues;
               isAlert = true;
-            }
-          } else if (metadataStr) {
-            // Parse metadata if it exists
-            const metadata = JSON.parse(metadataStr);
-            if (metadata.issues && Array.isArray(metadata.issues) && metadata.issues.length > 0) {
-              issues = metadata.issues;
+            } 
+            // Also check for alertReasons array
+            else if (rawData.alertReasons && Array.isArray(rawData.alertReasons)) {
+              issues = rawData.alertReasons;
               isAlert = true;
             }
           }
         } catch (e) {
-          console.warn(`Failed to parse metadata for patient ${patient.patientId}:`, e);
+          console.warn(`Failed to extract data for patient ${patient.patientId}:`, e);
         }
         
         // Create alert if this patient needs attention
@@ -317,9 +322,18 @@ Let's discuss this at your next appointment.`
   
   // Monthly reports methods with sample data for demonstration
   async getMonthlyReports(): Promise<any[]> {
-    // Query database for patient batches to count for monthly stats
-    const batches = await db.select().from(patientBatches);
-    const patients = await db.select().from(patientPrompts);
+    // Query database for patient batches to count for monthly stats, selecting specific columns
+    const batches = await db.select({
+      id: patientBatches.id,
+      batchId: patientBatches.batchId,
+      fileName: patientBatches.fileName,
+      createdAt: patientBatches.createdAt
+    }).from(patientBatches);
+    
+    // Get count from database directly using raw query
+    const { pool } = await import('./db');
+    const countResult = await pool.query('SELECT COUNT(*) as count FROM patient_prompts');
+    const patientCount = parseInt(countResult.rows[0].count as string, 10) || 0;
     
     // If we have real data, use it to create sample reports
     if (batches.length > 0) {
@@ -337,7 +351,7 @@ Let's discuss this at your next appointment.`
           status: "complete",
           generatedAt: new Date(now.getTime() - 86400000).toISOString(), // Yesterday
           downloadUrl: "#",
-          patientCount: patients.length,
+          patientCount: patientCount,
           fileSize: "1.2 MB"
         }
       ];
@@ -387,21 +401,26 @@ Let's discuss this at your next appointment.`
     // Extract month and year from the parameter
     const [year, month] = monthYear.split('-');
     
-    // Create a pending report (simulating async generation)
+    // Get actual patient count from database
+    const { pool } = await import('./db');
+    const countResult = await pool.query('SELECT COUNT(*) as count FROM patient_prompts');
+    const patientCount = parseInt(countResult.rows[0].count as string, 10) || 0;
+    
+    // Create a pending report using real patient data
     const report = {
       id: `report-${Date.now().toString(36)}`,
       month,
       year: parseInt(year),
       status: "pending",
       generatedAt: new Date().toISOString(),
-      patientCount: Math.floor(Math.random() * 50) + 100, // Random patient count between 100-150
+      patientCount: patientCount,
       downloadUrl: "#"
     };
     
     // Simulate report generation completed after a few seconds
     // (In a real implementation, this would be a background job)
     setTimeout(async () => {
-      console.log(`Report for ${monthYear} generation completed.`);
+      console.log(`Report for ${monthYear} generation completed with ${patientCount} patients.`);
       // We would update the database record here
     }, 5000);
     
