@@ -411,7 +411,7 @@ Let's discuss this at your next appointment.`
         month: String(currentMonth - 2).padStart(2, '0'),
         year: currentYear,
         generatedAt: new Date(currentDate.getTime() - 62 * 86400000).toISOString(), // 2 months ago
-        downloadUrl: "#",
+        downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth - 2).padStart(2, '0')}`,
         patientCount: 129,
         status: "complete",
         fileSize: "2.0 MB"
@@ -436,14 +436,21 @@ Let's discuss this at your next appointment.`
       status: "pending",
       generatedAt: new Date().toISOString(),
       patientCount: patientCount,
-      downloadUrl: "#"
+      downloadUrl: `/api/download-report/${year}/${month}`
     };
     
     // Simulate report generation completed after a few seconds
     // (In a real implementation, this would be a background job)
     setTimeout(async () => {
       console.log(`Report for ${monthYear} generation completed with ${patientCount} patients.`);
-      // We would update the database record here
+      
+      // In a real implementation, we would update a database record
+      // For now, we'll just print a message indicating the status change
+      console.log(`Report status updated from "pending" to "complete"`);
+      
+      // We would also determine the file size based on the amount of data
+      const fileSizeKB = Math.round(patientCount * 2.5); // Roughly estimate size
+      console.log(`Report estimated size: ${fileSizeKB} KB`);
     }, 5000);
     
     return report;
