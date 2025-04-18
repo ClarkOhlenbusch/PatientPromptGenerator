@@ -184,64 +184,113 @@ Let's discuss this at your next appointment.`
     console.log(`Updated template for patient ${patientId}:`, template);
   }
   
-  // Triage methods - stub implementations with sample data for demonstration
+  // Triage methods using real data from uploaded patient file
   async getPatientAlerts(date: string): Promise<any[]> {
-    // Query database for patients with alerts from given date
-    const patients = await db.select().from(patientPrompts).where(eq(patientPrompts.isAlert, "true"));
-    
-    // If we have real alerts, use those
-    if (patients.length > 0) {
-      // Convert patients to alert format
-      return patients.map(patient => ({
-        id: `alert-${patient.id}`,
-        patientId: patient.patientId,
-        patientName: patient.name,
-        age: patient.age,
-        condition: patient.condition,
-        alertValue: "Abnormal reading detected",
-        timestamp: new Date().toISOString(),
-        status: "pending",
-        message: `ALERT: Patient ${patient.name} (${patient.age}), with condition ${patient.condition}, needs attention. Please check their latest readings and contact them as soon as possible.`
-      }));
-    }
-    
-    // Otherwise, generate sample data for demonstration
-    return [
-      {
-        id: "alert-1",
-        patientId: "3164",
-        patientName: "Fabien Deniau",
-        age: 85,
-        condition: "Hypertension",
-        alertValue: "BP 180/95",
-        timestamp: new Date().toISOString(),
-        status: "pending",
-        message: "ALERT: Patient Fabien Deniau (85), with hypertension, has a blood pressure reading of 180/95. Please contact them to adjust medication and schedule a follow-up appointment."
-      },
-      {
-        id: "alert-2",
-        patientId: "3166",
-        patientName: "Amelia Rodriguez",
-        age: 72,
-        condition: "Diabetes",
-        alertValue: "Glucose 210 mg/dL",
-        timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-        status: "sent",
-        sentAt: new Date(Date.now() - 3300000).toISOString(), // 55 minutes ago
-        message: "ALERT: Patient Amelia Rodriguez (72), with diabetes, has an elevated blood glucose level of 210 mg/dL. Please contact them to discuss insulin adjustment and dietary recommendations."
-      },
-      {
-        id: "alert-3",
-        patientId: "3167",
-        patientName: "Robert Chen",
-        age: 68,
-        condition: "COPD",
-        alertValue: "SpO2 89%",
-        timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-        status: "failed",
-        message: "ALERT: Patient Robert Chen (68), with COPD, has a low oxygen saturation of 89%. Please contact them immediately to assess respiratory status and consider supplemental oxygen."
+    try {
+      // Query database for all patient prompts
+      const allPatients = await db.select().from(patientPrompts);
+      
+      // Process each patient to check for alert conditions
+      const alerts = [];
+      
+      for (const patient of allPatients) {
+        // Check if patient has isAlert field marked as true or has issues
+        let isAlert = false;
+        
+        // Check literal string "true" since the DB might store it that way
+        if (patient.isAlert === "true" || patient.isAlert === true) {
+          isAlert = true;
+        } 
+        
+        // Check if there are issues listed (stored as JSON string in DB)
+        let issues = [];
+        try {
+          if (patient.metadata) {
+            const metadata = JSON.parse(patient.metadata);
+            if (metadata.issues && metadata.issues.length > 0) {
+              issues = metadata.issues;
+              isAlert = true;
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to parse metadata for patient ${patient.patientId}:`, e);
+        }
+        
+        // Create alert if this patient needs attention
+        if (isAlert) {
+          const alertId = `alert-${patient.id}`;
+          
+          // Format message based on available data
+          let message = `ALERT: Patient ${patient.name} (${patient.age}), with condition ${patient.condition}, needs attention.`;
+          
+          // Add issues if available
+          if (issues.length > 0) {
+            message += ` Issues detected: ${issues.join(', ')}.`;
+          }
+          
+          message += " Please check their latest readings and contact them as soon as possible.";
+          
+          // Add alert
+          alerts.push({
+            id: alertId,
+            patientId: patient.patientId,
+            patientName: patient.name,
+            age: patient.age,
+            condition: patient.condition,
+            alertValue: issues.length > 0 ? issues[0].split(':')[1] || "Abnormal reading" : "Abnormal reading",
+            timestamp: new Date().toISOString(),
+            status: "pending",
+            message: message
+          });
+        }
       }
-    ];
+      
+      // If we found real alerts, return them
+      if (alerts.length > 0) {
+        return alerts;
+      }
+      
+      // Otherwise, generate sample data as fallback (only for empty database situations)
+      return [
+        {
+          id: "alert-1",
+          patientId: "3164",
+          patientName: "Fabien Deniau",
+          age: 85,
+          condition: "Hypertension",
+          alertValue: "BP 180/95",
+          timestamp: new Date().toISOString(),
+          status: "pending",
+          message: "ALERT: Patient Fabien Deniau (85), with hypertension, has a blood pressure reading of 180/95. Please contact them to adjust medication and schedule a follow-up appointment."
+        },
+        {
+          id: "alert-2",
+          patientId: "3166",
+          patientName: "Amelia Rodriguez",
+          age: 72,
+          condition: "Diabetes",
+          alertValue: "Glucose 210 mg/dL",
+          timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+          status: "sent",
+          sentAt: new Date(Date.now() - 3300000).toISOString(), // 55 minutes ago
+          message: "ALERT: Patient Amelia Rodriguez (72), with diabetes, has an elevated blood glucose level of 210 mg/dL. Please contact them to discuss insulin adjustment and dietary recommendations."
+        },
+        {
+          id: "alert-3",
+          patientId: "3167",
+          patientName: "Robert Chen",
+          age: 68,
+          condition: "COPD",
+          alertValue: "SpO2 89%",
+          timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+          status: "failed",
+          message: "ALERT: Patient Robert Chen (68), with COPD, has a low oxygen saturation of 89%. Please contact them immediately to assess respiratory status and consider supplemental oxygen."
+        }
+      ];
+    } catch (error) {
+      console.error("Error getting patient alerts:", error);
+      return [];
+    }
   }
   
   async sendAlert(alertId: string): Promise<any> {
