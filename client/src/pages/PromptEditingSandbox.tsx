@@ -189,8 +189,8 @@ export default function PromptEditingSandbox() {
                 </SelectTrigger>
                 <SelectContent>
                   {patientBatches?.map((batch: any) => (
-                    <SelectItem key={batch.id} value={batch.id}>
-                      {new Date(batch.createdAt).toLocaleDateString()} ({batch.id.slice(0, 6)}...)
+                    <SelectItem key={batch.id} value={batch.batchId}>
+                      {new Date(batch.createdAt).toLocaleDateString()} ({batch.batchId})
                     </SelectItem>
                   ))}
                 </SelectContent>

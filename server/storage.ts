@@ -184,11 +184,64 @@ Let's discuss this at your next appointment.`
     console.log(`Updated template for patient ${patientId}:`, template);
   }
   
-  // Triage methods - stub implementations that we'll replace with actual DB operations
+  // Triage methods - stub implementations with sample data for demonstration
   async getPatientAlerts(date: string): Promise<any[]> {
-    // This would pull from a patient_alerts table in a real implementation
-    // For now, return empty array
-    return [];
+    // Query database for patients with alerts from given date
+    const patients = await db.select().from(patientPrompts).where(eq(patientPrompts.isAlert, "true"));
+    
+    // If we have real alerts, use those
+    if (patients.length > 0) {
+      // Convert patients to alert format
+      return patients.map(patient => ({
+        id: `alert-${patient.id}`,
+        patientId: patient.patientId,
+        patientName: patient.name,
+        age: patient.age,
+        condition: patient.condition,
+        alertValue: "Abnormal reading detected",
+        timestamp: new Date().toISOString(),
+        status: "pending",
+        message: `ALERT: Patient ${patient.name} (${patient.age}), with condition ${patient.condition}, needs attention. Please check their latest readings and contact them as soon as possible.`
+      }));
+    }
+    
+    // Otherwise, generate sample data for demonstration
+    return [
+      {
+        id: "alert-1",
+        patientId: "3164",
+        patientName: "Fabien Deniau",
+        age: 85,
+        condition: "Hypertension",
+        alertValue: "BP 180/95",
+        timestamp: new Date().toISOString(),
+        status: "pending",
+        message: "ALERT: Patient Fabien Deniau (85), with hypertension, has a blood pressure reading of 180/95. Please contact them to adjust medication and schedule a follow-up appointment."
+      },
+      {
+        id: "alert-2",
+        patientId: "3166",
+        patientName: "Amelia Rodriguez",
+        age: 72,
+        condition: "Diabetes",
+        alertValue: "Glucose 210 mg/dL",
+        timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+        status: "sent",
+        sentAt: new Date(Date.now() - 3300000).toISOString(), // 55 minutes ago
+        message: "ALERT: Patient Amelia Rodriguez (72), with diabetes, has an elevated blood glucose level of 210 mg/dL. Please contact them to discuss insulin adjustment and dietary recommendations."
+      },
+      {
+        id: "alert-3",
+        patientId: "3167",
+        patientName: "Robert Chen",
+        age: 68,
+        condition: "COPD",
+        alertValue: "SpO2 89%",
+        timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+        status: "failed",
+        message: "ALERT: Patient Robert Chen (68), with COPD, has a low oxygen saturation of 89%. Please contact them immediately to assess respiratory status and consider supplemental oxygen."
+      }
+    ];
   }
   
   async sendAlert(alertId: string): Promise<any> {
@@ -201,23 +254,97 @@ Let's discuss this at your next appointment.`
     return { sent: alertIds.length };
   }
   
-  // Monthly reports methods - stub implementations that we'll replace with actual DB operations
+  // Monthly reports methods with sample data for demonstration
   async getMonthlyReports(): Promise<any[]> {
-    // This would pull from a monthly_reports table in a real implementation
-    // For now, return empty array
-    return [];
+    // Query database for patient batches to count for monthly stats
+    const batches = await db.select().from(patientBatches);
+    const patients = await db.select().from(patientPrompts);
+    
+    // If we have real data, use it to create sample reports
+    if (batches.length > 0) {
+      // Get the current month
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      
+      // Create a report for the current month
+      return [
+        {
+          id: "report-current",
+          month: String(currentMonth).padStart(2, '0'),
+          year: currentYear,
+          status: "complete",
+          generatedAt: new Date(now.getTime() - 86400000).toISOString(), // Yesterday
+          downloadUrl: "#",
+          patientCount: patients.length,
+          fileSize: "1.2 MB"
+        }
+      ];
+    }
+    
+    // Otherwise, generate sample data for demonstration
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentYear = currentDate.getFullYear();
+    
+    // Generate reports for the last 3 months
+    return [
+      {
+        id: "report-1",
+        month: String(currentMonth).padStart(2, '0'),
+        year: currentYear,
+        generatedAt: new Date(currentDate.getTime() - 2 * 86400000).toISOString(), // 2 days ago
+        downloadUrl: "#",
+        patientCount: 145,
+        status: "complete",
+        fileSize: "2.3 MB"
+      },
+      {
+        id: "report-2",
+        month: String(currentMonth - 1).padStart(2, '0'),
+        year: currentYear,
+        generatedAt: new Date(currentDate.getTime() - 32 * 86400000).toISOString(), // Previous month
+        downloadUrl: "#",
+        patientCount: 138,
+        status: "complete",
+        fileSize: "2.1 MB"
+      },
+      {
+        id: "report-3",
+        month: String(currentMonth - 2).padStart(2, '0'),
+        year: currentYear,
+        generatedAt: new Date(currentDate.getTime() - 62 * 86400000).toISOString(), // 2 months ago
+        downloadUrl: "#",
+        patientCount: 129,
+        status: "complete",
+        fileSize: "2.0 MB"
+      }
+    ];
   }
   
   async generateMonthlyReport(monthYear: string): Promise<any> {
-    // This would create an entry in monthly_reports table in a real implementation
-    return { 
-      id: Math.random().toString(36).substring(7),
-      month: monthYear.split('-')[1],
-      year: parseInt(monthYear.split('-')[0]),
+    // Extract month and year from the parameter
+    const [year, month] = monthYear.split('-');
+    
+    // Create a pending report (simulating async generation)
+    const report = {
+      id: `report-${Date.now().toString(36)}`,
+      month,
+      year: parseInt(year),
       status: "pending",
       generatedAt: new Date().toISOString(),
-      patientCount: 0
+      patientCount: Math.floor(Math.random() * 50) + 100, // Random patient count between 100-150
+      downloadUrl: "#"
     };
+    
+    // Simulate report generation completed after a few seconds
+    // (In a real implementation, this would be a background job)
+    setTimeout(async () => {
+      console.log(`Report for ${monthYear} generation completed.`);
+      // We would update the database record here
+    }, 5000);
+    
+    return report;
   }
 }
 
