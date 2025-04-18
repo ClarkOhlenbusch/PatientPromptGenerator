@@ -187,6 +187,12 @@ Let's discuss this at your next appointment.`
   // Triage methods using real data from uploaded patient file
   async getPatientAlerts(date: string): Promise<any[]> {
     try {
+      console.log(`Getting patient alerts for date: ${date}`);
+      
+      // Convert date string to Date object for comparison
+      const requestDate = date ? new Date(date) : new Date();
+      requestDate.setHours(0, 0, 0, 0); // Set to start of day
+      
       // Query database for all patient prompts with just the columns we know exist
       const allPatients = await db.select({
         id: patientPrompts.id,
@@ -196,13 +202,29 @@ Let's discuss this at your next appointment.`
         condition: patientPrompts.condition,
         isAlert: patientPrompts.isAlert,
         healthStatus: patientPrompts.healthStatus,
+        createdAt: patientPrompts.createdAt,
         rawData: patientPrompts.rawData
       }).from(patientPrompts);
       
       // Process each patient to check for alert conditions
       const alerts = [];
       
-      for (const patient of allPatients) {
+      // Filter patients by date when they were created
+      const filteredPatients = allPatients.filter(patient => {
+        if (!patient.createdAt) return true; // Include if no date
+        
+        try {
+          const patientDate = new Date(patient.createdAt);
+          return patientDate.toDateString() === requestDate.toDateString();
+        } catch(e) {
+          console.warn(`Could not parse date for patient ${patient.patientId}:`, e);
+          return true; // Include by default if date parsing fails
+        }
+      });
+      
+      console.log(`Filtered to ${filteredPatients.length} patients out of ${allPatients.length} for date ${requestDate.toISOString()}`);
+      
+      for (const patient of filteredPatients) {
         // Check if patient has isAlert field marked as true or has issues
         let isAlert = false;
         
@@ -350,7 +372,7 @@ Let's discuss this at your next appointment.`
           year: currentYear,
           status: "complete",
           generatedAt: new Date(now.getTime() - 86400000).toISOString(), // Yesterday
-          downloadUrl: "#",
+          downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth).padStart(2, '0')}`,
           patientCount: patientCount,
           fileSize: "1.2 MB"
         }

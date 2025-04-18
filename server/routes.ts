@@ -72,12 +72,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const prompt = await generatePrompt(patient);
             
-            // Store metadata as a JSON string for issues and alert reasons
-            const metadata = JSON.stringify({
+            // Instead of using metadata column, store issues in rawData
+            // Ensure patient object has the necessary fields
+            const patientWithMetadata = {
+              ...patient,
               issues: patient.issues || [],
               alertReasons: patient.alertReasons || [],
               variables: patient.variables || {}
-            });
+            };
             
             await storage.createPatientPrompt({
               batchId,
@@ -87,9 +89,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               condition: patient.condition,
               prompt,
               isAlert: patient.isAlert ? "true" : "false", // Store as string in DB
-              healthStatus: patient.healthStatus || "healthy",
-              metadata, // Add metadata field to store issues/reasons
-              rawData: patient,
+              healthStatus: patient.healthStatus || "healthy", 
+              rawData: patientWithMetadata, // Store all data including issues in rawData
             });
           } catch (err) {
             console.error(`Error generating prompt for patient ${patient.patientId}:`, err);
