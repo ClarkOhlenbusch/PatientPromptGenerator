@@ -41,7 +41,9 @@ export default function MonthlyReports() {
     queryFn: async () => {
       try {
         const res = await apiRequest("GET", "/api/monthly-reports");
-        return await res.json();
+        const data = await res.json();
+        console.log("Fetched monthly reports:", data);
+        return data;
       } catch (error) {
         console.error("Failed to fetch reports:", error);
         toast({

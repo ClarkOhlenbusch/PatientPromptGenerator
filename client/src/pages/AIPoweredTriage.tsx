@@ -33,7 +33,9 @@ export default function AIPoweredTriage() {
     queryFn: async () => {
       try {
         const res = await apiRequest("GET", `/api/triage/alerts?date=${selectedDate}`);
-        return await res.json();
+        const data = await res.json();
+        console.log("Fetched patient alerts:", data);
+        return data;
       } catch (error) {
         console.error("Failed to fetch alerts:", error);
         toast({
