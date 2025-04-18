@@ -83,7 +83,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPatientBatch(batchId: string): Promise<PatientBatch | undefined> {
-    const [batch] = await db.select().from(patientBatches).where(eq(patientBatches.id, batchId));
+    const [batch] = await db.select().from(patientBatches).where(eq(patientBatches.batchId, batchId));
     return batch;
   }
   
@@ -92,10 +92,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPatientPrompt(insertPrompt: InsertPatientPrompt): Promise<PatientPrompt> {
-    const [prompt] = await db.insert(patientPrompts).values({
-      ...insertPrompt,
-      rawData: insertPrompt.rawData ?? null
-    }).returning();
+    // Create a cleaned up version of the insert data that matches our schema
+    const promptData = {
+      batchId: insertPrompt.batchId,
+      patientId: insertPrompt.patientId,
+      name: insertPrompt.name,
+      age: insertPrompt.age,
+      condition: insertPrompt.condition,
+      prompt: insertPrompt.prompt,
+      isAlert: insertPrompt.isAlert ? "true" : "false",
+      healthStatus: insertPrompt.healthStatus || "alert",
+      rawData: insertPrompt.rawData ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    
+    const [prompt] = await db.insert(patientPrompts).values(promptData).returning();
     return prompt;
   }
 
@@ -113,8 +124,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt> {
+    // Create a cleaned up version of the update data that matches our schema
+    const updateData: Record<string, any> = {};
+    
+    if (updates.prompt) updateData.prompt = updates.prompt;
+    if (updates.isAlert !== undefined) updateData.isAlert = updates.isAlert ? "true" : "false";
+    if (updates.healthStatus) updateData.healthStatus = updates.healthStatus;
+    if (updates.condition) updateData.condition = updates.condition;
+    
+    // Add updatedAt timestamp
+    updateData.updatedAt = new Date().toISOString();
+    
     const [updatedPrompt] = await db.update(patientPrompts)
-      .set(updates)
+      .set(updateData)
       .where(eq(patientPrompts.id, id))
       .returning();
     

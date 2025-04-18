@@ -21,8 +21,11 @@ export type User = typeof users.$inferSelect;
 export const patientBatches = pgTable("patient_batches", {
   id: serial("id").primaryKey(),
   batchId: text("batch_id").notNull().unique(),
-  fileName: text("file_name").notNull(),
+  fileName: text("file_name").notNull().default('unknown'),
   createdAt: text("created_at").notNull(),
+  totalPatients: integer("total_patients").default(0),
+  processedPatients: integer("processed_patients").default(0),
+  userId: integer("user_id").default(-1),
 });
 
 export const insertPatientBatchSchema = createInsertSchema(patientBatches).omit({
@@ -37,8 +40,12 @@ export const patientPrompts = pgTable("patient_prompts", {
   name: text("name").notNull(),
   age: integer("age").notNull(),
   condition: text("condition").notNull(),
+  isAlert: text("is_alert").default("false"),
+  healthStatus: text("health_status").default("alert"),
   prompt: text("prompt").notNull(),
   rawData: jsonb("raw_data"),
+  createdAt: text("created_at").default(new Date().toISOString()),
+  updatedAt: text("updated_at"),
 });
 
 export const insertPatientPromptSchema = createInsertSchema(patientPrompts).omit({
