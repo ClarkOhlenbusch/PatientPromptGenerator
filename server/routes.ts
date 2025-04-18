@@ -251,6 +251,257 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all patient batches
+  app.get("/api/batches", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const batches = await storage.getAllPatientBatches();
+      res.status(200).json(batches);
+    } catch (err) {
+      console.error("Error fetching batches:", err);
+      res.status(500).json({ 
+        success: false, 
+        message: `Error fetching batches: ${err instanceof Error ? err.message : String(err)}` 
+      });
+    }
+  });
+
+  // ===== NEW API ENDPOINTS FOR CUSTOMER-REQUESTED FEATURES =====
+
+  // === PROMPT EDITING SANDBOX ENDPOINTS ===
+  
+  // Get prompt template for a patient
+  app.get("/api/prompt-template/:patientId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { patientId } = req.params;
+      const template = await storage.getPromptTemplate(patientId);
+      
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: "Template not found for this patient"
+        });
+      }
+      
+      return res.status(200).json(template);
+    } catch (err) {
+      console.error("Error fetching prompt template:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error fetching prompt template: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // Update prompt template for a patient
+  app.post("/api/update-prompt-template", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { patientId, template } = req.body;
+      
+      if (!patientId || !template) {
+        return res.status(400).json({
+          success: false,
+          message: "Patient ID and template are required"
+        });
+      }
+      
+      await storage.updatePromptTemplate(patientId, template);
+      
+      return res.status(200).json({
+        success: true,
+        message: "Template updated successfully"
+      });
+    } catch (err) {
+      console.error("Error updating prompt template:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating prompt template: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // Regenerate prompt with custom template
+  app.post("/api/regenerate-prompt-with-template", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { patientId, template } = req.body;
+      
+      if (!patientId || !template) {
+        return res.status(400).json({
+          success: false,
+          message: "Patient ID and template are required"
+        });
+      }
+      
+      // For now, we'll just simulate a successful regeneration
+      // In a real implementation, this would use the template to generate a new prompt
+      
+      return res.status(200).json({
+        success: true,
+        message: "Prompt regenerated with custom template"
+      });
+    } catch (err) {
+      console.error("Error regenerating prompt with template:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error regenerating prompt with template: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // === TRIAGE ENDPOINTS ===
+  
+  // Get patient alerts for a specific date
+  app.get("/api/triage/alerts", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const date = req.query.date as string || new Date().toISOString().split('T')[0];
+      const alerts = await storage.getPatientAlerts(date);
+      
+      return res.status(200).json(alerts);
+    } catch (err) {
+      console.error("Error fetching patient alerts:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error fetching patient alerts: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // Send a single alert
+  app.post("/api/triage/send-alert", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { alertId } = req.body;
+      
+      if (!alertId) {
+        return res.status(400).json({
+          success: false,
+          message: "Alert ID is required"
+        });
+      }
+      
+      const result = await storage.sendAlert(alertId);
+      
+      return res.status(200).json({
+        success: true,
+        patientName: result.patientName,
+        message: "Alert sent successfully"
+      });
+    } catch (err) {
+      console.error("Error sending alert:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error sending alert: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // Send multiple alerts
+  app.post("/api/triage/send-alerts", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { alertIds } = req.body;
+      
+      if (!alertIds || !Array.isArray(alertIds) || alertIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Alert IDs array is required"
+        });
+      }
+      
+      const result = await storage.sendAllAlerts(alertIds);
+      
+      return res.status(200).json({
+        success: true,
+        sent: result.sent,
+        message: `Successfully sent ${result.sent} alerts`
+      });
+    } catch (err) {
+      console.error("Error sending alerts:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error sending alerts: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // === MONTHLY REPORTS ENDPOINTS ===
+  
+  // Get all monthly reports
+  app.get("/api/monthly-reports", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const reports = await storage.getMonthlyReports();
+      
+      return res.status(200).json(reports);
+    } catch (err) {
+      console.error("Error fetching monthly reports:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error fetching monthly reports: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // Generate a new monthly report
+  app.post("/api/generate-monthly-report", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { monthYear } = req.body;
+      
+      if (!monthYear) {
+        return res.status(400).json({
+          success: false,
+          message: "Month and year are required (format: YYYY-MM)"
+        });
+      }
+      
+      const report = await storage.generateMonthlyReport(monthYear);
+      
+      return res.status(200).json({
+        success: true,
+        report,
+        message: "Monthly report generation initiated"
+      });
+    } catch (err) {
+      console.error("Error generating monthly report:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error generating monthly report: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

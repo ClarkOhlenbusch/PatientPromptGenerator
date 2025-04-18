@@ -1,4 +1,7 @@
 import { 
+  users,
+  patientBatches,
+  patientPrompts,
   type User, 
   type InsertUser, 
   type PatientBatch, 
@@ -7,7 +10,9 @@ import {
   type InsertPatientPrompt 
 } from "@shared/schema";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { db } from "./db";
+import { and, eq } from "drizzle-orm";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -19,6 +24,7 @@ export interface IStorage {
   // Patient Batch methods
   createPatientBatch(batch: InsertPatientBatch): Promise<PatientBatch>;
   getPatientBatch(batchId: string): Promise<PatientBatch | undefined>;
+  getAllPatientBatches(): Promise<PatientBatch[]>;
   
   // Patient Prompt methods
   createPatientPrompt(prompt: InsertPatientPrompt): Promise<PatientPrompt>;
@@ -26,107 +32,171 @@ export interface IStorage {
   getPatientPromptByIds(batchId: string, patientId: string): Promise<PatientPrompt | undefined>;
   updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt>;
   
+  // Template methods
+  getPromptTemplate(patientId: string): Promise<{ template: string, originalTemplate?: string } | null>;
+  updatePromptTemplate(patientId: string, template: string): Promise<void>;
+  
+  // Triage methods
+  getPatientAlerts(date: string): Promise<any[]>;
+  sendAlert(alertId: string): Promise<any>;
+  sendAllAlerts(alertIds: string[]): Promise<{ sent: number }>;
+  
+  // Monthly reports methods
+  getMonthlyReports(): Promise<any[]>;
+  generateMonthlyReport(monthYear: string): Promise<any>;
+  
   // Session store
   sessionStore: session.Store;
 }
 
-const MemoryStore = createMemoryStore(session);
-
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private patientBatches: Map<string, PatientBatch>;
-  private patientPrompts: Map<number, PatientPrompt>;
-  
-  private currentUserId: number;
-  private currentPromptId: number;
-  private currentBatchId: number;
-  
+export class DatabaseStorage implements IStorage {
   public sessionStore: session.Store;
-
+  
   constructor() {
-    this.users = new Map();
-    this.patientBatches = new Map();
-    this.patientPrompts = new Map();
-    
-    this.currentUserId = 1;
-    this.currentPromptId = 1;
-    this.currentBatchId = 1;
-    
-    // Initialize session store
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+    const PostgresSessionStore = connectPg(session);
+    this.sessionStore = new PostgresSessionStore({
+      conObject: {
+        connectionString: process.env.DATABASE_URL,
+      },
+      createTableIfMissing: true,
     });
   }
 
-  // User methods (kept from original)
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
-  
-  // Patient Batch methods
+
   async createPatientBatch(insertBatch: InsertPatientBatch): Promise<PatientBatch> {
-    const id = this.currentBatchId++;
-    const batch: PatientBatch = { ...insertBatch, id };
-    this.patientBatches.set(batch.batchId, batch);
+    const [batch] = await db.insert(patientBatches).values(insertBatch).returning();
+    return batch;
+  }
+
+  async getPatientBatch(batchId: string): Promise<PatientBatch | undefined> {
+    const [batch] = await db.select().from(patientBatches).where(eq(patientBatches.id, batchId));
     return batch;
   }
   
-  async getPatientBatch(batchId: string): Promise<PatientBatch | undefined> {
-    return this.patientBatches.get(batchId);
+  async getAllPatientBatches(): Promise<PatientBatch[]> {
+    return await db.select().from(patientBatches).orderBy(patientBatches.createdAt);
   }
-  
-  // Patient Prompt methods
+
   async createPatientPrompt(insertPrompt: InsertPatientPrompt): Promise<PatientPrompt> {
-    const id = this.currentPromptId++;
-    
-    // Ensure rawData is not undefined to satisfy PatientPrompt type
-    const prompt: PatientPrompt = { 
-      ...insertPrompt, 
-      id,
+    const [prompt] = await db.insert(patientPrompts).values({
+      ...insertPrompt,
       rawData: insertPrompt.rawData ?? null
-    };
-    
-    this.patientPrompts.set(id, prompt);
+    }).returning();
     return prompt;
   }
-  
+
   async getPatientPromptsByBatchId(batchId: string): Promise<PatientPrompt[]> {
-    return Array.from(this.patientPrompts.values()).filter(
-      (prompt) => prompt.batchId === batchId
-    );
+    return await db.select().from(patientPrompts).where(eq(patientPrompts.batchId, batchId));
   }
-  
+
   async getPatientPromptByIds(batchId: string, patientId: string): Promise<PatientPrompt | undefined> {
-    return Array.from(this.patientPrompts.values()).find(
-      (prompt) => prompt.batchId === batchId && prompt.patientId === patientId
-    );
+    const [prompt] = await db.select().from(patientPrompts)
+      .where(and(
+        eq(patientPrompts.batchId, batchId),
+        eq(patientPrompts.patientId, patientId)
+      ));
+    return prompt;
   }
-  
+
   async updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt> {
-    const prompt = this.patientPrompts.get(id);
+    const [updatedPrompt] = await db.update(patientPrompts)
+      .set(updates)
+      .where(eq(patientPrompts.id, id))
+      .returning();
     
-    if (!prompt) {
-      throw new Error(`Patient prompt with id ${id} not found`);
+    if (!updatedPrompt) {
+      throw new Error(`Prompt with id ${id} not found`);
     }
-    
-    const updatedPrompt = { ...prompt, ...updates };
-    this.patientPrompts.set(id, updatedPrompt);
     
     return updatedPrompt;
   }
+  
+  // Template methods - stub implementations that we'll replace with actual DB operations
+  async getPromptTemplate(patientId: string): Promise<{ template: string, originalTemplate?: string } | null> {
+    // This would pull from a prompt_templates table in a real implementation
+    const [prompt] = await db.select().from(patientPrompts).where(eq(patientPrompts.patientId, patientId));
+    if (!prompt) {
+      return null;
+    }
+    
+    // For now, we'll return a default template based on the prompt
+    return {
+      template: `Hello {name}, 
+
+Based on your recent health data, I notice {reasoning}.
+
+Current reading: {current}
+Trend: {slope}
+Compliance: {compliance}%
+
+Let's discuss this at your next appointment.`,
+      originalTemplate: `Hello {name}, 
+
+Based on your recent health data, I notice {reasoning}.
+
+Current reading: {current}
+Trend: {slope}
+Compliance: {compliance}%
+
+Let's discuss this at your next appointment.`
+    };
+  }
+  
+  async updatePromptTemplate(patientId: string, template: string): Promise<void> {
+    // This would update a prompt_templates table in a real implementation
+    // For now, we'll just log that we received the update
+    console.log(`Updated template for patient ${patientId}:`, template);
+  }
+  
+  // Triage methods - stub implementations that we'll replace with actual DB operations
+  async getPatientAlerts(date: string): Promise<any[]> {
+    // This would pull from a patient_alerts table in a real implementation
+    // For now, return empty array
+    return [];
+  }
+  
+  async sendAlert(alertId: string): Promise<any> {
+    // This would update a patient_alerts table and call SMS service in a real implementation
+    return { success: true, patientName: "Test Patient" };
+  }
+  
+  async sendAllAlerts(alertIds: string[]): Promise<{ sent: number }> {
+    // This would update multiple patient_alerts and call SMS service in a real implementation
+    return { sent: alertIds.length };
+  }
+  
+  // Monthly reports methods - stub implementations that we'll replace with actual DB operations
+  async getMonthlyReports(): Promise<any[]> {
+    // This would pull from a monthly_reports table in a real implementation
+    // For now, return empty array
+    return [];
+  }
+  
+  async generateMonthlyReport(monthYear: string): Promise<any> {
+    // This would create an entry in monthly_reports table in a real implementation
+    return { 
+      id: Math.random().toString(36).substring(7),
+      month: monthYear.split('-')[1],
+      year: parseInt(monthYear.split('-')[0]),
+      status: "pending",
+      generatedAt: new Date().toISOString(),
+      patientCount: 0
+    };
+  }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
