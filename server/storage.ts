@@ -391,7 +391,7 @@ Let's discuss this at your next appointment.`
         month: String(currentMonth).padStart(2, '0'),
         year: currentYear,
         generatedAt: new Date(currentDate.getTime() - 2 * 86400000).toISOString(), // 2 days ago
-        downloadUrl: "#",
+        downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth).padStart(2, '0')}`,
         patientCount: 145,
         status: "complete",
         fileSize: "2.3 MB"
@@ -401,7 +401,7 @@ Let's discuss this at your next appointment.`
         month: String(currentMonth - 1).padStart(2, '0'),
         year: currentYear,
         generatedAt: new Date(currentDate.getTime() - 32 * 86400000).toISOString(), // Previous month
-        downloadUrl: "#",
+        downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth - 1).padStart(2, '0')}`,
         patientCount: 138,
         status: "complete",
         fileSize: "2.1 MB"

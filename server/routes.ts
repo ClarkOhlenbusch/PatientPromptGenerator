@@ -7,6 +7,9 @@ import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
 import { generatePrompt, getTokenUsageStats } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
+import * as ExcelJS from "exceljs";
+import { db } from "./db";
+import { patientPrompts } from "@shared/schema";
 import { setupAuth } from "./auth";
 
 // Set up multer for file uploads
@@ -477,6 +480,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({
         success: false,
         message: `Error fetching monthly reports: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  // Download a monthly report
+  app.get("/api/download-report/:year/:month", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { year, month } = req.params;
+      
+      // Get all patient prompts from the database
+      const prompts = await db.select().from(patientPrompts);
+      
+      // Filter to match the specified month/year if provided
+      const filteredPrompts = prompts.filter(prompt => {
+        if (!prompt.createdAt) return false;
+        
+        try {
+          const promptDate = new Date(prompt.createdAt);
+          const promptMonth = String(promptDate.getMonth() + 1).padStart(2, '0');
+          const promptYear = promptDate.getFullYear().toString();
+          
+          return promptMonth === month && promptYear === year;
+        } catch(e) {
+          console.warn(`Could not parse date for prompt ${prompt.id}:`, e);
+          return false;
+        }
+      });
+      
+      // Generate Excel file
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Patient Data');
+      
+      // Add headers
+      worksheet.columns = [
+        { header: 'Patient ID', key: 'patientId', width: 15 },
+        { header: 'Name', key: 'name', width: 20 },
+        { header: 'Age', key: 'age', width: 10 },
+        { header: 'Condition', key: 'condition', width: 20 },
+        { header: 'Health Status', key: 'healthStatus', width: 15 },
+        { header: 'Alert Status', key: 'isAlert', width: 15 },
+        { header: 'Prompt', key: 'prompt', width: 50 },
+      ];
+      
+      // Add rows
+      filteredPrompts.forEach(prompt => {
+        worksheet.addRow({
+          patientId: prompt.patientId,
+          name: prompt.name,
+          age: prompt.age,
+          condition: prompt.condition,
+          healthStatus: prompt.healthStatus,
+          isAlert: prompt.isAlert === 'true' ? 'Yes' : 'No',
+          prompt: prompt.prompt
+        });
+      });
+      
+      // Set Content-Type and attachment header
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="patient-report-${year}-${month}.xlsx"`);
+      
+      // Write to response
+      await workbook.xlsx.write(res);
+      res.end();
+      
+    } catch (err) {
+      console.error("Error generating report for download:", err);
+      res.status(500).json({ 
+        success: false, 
+        message: `Error generating report: ${err instanceof Error ? err.message : String(err)}` 
       });
     }
   });
