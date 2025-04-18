@@ -1,0 +1,145 @@
+**RepLit, here’s your end‑to‑end sprint plan. You have full access to the codebase (Next.js/React pages, `openai.ts`, `excelProcessor.ts`, API routes, Vercel/Twilio creds via ENV). Please implement **all** of the following, in order, and validate each step before moving on.**
+
+---
+
+## 1. Revamp Login/Main Menu UI  
+- **Replace** the four static cards on the right of the login page with a **Caretaker Prompt Generator** menu:  
+  1. Upload Excel Data  
+  2. AI‑Powered Triage  
+  3. AI‑Prompt Editing  
+  4. AI‑Powered Monthly Reports  
+- **Implementation guidance:**  
+  - Update the React component for the login page (e.g. `pages/index.tsx` or equivalent).  
+  - Each menu item should route to the correct protected page after login.
+
+---
+
+## 2. Secure, Editable “Sandbox” for Prompt Templates  
+- **Move** all prompt templates out of `openai.ts` into a JSON/DB-backed config (e.g. `prompts.json` or a simple table).  
+- **Build** a “Sandbox” UI page under **AI‑Prompt Editing** where a caretaker can:  
+  1. Select a patient from a dropdown or search.  
+  2. View the current prompt template, including a `{reasoning}` placeholder.  
+  3. Edit and save changes.  
+  4. Click “Regenerate” to call OpenAI with the updated template and refresh that patient’s advice.  
+- **Key expectations:** sanitize user edits to avoid code injection; version or backup the original template.
+
+---
+
+## 3. Excel Processing & Aggregation Logic  
+- **Refactor** `excelProcessor.ts` to:  
+  1. **Load** the entire XLSX into memory or stream (whichever is more efficient).  
+  2. **Group** rows by **PatientID**.  
+  3. **Parse** `Senior Name` to extract name and DOB (format: “Last, First (MM/DD/YYYY)”).  
+  4. **Compute** `age` = difference between today’s date and DOB.  
+  5. **Include** both `Is Alert = TRUE` *and* `FALSE` rows:  
+     - TRUE rows for immediate triage.  
+     - FALSE rows for trend analysis.  
+  6. **Aggregate** each patient’s data into a summary object:  
+     ```ts
+     interface PatientSummary {
+       name: string;
+       age: number;
+       alerts: { variable: string; value: number; timestamp: Date; }[];
+       history: { variable: string; values: number[]; timestamps: Date[] }[];
+       compliance: number; // % of expected entries
+       trends: { [variable: string]: { slope: number; min: number; max: number; stddev: number } };
+     }
+     ```  
+  7. **Return** one `PatientSummary` per patient for downstream use.
+
+---
+
+## 4. Token & Cost Optimization Strategies  
+- **Local summarization:** compute slopes, min/max, volatility, compliance in code.  
+- **Thresholding:** only include trends where |slope| or variance > configurable threshold.  
+- **Bullet compression:** send GPT a tight bullet list (≤ 10 lines) instead of raw rows.  
+- **Delta updates:** for subsequent runs, only send changes since last summary.  
+- **Function‑calling:** wrap your summary object in a JSON schema so GPT returns structured output.
+
+---
+
+## 5. One Comprehensive Prompt per Patient  
+- **Templates:**  
+  - **Alexa‑Triage (≤ 100 words)** – for daily SMS  
+  - **Monthly Report (≤ 200 words)** – for PDF  
+- **Placeholders:** `{name}`, `{age}`, `{reasoning}`, plus trend bullets.  
+- **Sample triage prompt:**
+  ```
+  Patient: {name}, age {age}
+  • Weight: {current} lbs (↑{slope} lbs/month)
+  • BP: {current_systolic}/{current_diastolic} (↑{slope} pts)
+  Reasoning: {reasoning}
+  ```
+- **Sample monthly report prompt:**  
+  ```
+  {name}, age {age}, has had {compliance}% compliance over the past month. 
+  Trends: weight {trend_summary}; BP {trend_summary}; …
+  Recommendations: {actionable guidance…}
+  Reasoning: {reasoning}
+  ```
+
+---
+
+## 6. AI‑Powered Triage (Daily)  
+- **API route:** `/api/triage` that:  
+  1. Filters all `alerts` in today’s summaries.  
+  2. Builds per‑patient Alexa‑Triage prompts.  
+  3. Sends SMS via Twilio (`process.env.TWILIO_*`).  
+  4. Logs sends in a DB table to prevent duplicates within X hours.  
+- **UI page:** under **AI‑Powered Triage**, show today’s alerts, a “Send SMS” button, and status logs.
+
+---
+
+## 7. AI‑Powered Monthly Reports  
+- **Scheduler:** use Vercel Cron or an external scheduler to hit `/api/monthly-report` once per month.  
+- **Endpoint** `/api/monthly-report` that:  
+  1. Gathers last 30 days of each patient’s `PatientSummary`.  
+  2. Computes compliance and trend forecasts (linear regression).  
+  3. Generates a PDF via Puppeteer or pdfmake, matching Ben’s template.  
+  4. Stores the PDF in a bucket or DB, and returns a download link.  
+- **UI page:** under **AI‑Powered Monthly Reports**, list available PDFs with “Download” buttons.
+
+---
+
+## 8. SMS Alert Escalation  
+- **Immediate SMS** when a new TRUE alert appears in your daily import.  
+- **Template:**  
+  ```
+  ALERT: {name}, age {age}, {variable} at {value} on {timestamp}. Reason: {reasoning}.
+  ```
+- **Ensure:** ENV‑driven caregiver phone number, idempotent sends.
+
+---
+
+## 9. Security & Deployment  
+- **Secrets:** move OpenAI, Twilio, PDF‑service creds into Vercel Env Vars (`process.env.*`).  
+- **CI/CD:**  
+  - `main` → production  
+  - `staging` → sandbox URL  
+- **Verify:** no secrets in client bundles; all GPT calls happen server‑side.
+
+---
+
+## 10. Testing & Documentation  
+- **Unit tests** for: DOB parsing, age calculation, grouping logic, trend computation, compliance.  
+- **Integration tests** for: triage SMS, PDF generation, sandbox edits + regeneration.  
+- **README updates**:  
+  - ENV var list with descriptions.  
+  - Local dev vs. staging vs. prod setup.  
+  - How to use each new feature.
+
+---
+
+> **Checklist Before You Finish:**  
+> - [ ] UI menu items route correctly  
+> - [ ] Sandbox CRUD & regenerate works  
+> - [ ] Excel logic groups and summaries correct  
+> - [ ] Prompt templates produce valid output (triage & monthly)  
+> - [ ] SMS triage fires and logs properly  
+> - [ ] Monthly PDFs match Ben’s template  
+> - [ ] No secrets in client code; Env vars are used  
+> - [ ] Scheduler triggers monthly job  
+> - [ ] Token usage optimized via summaries & thresholds  
+> - [ ] Tests passing  
+
+Please confirm each milestone as you go and raise any blockers immediately. Let’s show the magic of a single, optimized prompt per patient—with predictive trends, secure deployment, and Alexa‑ready output!
