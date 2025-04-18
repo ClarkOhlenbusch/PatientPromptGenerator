@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, User, Loader2 } from "lucide-react";
+import { LogOut, User, Loader2, Menu, X } from "lucide-react";
 
 export default function Header() {
   const { user, logoutMutation, isLoading } = useAuth();
   const [location, navigate] = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -36,6 +38,31 @@ export default function Header() {
         </Link>
         
         <div className="hidden md:flex items-center space-x-4">
+          {user && (
+            <nav className="flex items-center space-x-4 mr-4">
+              <Link href="/">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  Upload Data
+                </span>
+              </Link>
+              <Link href="/triage">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/triage" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  Triage
+                </span>
+              </Link>
+              <Link href="/prompt-editing">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  Prompt Editing
+                </span>
+              </Link>
+              <Link href="/monthly-reports">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  Monthly Reports
+                </span>
+              </Link>
+            </nav>
+          )}
+          
           <Link href="/faq">
             <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
           </Link>
@@ -76,11 +103,65 @@ export default function Header() {
           )}
         </div>
         
-        <button className="md:hidden text-gray-600 hover:text-gray-900">
-          <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        <div className="md:hidden relative">
+          {user && mobileMenuOpen && (
+            <div className="absolute top-10 right-0 bg-white shadow-lg rounded-md p-4 min-w-[200px] z-10 border">
+              <nav className="flex flex-col space-y-3">
+                <Link href="/" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    Upload Data
+                  </span>
+                </Link>
+                <Link href="/triage" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/triage" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    Triage
+                  </span>
+                </Link>
+                <Link href="/prompt-editing" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    Prompt Editing
+                  </span>
+                </Link>
+                <Link href="/monthly-reports" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    Monthly Reports
+                  </span>
+                </Link>
+                <Link href="/faq" onClick={() => setMobileMenuOpen(false)}>
+                  <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
+                </Link>
+                <hr className="my-2" />
+                <Button 
+                  onClick={() => {
+                    handleLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  variant="outline" 
+                  size="sm"
+                  disabled={logoutMutation.isPending}
+                  className="w-full"
+                >
+                  {logoutMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="mr-2 h-4 w-4" />
+                  )}
+                  Logout
+                </Button>
+              </nav>
+            </div>
+          )}
+          <button 
+            className="text-gray-600 hover:text-gray-900"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? (
+              <X className="h-6 w-6" />
+            ) : (
+              <Menu className="h-6 w-6" />
+            )}
+          </button>
+        </div>
       </div>
     </header>
   );
