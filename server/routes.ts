@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
 import { generatePrompt, getTokenUsageStats } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
-import { Workbook } from "exceljs";
+import * as ExcelJS from "exceljs";
 import { db } from "./db";
 import { patientPrompts } from "@shared/schema";
 import { setupAuth } from "./auth";
@@ -484,8 +484,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Download a monthly report
+  // Download monthly report as PDF
   app.get("/api/download-report/:year/:month", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      const { year, month } = req.params;
+      const patientId = req.query.patientId as string | undefined; // Optional patient ID for individual reports
+      
+      // Import the PDF generator
+      const { generatePatientMonthlyReport, generateConsolidatedMonthlyReport } = await import('./lib/pdfGenerator');
+      
+      // Get all patient prompts from the database
+      const prompts = await db.select().from(patientPrompts);
+      
+      // Filter to match the specified month/year if provided
+      const filteredPrompts = prompts.filter(prompt => {
+        if (!prompt.createdAt) return false;
+        
+        try {
+          const promptDate = new Date(prompt.createdAt);
+          const promptMonth = String(promptDate.getMonth() + 1).padStart(2, '0');
+          const promptYear = promptDate.getFullYear().toString();
+          
+          return promptMonth === month && promptYear === year;
+        } catch(e) {
+          console.warn(`Could not parse date for prompt ${prompt.id}:`, e);
+          return false;
+        }
+      });
+      
+      if (filteredPrompts.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: `No patient data found for ${year}-${month}` 
+        });
+      }
+      
+      // Get measurements for patients from their rawData
+      // In a real implementation, this would query a measurements table
+      const patientMeasurements: Record<string, any[]> = {};
+      
+      filteredPrompts.forEach(prompt => {
+        if (prompt.rawData) {
+          const patientId = prompt.patientId;
+          
+          if (!patientMeasurements[patientId]) {
+            patientMeasurements[patientId] = [];
+          }
+          
+          // Extract measurements from rawData
+          try {
+            const rawData = prompt.rawData as any;
+            
+            // Check for variables array in rawData
+            if (rawData.variables && typeof rawData.variables === 'object') {
+              Object.entries(rawData.variables).forEach(([variable, value]) => {
+                if (value !== null && value !== undefined) {
+                  patientMeasurements[patientId].push({
+                    patientId,
+                    timestamp: prompt.createdAt || new Date().toISOString(),
+                    variable,
+                    value: parseFloat(value as string) || 0,
+                    isAlert: prompt.isAlert === 'true'
+                  });
+                }
+              });
+            }
+          } catch (error) {
+            console.warn(`Failed to extract measurements for patient ${patientId}:`, error);
+          }
+        }
+      });
+      
+      let pdfBuffer: Buffer;
+      
+      // Generate individual report or consolidated report
+      if (patientId) {
+        // Find the specific patient
+        const patient = filteredPrompts.find(p => p.patientId === patientId);
+        
+        if (!patient) {
+          return res.status(404).json({ 
+            success: false, 
+            message: `Patient ${patientId} not found for ${year}-${month}` 
+          });
+        }
+        
+        // Generate PDF for the specific patient
+        pdfBuffer = await generatePatientMonthlyReport(
+          patient,
+          patientMeasurements[patientId] || [],
+          month,
+          year
+        );
+        
+        // Set filename for individual report
+        res.setHeader('Content-Disposition', `attachment; filename="patient-report-${patientId}-${year}-${month}.pdf"`);
+      } else {
+        // Generate consolidated PDF for all patients
+        pdfBuffer = await generateConsolidatedMonthlyReport(
+          filteredPrompts,
+          patientMeasurements,
+          month,
+          year
+        );
+        
+        // Set filename for consolidated report
+        res.setHeader('Content-Disposition', `attachment; filename="monthly-report-${year}-${month}.pdf"`);
+      }
+      
+      // Set Content-Type for PDF
+      res.setHeader('Content-Type', 'application/pdf');
+      
+      // Send the PDF
+      res.send(pdfBuffer);
+      
+    } catch (err) {
+      console.error("Error generating PDF report for download:", err);
+      res.status(500).json({ 
+        success: false, 
+        message: `Error generating report: ${err instanceof Error ? err.message : String(err)}` 
+      });
+    }
+  });
+  
+  // Download monthly report as Excel (fallback)
+  app.get("/api/download-report-excel/:year/:month", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ success: false, message: "Authentication required" });
@@ -513,7 +640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Generate Excel file
-      const workbook = new Workbook();
+      const workbook = new ExcelJS.default.Workbook();
       const worksheet = workbook.addWorksheet('Patient Data');
       
       // Add headers
@@ -549,7 +676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.end();
       
     } catch (err) {
-      console.error("Error generating report for download:", err);
+      console.error("Error generating Excel report for download:", err);
       res.status(500).json({ 
         success: false, 
         message: `Error generating report: ${err instanceof Error ? err.message : String(err)}` 

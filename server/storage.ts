@@ -209,30 +209,72 @@ Let's discuss this at your next appointment.`
       // Process each patient to check for alert conditions
       const alerts = [];
       
-      // Filter patients by date when they were created
+      // Filter patients by date when they were created or by measurement date
       // Only show patients from the uploaded batch that match the requested date
       const filteredPatients = allPatients.filter(patient => {
         try {
           // If date is explicitly requested, filter strictly by that date
           if (date) {
-            if (!patient.createdAt) return false; // Skip if no date and filtering is requested
-            
-            const patientDate = new Date(patient.createdAt);
             const requestDateStr = requestDate.toISOString().split('T')[0]; // YYYY-MM-DD
-            const patientDateStr = patientDate.toISOString().split('T')[0]; // YYYY-MM-DD
             
-            // Compare dates as strings in YYYY-MM-DD format for exact date matching
-            console.log(`Comparing dates: ${patientDateStr} with ${requestDateStr}`);
-            return patientDateStr === requestDateStr;
+            // First check patient creation date
+            if (patient.createdAt) {
+              const patientDate = new Date(patient.createdAt);
+              const patientDateStr = patientDate.toISOString().split('T')[0]; // YYYY-MM-DD
+              
+              if (patientDateStr === requestDateStr) {
+                return true;
+              }
+            }
+            
+            // If not matching by creation date, check if there are measurements for the requested date
+            // in the rawData (if available)
+            if (patient.rawData) {
+              const rawData = patient.rawData as any;
+              
+              // Check if there's a timestamp in the raw data that matches
+              if (rawData.timestamp) {
+                const measurementDate = new Date(rawData.timestamp);
+                const measurementDateStr = measurementDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                
+                if (measurementDateStr === requestDateStr) {
+                  return true;
+                }
+              }
+              
+              // Look for any timestamps that might be nested in the data
+              if (rawData.variables && typeof rawData.variables === 'object') {
+                // Some systems store timestamps with measurements
+                for (const [key, value] of Object.entries(rawData.variables)) {
+                  if (key.toLowerCase().includes('date') || key.toLowerCase().includes('time')) {
+                    try {
+                      const varDate = new Date(value as string);
+                      const varDateStr = varDate.toISOString().split('T')[0];
+                      
+                      if (varDateStr === requestDateStr) {
+                        return true;
+                      }
+                    } catch (e) {
+                      // Not a valid date, continue checking
+                    }
+                  }
+                }
+              }
+            }
+            
+            // No matching date found
+            return false;
           }
           
-          // If no specific date requested, include all patients with alerts
-          return true;
+          // If no specific date requested, include all patients with alerts or issues
+          return patient.isAlert === "true";
         } catch(e) {
           console.warn(`Could not parse date for patient ${patient.patientId}:`, e);
           return false; // Exclude by default if date parsing fails
         }
       });
+      
+      
       
       console.log(`Filtered to ${filteredPatients.length} patients out of ${allPatients.length} for date ${requestDate.toISOString()}`);
       
