@@ -214,29 +214,30 @@ export default function AuthPage() {
             <p className="text-xl mb-8">
               Transform your medical data into personalized patient communication with AI-powered prompt generation.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+            <div className="grid grid-cols-1 gap-6 text-left">
+              <h2 className="font-bold text-2xl mb-2">Caretaker Prompt Generator</h2>
               <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">Upload Excel Data</h3>
+                <h3 className="font-semibold text-lg mb-2">1. Upload Excel Data</h3>
                 <p className="opacity-90 text-sm">
-                  Easily import your patient data from Excel files for processing.
+                  Import patient data from Excel files to start the prompt generation workflow.
                 </p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">AI-Powered Analysis</h3>
+                <h3 className="font-semibold text-lg mb-2">2. AI-Powered Triage</h3>
                 <p className="opacity-90 text-sm">
-                  Our system uses OpenAI to generate customized prompts for each patient.
+                  Automatically prioritize patients based on health metrics and send SMS alerts.
                 </p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">Secure Processing</h3>
+                <h3 className="font-semibold text-lg mb-2">3. AI-Prompt Editing</h3>
                 <p className="opacity-90 text-sm">
-                  All patient data is processed securely and protected with authentication.
+                  Edit and customize prompt templates in a secure sandbox environment.
                 </p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">Export Results</h3>
+                <h3 className="font-semibold text-lg mb-2">4. AI-Powered Monthly Reports</h3>
                 <p className="opacity-90 text-sm">
-                  Download your generated prompts in CSV format for easy integration.
+                  Generate comprehensive monthly analysis reports with patient trends and insights.
                 </p>
               </div>
             </div>

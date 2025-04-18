@@ -11,6 +11,9 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
+import PromptEditingSandbox from "@/pages/PromptEditingSandbox";
+import AIPoweredTriage from "@/pages/AIPoweredTriage";
+import MonthlyReports from "@/pages/MonthlyReports";
 
 function Router() {
   return (
@@ -21,6 +24,9 @@ function Router() {
           <Switch>
             <ProtectedRoute path="/" component={Home} />
             <ProtectedRoute path="/patient-prompts/:id" component={PatientPrompts} />
+            <ProtectedRoute path="/prompt-editing" component={PromptEditingSandbox} />
+            <ProtectedRoute path="/triage" component={AIPoweredTriage} />
+            <ProtectedRoute path="/monthly-reports" component={MonthlyReports} />
             <Route path="/auth" component={AuthPage} />
             <Route path="/faq" component={FAQ} />
             <Route component={NotFound} />
