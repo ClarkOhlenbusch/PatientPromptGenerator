@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
 import { generatePrompt, getTokenUsageStats } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
-import * as ExcelJS from "exceljs";
+import { Workbook } from "exceljs";
 import { db } from "./db";
 import { patientPrompts } from "@shared/schema";
 import { setupAuth } from "./auth";
@@ -513,7 +513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Generate Excel file
-      const workbook = new ExcelJS.Workbook();
+      const workbook = new Workbook();
       const worksheet = workbook.addWorksheet('Patient Data');
       
       // Add headers

@@ -210,15 +210,27 @@ Let's discuss this at your next appointment.`
       const alerts = [];
       
       // Filter patients by date when they were created
+      // Only show patients from the uploaded batch that match the requested date
       const filteredPatients = allPatients.filter(patient => {
-        if (!patient.createdAt) return true; // Include if no date
-        
         try {
-          const patientDate = new Date(patient.createdAt);
-          return patientDate.toDateString() === requestDate.toDateString();
+          // If date is explicitly requested, filter strictly by that date
+          if (date) {
+            if (!patient.createdAt) return false; // Skip if no date and filtering is requested
+            
+            const patientDate = new Date(patient.createdAt);
+            const requestDateStr = requestDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            const patientDateStr = patientDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            
+            // Compare dates as strings in YYYY-MM-DD format for exact date matching
+            console.log(`Comparing dates: ${patientDateStr} with ${requestDateStr}`);
+            return patientDateStr === requestDateStr;
+          }
+          
+          // If no specific date requested, include all patients with alerts
+          return true;
         } catch(e) {
           console.warn(`Could not parse date for patient ${patient.patientId}:`, e);
-          return true; // Include by default if date parsing fails
+          return false; // Exclude by default if date parsing fails
         }
       });
       
