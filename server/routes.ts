@@ -72,6 +72,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const prompt = await generatePrompt(patient);
             
+            // Store metadata as a JSON string for issues and alert reasons
+            const metadata = JSON.stringify({
+              issues: patient.issues || [],
+              alertReasons: patient.alertReasons || [],
+              variables: patient.variables || {}
+            });
+            
             await storage.createPatientPrompt({
               batchId,
               patientId: patient.patientId || `P${nanoid(6)}`,
@@ -79,6 +86,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               age: patient.age,
               condition: patient.condition,
               prompt,
+              isAlert: patient.isAlert ? "true" : "false", // Store as string in DB
+              healthStatus: patient.healthStatus || "healthy",
+              metadata, // Add metadata field to store issues/reasons
               rawData: patient,
             });
           } catch (err) {

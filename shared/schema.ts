@@ -43,6 +43,7 @@ export const patientPrompts = pgTable("patient_prompts", {
   isAlert: text("is_alert").default("false"),
   healthStatus: text("health_status").default("alert"),
   prompt: text("prompt").notNull(),
+  metadata: text("metadata"), // Store issues and alert reasons as JSON string
   rawData: jsonb("raw_data"),
   createdAt: text("created_at").default(new Date().toISOString()),
   updatedAt: text("updated_at"),

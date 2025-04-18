@@ -198,16 +198,28 @@ Let's discuss this at your next appointment.`
         let isAlert = false;
         
         // Check literal string "true" since the DB might store it that way
-        if (patient.isAlert === "true" || patient.isAlert === true) {
+        if (patient.isAlert && typeof patient.isAlert === 'string' && patient.isAlert === "true") {
           isAlert = true;
         } 
         
         // Check if there are issues listed (stored as JSON string in DB)
         let issues = [];
         try {
-          if (patient.metadata) {
-            const metadata = JSON.parse(patient.metadata);
-            if (metadata.issues && metadata.issues.length > 0) {
+          // Get metadata from the patient record
+          // It might be stored in the raw data if it's not in the metadata field
+          let metadataStr = patient.metadata || '';
+          
+          // If no metadata field (for older records), try to extract from rawData
+          if (!metadataStr && patient.rawData) {
+            const rawData = patient.rawData as any;
+            if (rawData.issues && Array.isArray(rawData.issues)) {
+              issues = rawData.issues;
+              isAlert = true;
+            }
+          } else if (metadataStr) {
+            // Parse metadata if it exists
+            const metadata = JSON.parse(metadataStr);
+            if (metadata.issues && Array.isArray(metadata.issues) && metadata.issues.length > 0) {
               issues = metadata.issues;
               isAlert = true;
             }

@@ -303,6 +303,9 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
     // Convert Map entries to array for safer iteration
     Array.from(patientDataMap.entries()).forEach(([_, patientData]) => {
       // Create a consolidated patient record with all issues
+      // Explicitly set isAlert based on presence of issues and alert reasons
+      const isAlert = patientData.issues.length > 0 || patientData.alertReasons.length > 0;
+      
       const aggregatedPatient: PatientData = {
         patientId: patientData.patientId,
         name: patientData.name,
@@ -316,7 +319,11 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
         // Store all raw data for reference
         rawData: patientData.rawData,
         // Combined alert reasons
-        alertReasons: patientData.alertReasons
+        alertReasons: patientData.alertReasons,
+        // Explicitly mark as alert
+        isAlert: isAlert,
+        // Set health status
+        healthStatus: isAlert ? 'alert' : 'healthy'
       };
       
       aggregatedPatients.push(aggregatedPatient);
