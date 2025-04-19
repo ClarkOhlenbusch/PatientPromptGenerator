@@ -28,11 +28,21 @@ function createDatabaseClient() {
   return drizzle(pool, { schema });
 }
 
+// Import initialization function
+import { initializeDatabase } from './lib/initDb';
+
 // Create database client
 let db;
 try {
   db = createDatabaseClient();
   console.log("Database client initialized successfully");
+  
+  // Initialize database tables
+  initializeDatabase().then(() => {
+    console.log("Database tables initialized successfully");
+  }).catch(err => {
+    console.error("Failed to initialize database tables:", err);
+  });
 } catch (err) {
   console.error("Failed to initialize database client:", err);
   throw err;
