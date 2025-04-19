@@ -8,13 +8,64 @@ import {
   Activity,
   PlusCircle
 } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Define types for patients
+interface Patient {
+  id: number;
+  patientId: string;
+  name: string;
+  batchId: string;
+  age: number;
+  condition: string;
+}
 
 export default function MonthlyReports() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>("all");
   const { toast } = useToast();
+  
+  // Query to get the latest batch
+  const { data: latestBatch } = useQuery({
+    queryKey: ["/api/latest-batch"],
+    queryFn: async () => {
+      try {
+        // Get all batches and sort by most recent
+        const res = await apiRequest("GET", "/api/batches");
+        const batches = await res.json();
+        
+        if (batches && batches.length > 0) {
+          // Sort batches by createdAt, descending
+          const sortedBatches = [...batches].sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          return sortedBatches[0]; // Return the most recent batch
+        }
+        return null;
+      } catch (error) {
+        console.error("Failed to fetch latest batch:", error);
+        return null;
+      }
+    }
+  });
+  
+  // Query to get patients from the latest batch
+  const { data: patients, isLoading: isPatientsLoading } = useQuery({
+    queryKey: ["/api/patients", latestBatch?.batchId],
+    queryFn: async () => {
+      if (!latestBatch?.batchId) return [];
+      
+      try {
+        const res = await apiRequest("GET", `/api/patient-prompts/${latestBatch.batchId}`);
+        return await res.json();
+      } catch (error) {
+        console.error("Failed to fetch patients:", error);
+        return [];
+      }
+    },
+    enabled: !!latestBatch?.batchId // Only run if we have a batch ID
+  });
   
   // Mutation for generating a PDF report from the latest upload data
   const generateReportMutation = useMutation({
@@ -104,13 +155,18 @@ export default function MonthlyReports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Patients</SelectItem>
-                  {/* To be replaced with actual patients from the latest batch */}
-                  <SelectItem value="1001">Patient #1001</SelectItem>
-                  <SelectItem value="1002">Patient #1002</SelectItem>
-                  <SelectItem value="1003">Patient #1003</SelectItem>
-                  <SelectItem value="Joe">Joe Butera</SelectItem>
-                  <SelectItem value="Diane">Diane Affre</SelectItem>
-                  <SelectItem value="Fabien">Fabien Deniau</SelectItem>
+                  {/* Use real patient data if available */}
+                  {isPatientsLoading ? (
+                    <SelectItem value="loading" disabled>Loading patients...</SelectItem>
+                  ) : (patients && patients.length > 0) ? (
+                    patients.map((patient: any) => (
+                      <SelectItem key={patient.patientId} value={patient.patientId}>
+                        {patient.name || `Patient #${patient.patientId}`}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="nodata" disabled>No patient data available</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
