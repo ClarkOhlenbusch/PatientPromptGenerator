@@ -1,0 +1,30 @@
+**Replit AI — Full‑Repo Database & Login Fix**
+
+> **Context:**  
+> This Next.js/Vercel app uses a SQLite/Postgres database (via Prisma/knex/your chosen ORM) to store users, patient batches, and measurements. Users cannot log in because the `users` table doesn’t exist. Patient batch records are created but never mark any processed patients.
+
+> **Your Task:**  
+> 1. **Scan every file** in the repo (including `.replit`, `excelProcessor.ts`, `openai.ts`, `pdfGenerator.ts`, API routes, database config, and migration scripts).  
+> 2. **Fix the login error**:  
+>    - Locate and correct the database configuration so the `users` table is created on startup or via migrations.  
+>    - Ensure your ORM/knex/Prisma migration runs automatically or add a migration file defining `users(id, email, passwordHash, createdAt)`.  
+>    - Verify the NextAuth (or custom auth) adapter points to the correct table/schema.  
+>    - Add error logging around the login endpoint to capture SQL errors and prevent 500s.  
+> 3. **Ensure patient batch processing counts update correctly**:  
+>    - In the `/api/upload` or batch‑processing code, after saving each patient record, increment the `processedPatients` count on the corresponding batch row.  
+>    - Confirm that `totalPatients` reflects the number of rows parsed from the Excel file and that `processedPatients` matches the number successfully upserted.  
+> 4. **General DB schema audit:**  
+>    - Verify tables for `users`, `patients`, `measurements`, `batches`, and `reports` all exist.  
+>    - Add missing migrations or table‑creation logic where needed.  
+>    - Ensure your database connection string (`DATABASE_URL`) is correctly set in Vercel ENV and in local `.env`.  
+> 5. **Post‑fix validation steps:**  
+>    - Run `npm run migrate` or your ORM’s migration command and verify no errors.  
+>    - Start the app locally and confirm you can create a user, log in, and see the dashboard.  
+>    - Upload your demo XLSX, then check the batch list: `totalPatients` and `processedPatients` should both reflect the actual row count.  
+
+> **Instructions:**  
+> - For each file you modify, add a brief comment at the top explaining the change.  
+> - Commit in logical chunks (e.g., `fix: add users table migration`, `fix: update batch processing count`).  
+> - After you’ve fixed login and batch counts, report back so we can proceed to Triage and PDF fixes.  
+
+Please proceed now with these database and login fixes.

@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "bash", "web"]
+modules = ["nodejs-20", "bash", "web", "postgresql-16"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
@@ -8,7 +8,7 @@ channel = "stable-24_05"
 [deployment]
 deploymentTarget = "autoscale"
 run = ["sh", "-c", "NODE_ENV=production node dist/index.js"]
-build = ["sh", "-c", "npm run build"]
+build = ["sh", "-c", "npm ci && npm run build"]
 
 [[ports]]
 localPort = 5000
