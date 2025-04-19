@@ -198,6 +198,58 @@ While the current version uses in-memory storage for simplicity and demonstratio
 2. Response analytics and effectiveness metrics
 3. Patient feedback and interaction history
 
+## Recent Improvements
+
+We've made several important improvements to enhance the application's functionality and reliability:
+
+### 1. Authentication Enhancements
+
+- **Robust Error Logging**: Added comprehensive error logging for authentication, helping to diagnose login issues in production.
+- **Session Security**: Improved session handling with proper cookie settings and secure configuration.
+- **Protected Routes**: All sensitive API endpoints are now properly protected, redirecting unauthenticated users to the login screen.
+
+To test authentication:
+```bash
+# Run the smoke test to verify authentication is working
+npm run smoke-test
+```
+
+### 2. Monthly Reports
+
+The application now generates comprehensive PDF monthly reports with:
+
+- **30-Day Patient Data Analysis**: Consolidation of patient data from the last 30 days.
+- **Compliance Tracking**: Calculation of patient compliance rates.
+- **Trend Analysis**: Identification of trends in patient health metrics.
+- **PDF Generation**: Server-side generation of professional PDF reports using pdfmake.
+
+To generate a monthly report:
+1. Navigate to the "Monthly Reports" tab
+2. Select the month/year or use the current month
+3. Click "Generate & Download PDF"
+4. The report will be generated and automatically downloaded
+
+### 3. Triage System Improvements
+
+The triage system has been completely redesigned for better usability:
+
+- **Patient-Centric Grouping**: Alerts are now grouped by patient rather than by row, providing a clearer overview.
+- **Improved SMS Formatting**: SMS messages now follow a clear, consistent template:
+  ```
+  ALERT for {name}, age {age}:
+  • {Variable1}: {Value1} at {Timestamp1}
+  • {Variable2}: {Value2} at {Timestamp2}
+  Reasoning: {reasoning}
+  ```
+- **Detailed View**: Each patient card includes a "View Details" option to expand and see all alert information.
+- **Batch or Individual Messaging**: Send SMS alerts to individual patients or in batch to multiple patients.
+
+### 4. Data Persistence
+
+- **Complete Data Storage**: All uploaded Excel data is now properly persisted in the database.
+- **No Data Limitations**: Removed the arbitrary limit on the number of patients processed.
+- **Error Handling**: Improved error handling and logging throughout the data processing pipeline.
+
 ## Acknowledgments
 
 - OpenAI for providing the API for generating patient prompts

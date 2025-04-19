@@ -206,145 +206,106 @@ Let's discuss this at your next appointment.`
         rawData: patientPrompts.rawData
       }).from(patientPrompts);
       
-      // Process each patient to check for alert conditions
-      const alerts = [];
+      // Filter to alerts only
+      const alertPatients = allPatients.filter(p => p.isAlert === 'true');
       
-      // Filter patients by date when they were created or by measurement date
-      // Only show patients from the uploaded batch that match the requested date
-      const filteredPatients = allPatients.filter(patient => {
-        try {
-          // If date is explicitly requested, filter strictly by that date
-          if (date) {
-            const requestDateStr = requestDate.toISOString().split('T')[0]; // YYYY-MM-DD
-            
-            // First check patient creation date
-            if (patient.createdAt) {
-              const patientDate = new Date(patient.createdAt);
-              const patientDateStr = patientDate.toISOString().split('T')[0]; // YYYY-MM-DD
-              
-              if (patientDateStr === requestDateStr) {
-                return true;
-              }
+      // Group alerts by patient (using patientId as the key)
+      const patientAlertsMap = new Map();
+      
+      alertPatients.forEach(patient => {
+        // Extract relevant data
+        const alertData = {
+          id: `alert-${patient.id}`,
+          patientId: patient.patientId,
+          patientName: patient.name,
+          age: patient.age,
+          condition: patient.condition,
+          createdAt: patient.createdAt,
+          variables: [],
+          status: "pending", // Default to pending
+          sentAt: null
+        };
+        
+        // Extract variables from rawData if available
+        if (patient.rawData) {
+          if (typeof patient.rawData === 'string') {
+            try {
+              patient.rawData = JSON.parse(patient.rawData);
+            } catch (e) {
+              console.warn(`Could not parse rawData for patient ${patient.patientId}:`, e);
             }
-            
-            // If not matching by creation date, check if there are measurements for the requested date
-            // in the rawData (if available)
-            if (patient.rawData) {
-              const rawData = patient.rawData as any;
-              
-              // Check if there's a timestamp in the raw data that matches
-              if (rawData.timestamp) {
-                const measurementDate = new Date(rawData.timestamp);
-                const measurementDateStr = measurementDate.toISOString().split('T')[0]; // YYYY-MM-DD
-                
-                if (measurementDateStr === requestDateStr) {
-                  return true;
-                }
-              }
-              
-              // Look for any timestamps that might be nested in the data
-              if (rawData.variables && typeof rawData.variables === 'object') {
-                // Some systems store timestamps with measurements
-                for (const [key, value] of Object.entries(rawData.variables)) {
-                  if (key.toLowerCase().includes('date') || key.toLowerCase().includes('time')) {
-                    try {
-                      const varDate = new Date(value as string);
-                      const varDateStr = varDate.toISOString().split('T')[0];
-                      
-                      if (varDateStr === requestDateStr) {
-                        return true;
-                      }
-                    } catch (e) {
-                      // Not a valid date, continue checking
-                    }
-                  }
-                }
-              }
-            }
-            
-            // No matching date found
-            return false;
           }
           
-          // If no specific date requested, include all patients with alerts or issues
-          return patient.isAlert === "true";
-        } catch(e) {
-          console.warn(`Could not parse date for patient ${patient.patientId}:`, e);
-          return false; // Exclude by default if date parsing fails
+          // Extract relevant measurements/variables from rawData
+          if (patient.rawData.variables) {
+            const variables = patient.rawData.variables;
+            Object.keys(variables).forEach(key => {
+              if (key !== 'patientId' && key !== 'name' && key !== 'age' && key !== 'condition') {
+                alertData.variables.push({
+                  name: key,
+                  value: variables[key],
+                  timestamp: patient.createdAt
+                });
+              }
+            });
+          }
+          
+          // Extract reasoning if available
+          if (patient.rawData.alertReasons && patient.rawData.alertReasons.length > 0) {
+            alertData.reasoning = patient.rawData.alertReasons.join('; ');
+          } else {
+            alertData.reasoning = `Abnormal ${patient.condition} readings`;
+          }
+        }
+        
+        // Format the SMS message using the new template
+        alertData.message = this.formatSmsMessage(alertData);
+        
+        // Add to or update the patient in the map
+        if (patientAlertsMap.has(patient.patientId)) {
+          const existingPatient = patientAlertsMap.get(patient.patientId);
+          // Add this alert's variables to the existing patient
+          existingPatient.variables = [...existingPatient.variables, ...alertData.variables];
+          existingPatient.alertCount = (existingPatient.alertCount || 0) + 1;
+          
+          // Update the message to include all variables
+          existingPatient.message = this.formatSmsMessage(existingPatient);
+        } else {
+          // First alert for this patient
+          alertData.alertCount = 1;
+          patientAlertsMap.set(patient.patientId, alertData);
         }
       });
       
+      // Convert map to array
+      const groupedAlerts = Array.from(patientAlertsMap.values());
       
-      
-      console.log(`Filtered to ${filteredPatients.length} patients out of ${allPatients.length} for date ${requestDate.toISOString()}`);
-      
-      for (const patient of filteredPatients) {
-        // Check if patient has isAlert field marked as true or has issues
-        let isAlert = false;
-        
-        // Check literal string "true" since the DB might store it that way
-        if (patient.isAlert && typeof patient.isAlert === 'string' && patient.isAlert === "true") {
-          isAlert = true;
-        } 
-        
-        // Check if there are issues listed (stored in rawData)
-        let issues = [];
-        try {
-          // Extract issues from rawData instead of metadata
-          if (patient.rawData) {
-            const rawData = patient.rawData as any;
-            
-            // Check for issues array
-            if (rawData.issues && Array.isArray(rawData.issues)) {
-              issues = rawData.issues;
-              isAlert = true;
-            } 
-            // Also check for alertReasons array
-            else if (rawData.alertReasons && Array.isArray(rawData.alertReasons)) {
-              issues = rawData.alertReasons;
-              isAlert = true;
-            }
-          }
-        } catch (e) {
-          console.warn(`Failed to extract data for patient ${patient.patientId}:`, e);
-        }
-        
-        // Create alert if this patient needs attention
-        if (isAlert) {
-          const alertId = `alert-${patient.id}`;
-          
-          // Format message based on available data
-          let message = `ALERT: Patient ${patient.name} (${patient.age}), with condition ${patient.condition}, needs attention.`;
-          
-          // Add issues if available
-          if (issues.length > 0) {
-            message += ` Issues detected: ${issues.join(', ')}.`;
-          }
-          
-          message += " Please check their latest readings and contact them as soon as possible.";
-          
-          // Add alert
-          alerts.push({
-            id: alertId,
-            patientId: patient.patientId,
-            patientName: patient.name,
-            age: patient.age,
-            condition: patient.condition,
-            alertValue: issues.length > 0 ? issues[0].split(':')[1] || "Abnormal reading" : "Abnormal reading",
-            timestamp: new Date().toISOString(),
-            status: "pending",
-            message: message
-          });
-        }
-      }
-      
-      // Return only the real alerts from the database
-      console.log(`Returning ${alerts.length} real patient alerts for date ${date || 'today'}`);
-      return alerts;
+      console.log(`Found ${groupedAlerts.length} patients with alerts`);
+      return groupedAlerts;
     } catch (error) {
       console.error("Error getting patient alerts:", error);
       return [];
     }
+  }
+  
+  // Format SMS message with the new template
+  formatSmsMessage(alert: any): string {
+    const { patientName, age, variables, reasoning } = alert;
+    
+    // Build the variables section
+    let variablesText = '';
+    if (variables && variables.length > 0) {
+      variablesText = variables.map((v: any) => {
+        // Format timestamp if available
+        const timestamp = v.timestamp ? new Date(v.timestamp).toLocaleString() : 'unknown time';
+        return `• ${v.name}: ${v.value} at ${timestamp}`;
+      }).join('\n');
+    }
+    
+    // Create the message using the new template
+    return `ALERT for ${patientName}, age ${age}:
+${variablesText}
+Reasoning: ${reasoning || 'Abnormal readings detected'}`;
   }
   
   async sendAlert(alertId: string): Promise<any> {

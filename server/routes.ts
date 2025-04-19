@@ -11,6 +11,8 @@ import ExcelJS from "exceljs";
 import { db } from "./db";
 import { patientPrompts } from "@shared/schema";
 import { setupAuth } from "./auth";
+import fs from "fs";
+import { eq, and, sql as SQL } from "drizzle-orm";
 
 // Set up multer for file uploads
 const upload = multer({
@@ -35,6 +37,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/upload", upload.single("file"), async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
       if (!req.file) {
         return res.status(400).json({ success: false, message: "No file uploaded" });
       }
@@ -53,50 +59,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Process the Excel file and extract patient data
         const patientData = await processExcelFile(file.buffer);
-
-        // Limit the number of records to process to improve performance
-        // Take only unique patient IDs to reduce load, but preserve all conditions
-        const uniquePatients = new Map();
-        const MAX_PATIENTS = 20; // Limit to 20 patients for demo
+        console.log(`Processed ${patientData.length} rows from Excel file`);
         
-        // Group patients by unique patientId only
+        // Store all patients without limiting the number
+        const successfullyStored = [];
+        
+        // Process each patient record
         for (const patient of patientData) {
-          // Only use patientId as the key to ensure we get all conditions for each patient
-          const key = patient.patientId;
-          
-          if (!uniquePatients.has(key)) {
-            uniquePatients.set(key, patient);
-            if (uniquePatients.size >= MAX_PATIENTS) break;
-          }
-        }
-        
-        // Generate prompts for each unique patient-condition combination
-        for (const patient of Array.from(uniquePatients.values())) {
           try {
-            const prompt = await generatePrompt(patient);
+            // Ensure patient has a unique ID
+            const patientId = patient.patientId || `P${nanoid(6)}`;
             
-            // Instead of using metadata column, store issues in rawData
             // Ensure patient object has the necessary fields
             const patientWithMetadata = {
               ...patient,
+              patientId,
               issues: patient.issues || [],
               alertReasons: patient.alertReasons || [],
               variables: patient.variables || {}
             };
             
+            // Generate a prompt for the patient
+            const prompt = await generatePrompt(patientWithMetadata);
+            
+            // Create the patient prompt record in the database
             await storage.createPatientPrompt({
               batchId,
-              patientId: patient.patientId || `P${nanoid(6)}`,
-              name: patient.name,
-              age: patient.age,
-              condition: patient.condition,
+              patientId,
+              name: patient.name || 'Unknown',
+              age: patient.age || 0,
+              condition: patient.condition || 'Unknown',
               prompt,
               isAlert: patient.isAlert ? "true" : "false", // Store as string in DB
               healthStatus: patient.healthStatus || "healthy", 
               rawData: patientWithMetadata, // Store all data including issues in rawData
             });
+            
+            successfullyStored.push(patientId);
           } catch (err) {
-            console.error(`Error generating prompt for patient ${patient.patientId}:`, err);
+            console.error(`Error storing patient data:`, err);
             // Continue with other patients even if one fails
           }
         }
@@ -104,7 +105,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(200).json({
           success: true,
           batchId,
-          message: `Processed ${patientData.length} patients`,
+          processed: patientData.length,
+          stored: successfullyStored.length,
+          message: `Processed ${patientData.length} patients, stored ${successfullyStored.length} records`
         });
       } catch (err) {
         console.error("Error in Excel processing:", err);
@@ -465,6 +468,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === MONTHLY REPORTS ENDPOINTS ===
   
+  // Dedicated server-side monthly-report endpoint for PDF generation
+  app.get("/api/monthly-report", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ success: false, message: "Authentication required" });
+      }
+      
+      // Extract month and year from query parameters, default to current month
+      const currentDate = new Date();
+      const month = req.query.month ? String(req.query.month) : String(currentDate.getMonth() + 1).padStart(2, '0');
+      const year = req.query.year ? String(req.query.year) : String(currentDate.getFullYear());
+      
+      console.log(`Generating monthly report PDF for ${month}/${year}`);
+      
+      // Get patient data for the specific month and year
+      const targetDate = new Date(`${year}-${month}-01`);
+      const targetMonthStart = targetDate.toISOString().split('T')[0];
+      
+      // Calculate the month end date
+      const targetMonthEnd = new Date(targetDate);
+      targetMonthEnd.setMonth(targetMonthEnd.getMonth() + 1);
+      targetMonthEnd.setDate(0); // Last day of the month
+      const targetMonthEndStr = targetMonthEnd.toISOString().split('T')[0];
+      
+      // Get all patients created within the month (last 30 days of data)
+      const periodPatients = await db.select()
+        .from(patientPrompts)
+        .where(
+          SQL`${patientPrompts.createdAt} >= ${targetMonthStart} AND ${patientPrompts.createdAt} <= ${targetMonthEndStr}`
+        );
+      
+      if (periodPatients.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "No patient data found for the specified period" 
+        });
+      }
+      
+      // Now generate PDF with patient data summary using pdfmake
+      const pdfmake = await import('pdfmake');
+      const fonts = {
+        Roboto: {
+          normal: 'node_modules/pdfmake/fonts/Roboto/Roboto-Regular.ttf',
+          bold: 'node_modules/pdfmake/fonts/Roboto/Roboto-Medium.ttf',
+          italics: 'node_modules/pdfmake/fonts/Roboto/Roboto-Italic.ttf',
+          bolditalics: 'node_modules/pdfmake/fonts/Roboto/Roboto-MediumItalic.ttf'
+        }
+      };
+      
+      // Create PDF document definition
+      const docDefinition = {
+        info: {
+          title: `Monthly Patient Report - ${month}/${year}`,
+          author: 'Patient Monitoring System',
+          subject: 'Monthly Health Summary',
+          keywords: 'health, patients, monthly report',
+        },
+        content: [
+          { text: `Monthly Patient Report - ${month}/${year}`, style: 'header' },
+          { text: `Generated on ${new Date().toLocaleDateString()}`, style: 'subheader' },
+          { text: 'Patient Summary', style: 'sectionHeader' },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['auto', 'auto', 'auto', 'auto', '*'],
+              body: [
+                ['Patient ID', 'Name', 'Age', 'Condition', 'Status'],
+                ...periodPatients.map(patient => [
+                  patient.patientId,
+                  patient.name,
+                  patient.age,
+                  patient.condition,
+                  patient.isAlert === 'true' ? 'ALERT' : 'Normal'
+                ])
+              ]
+            }
+          },
+          { text: 'Summary Statistics', style: 'sectionHeader', margin: [0, 20, 0, 10] },
+          {
+            ul: [
+              `Total Patients: ${periodPatients.length}`,
+              `Alerts: ${periodPatients.filter(p => p.isAlert === 'true').length}`,
+              `Compliance Rate: ${calculateComplianceRate(periodPatients)}%`,
+              `Average Age: ${calculateAverageAge(periodPatients)}`
+            ]
+          },
+          { text: 'Trends and Analysis', style: 'sectionHeader', margin: [0, 20, 0, 10] },
+          { text: trendsSummary(periodPatients) }
+        ],
+        styles: {
+          header: {
+            fontSize: 22,
+            bold: true,
+            margin: [0, 0, 0, 10]
+          },
+          subheader: {
+            fontSize: 16,
+            bold: true,
+            margin: [0, 10, 0, 5]
+          },
+          sectionHeader: {
+            fontSize: 14,
+            bold: true,
+            margin: [0, 15, 0, 10]
+          }
+        }
+      };
+      
+      // Generate the PDF
+      const printer = new pdfmake.default(fonts);
+      const pdfDoc = printer.createPdfKitDocument(docDefinition);
+      
+      // Generate a unique filename for the PDF
+      const timestamp = Date.now();
+      const pdfFilename = `monthly-report-${year}-${month}-${timestamp}.pdf`;
+      const pdfPath = path.join(process.cwd(), 'public', 'reports', pdfFilename);
+      
+      // Ensure the reports directory exists
+      const reportsDir = path.join(process.cwd(), 'public', 'reports');
+      await fs.promises.mkdir(reportsDir, { recursive: true });
+      
+      // Pipe the PDF to a file
+      pdfDoc.pipe(fs.createWriteStream(pdfPath));
+      pdfDoc.end();
+      
+      // Return the URL to the generated PDF
+      const pdfUrl = `/reports/${pdfFilename}`;
+      return res.status(200).json({ 
+        success: true, 
+        url: pdfUrl,
+        message: "Monthly report generated successfully"
+      });
+    } catch (err) {
+      console.error("Error generating monthly report PDF:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error generating monthly report: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+
+  // Helper functions for the PDF report
+  function calculateComplianceRate(patients) {
+    // A simplified compliance calculation based on alert status
+    // In a real system, this would be based on scheduled vs. actual measurements
+    const alertPatients = patients.filter(p => p.isAlert === 'true').length;
+    const complianceRate = ((patients.length - alertPatients) / patients.length) * 100;
+    return Math.round(complianceRate);
+  }
+
+  function calculateAverageAge(patients) {
+    if (patients.length === 0) return 0;
+    const totalAge = patients.reduce((sum, patient) => sum + (patient.age || 0), 0);
+    return Math.round(totalAge / patients.length);
+  }
+
+  function trendsSummary(patients) {
+    // Generate a simple summary of patient trends
+    const totalPatients = patients.length;
+    const alertPatients = patients.filter(p => p.isAlert === 'true').length;
+    const alertPercentage = (alertPatients / totalPatients) * 100;
+    
+    // Group patients by condition
+    const conditionGroups = {};
+    patients.forEach(patient => {
+      const condition = patient.condition || 'Unknown';
+      if (!conditionGroups[condition]) {
+        conditionGroups[condition] = [];
+      }
+      conditionGroups[condition].push(patient);
+    });
+    
+    // Generate trend summary text
+    let trendText = `Based on the data for ${totalPatients} patients, ${alertPercentage.toFixed(1)}% have alerts that require attention.\n\n`;
+    
+    // Add condition-specific summaries
+    Object.entries(conditionGroups).forEach(([condition, patients]) => {
+      const count = patients.length;
+      const percentage = (count / totalPatients) * 100;
+      trendText += `${condition}: ${count} patients (${percentage.toFixed(1)}% of total)\n`;
+    });
+    
+    return trendText;
+  }
+
   // Get all monthly reports
   app.get("/api/monthly-reports", async (req, res) => {
     try {

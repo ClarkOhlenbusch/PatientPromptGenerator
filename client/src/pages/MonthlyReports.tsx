@@ -79,6 +79,48 @@ export default function MonthlyReports() {
     }
   });
   
+  // Inside the export default function MonthlyReports()
+  // Add a new mutation for directly generating and downloading a PDF report
+  const generatePdfReportMutation = useMutation({
+    mutationFn: async (monthYear: string) => {
+      const [year, month] = monthYear.split('-');
+      const res = await apiRequest("GET", `/api/monthly-report?month=${month}&year=${year}`);
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.url) {
+        toast({
+          title: "Success",
+          description: "Monthly report PDF generated successfully",
+        });
+        
+        // Create link to download the PDF and click it
+        const downloadLink = document.createElement('a');
+        downloadLink.href = data.url;
+        downloadLink.download = `monthly-report-${selectedMonth}.pdf`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Invalidate reports query to refresh the list
+        queryClient.invalidateQueries({ queryKey: ["/api/monthly-reports"] });
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to generate PDF report",
+          variant: "destructive"
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to generate PDF report: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
+  
   // Format month-year string for display
   const formatMonthYear = (monthYearStr: string) => {
     const [year, month] = monthYearStr.split('-');
@@ -88,13 +130,13 @@ export default function MonthlyReports() {
     });
   };
   
-  // Handle generate report
+  // Modify the handleGenerateReport function to use the new PDF generation
   const handleGenerateReport = () => {
     if (!selectedMonth) {
       setSelectedMonth(currentMonth);
-      generateReportMutation.mutate(currentMonth);
+      generatePdfReportMutation.mutate(currentMonth);
     } else {
-      generateReportMutation.mutate(selectedMonth);
+      generatePdfReportMutation.mutate(selectedMonth);
     }
   };
   
@@ -135,17 +177,17 @@ export default function MonthlyReports() {
               <Button 
                 className="w-full" 
                 onClick={handleGenerateReport}
-                disabled={generateReportMutation.isPending}
+                disabled={generatePdfReportMutation.isPending}
               >
-                {generateReportMutation.isPending ? (
+                {generatePdfReportMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
+                    Generating PDF...
                   </>
                 ) : (
                   <>
                     <FileUp className="mr-2 h-4 w-4" />
-                    Generate Report
+                    Generate & Download PDF
                   </>
                 )}
               </Button>
@@ -263,33 +305,15 @@ export default function MonthlyReports() {
                         {report.patientCount}
                       </TableCell>
                       <TableCell className="text-right">
-                        {report.status === "complete" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(report.downloadUrl, '_blank')}
-                            className="flex items-center"
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                            {report.fileSize && <span className="ml-1 text-xs">({report.fileSize})</span>}
-                          </Button>
-                        ) : report.status === "pending" ? (
-                          <span className="text-amber-600 flex items-center justify-end">
-                            <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                            Processing
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleGenerateReport()}
-                            className="flex items-center"
-                          >
-                            <RefreshCw className="h-4 w-4 mr-1" />
-                            Retry
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(report.downloadUrl, '_blank')}
+                          className="flex items-center"
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Download PDF
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
