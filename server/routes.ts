@@ -565,7 +565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
       
       // Style headers
-      headerRow.eachCell((cell) => {
+      headerRow.eachCell((cell: any) => {
         cell.font = { bold: true };
         cell.fill = {
           type: 'pattern',
@@ -612,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Add borders to the row
-        row.eachCell((cell) => {
+        row.eachCell((cell: any) => {
           cell.border = {
             top: { style: 'thin' },
             left: { style: 'thin' },
@@ -674,7 +674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Generate Excel file
-      const workbook = new ExcelJS.default.Workbook();
+      const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Patient Data');
       
       // Add headers
