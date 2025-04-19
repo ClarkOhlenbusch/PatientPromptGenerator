@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function MonthlyReports() {
-  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("all");
   const { toast } = useToast();
   
   // Mutation for generating a PDF report from the latest upload data
@@ -60,10 +60,11 @@ export default function MonthlyReports() {
   
   // Generate report for all patients or a specific patient
   const handleGenerateReport = () => {
-    if (selectedPatientId) {
+    if (selectedPatientId && selectedPatientId !== "all") {
       generateReportMutation.mutate(selectedPatientId);
     } else {
-      generateReportMutation.mutate();
+      // Pass undefined explicitly to use the default value
+      generateReportMutation.mutate(undefined);
     }
   };
   
@@ -102,7 +103,7 @@ export default function MonthlyReports() {
                   <SelectValue placeholder="All Patients" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Patients</SelectItem>
+                  <SelectItem value="all">All Patients</SelectItem>
                   {/* To be replaced with actual patients from the latest batch */}
                   <SelectItem value="1001">Patient #1001</SelectItem>
                   <SelectItem value="1002">Patient #1002</SelectItem>

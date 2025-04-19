@@ -9,7 +9,7 @@ import { generatePrompt, getTokenUsageStats } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
 import ExcelJS from "exceljs";
 import { db } from "./db";
-import { patientPrompts } from "@shared/schema";
+import { patientPrompts, patientBatches } from "@shared/schema";
 import { setupAuth } from "./auth";
 import fs from "fs";
 import { eq, and, sql as SQL } from "drizzle-orm";
