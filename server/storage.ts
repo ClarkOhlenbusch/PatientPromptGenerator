@@ -184,7 +184,7 @@ Let's discuss this at your next appointment.`
     console.log(`Updated template for patient ${patientId}:`, template);
   }
   
-  // Triage methods using real data from uploaded patient file
+  // Triage methods using real data from uploaded patient file with severity levels
   async getPatientAlerts(date: string): Promise<any[]> {
     try {
       console.log(`Getting patient alerts for date: ${date}`);
@@ -193,7 +193,7 @@ Let's discuss this at your next appointment.`
       const requestDate = date ? new Date(date) : new Date();
       requestDate.setHours(0, 0, 0, 0); // Set to start of day
       
-      // Query database for all patient prompts with just the columns we know exist
+      // Query database for all patient prompts
       const allPatients = await db.select({
         id: patientPrompts.id,
         patientId: patientPrompts.patientId,
@@ -203,109 +203,246 @@ Let's discuss this at your next appointment.`
         isAlert: patientPrompts.isAlert,
         healthStatus: patientPrompts.healthStatus,
         createdAt: patientPrompts.createdAt,
-        rawData: patientPrompts.rawData
+        rawData: patientPrompts.rawData,
+        prompt: patientPrompts.prompt
       }).from(patientPrompts);
       
-      // Filter to alerts only
-      const alertPatients = allPatients.filter(p => p.isAlert === 'true');
+      // Group all patients by ID (not just alerts)
+      const patientMap = new Map();
       
-      // Group alerts by patient (using patientId as the key)
-      const patientAlertsMap = new Map();
-      
-      alertPatients.forEach(patient => {
-        // Extract relevant data
-        const alertData = {
+      // Process all patients to categorize by severity
+      allPatients.forEach(patient => {
+        // Default severity is 'green' (healthy)
+        let severity = 'green';
+        let alertStatus = false;
+        let alertReasons: string[] = [];
+        let healthMetrics: any[] = [];
+        
+        // Parse raw data if available
+        let parsedRawData: any = null;
+        if (patient.rawData) {
+          if (typeof patient.rawData === 'string') {
+            try {
+              parsedRawData = JSON.parse(patient.rawData);
+            } catch (e) {
+              console.warn(`Could not parse rawData for patient ${patient.patientId}:`, e);
+            }
+          } else {
+            parsedRawData = patient.rawData;
+          }
+        }
+        
+        // Determine severity based on parsed data and alert status
+        if (parsedRawData) {
+          // Extract health variables
+          if (parsedRawData.variables) {
+            const variables = parsedRawData.variables;
+            
+            Object.keys(variables).forEach(key => {
+              if (key !== 'patientId' && key !== 'name' && key !== 'age' && key !== 'condition') {
+                // Add to health metrics for display
+                healthMetrics.push({
+                  name: key,
+                  value: variables[key],
+                  timestamp: patient.createdAt
+                });
+                
+                // Check for specific severe conditions
+                const varName = key.toLowerCase();
+                const varValue = variables[key];
+                
+                // Convert value to number if possible
+                let numValue: number | null = null;
+                if (typeof varValue === 'number') {
+                  numValue = varValue;
+                } else if (typeof varValue === 'string') {
+                  const parsed = parseFloat(varValue);
+                  if (!isNaN(parsed)) {
+                    numValue = parsed;
+                  }
+                }
+                
+                // Apply severity rules if we have a numeric value
+                if (numValue !== null) {
+                  // RED level alerts - critical values requiring immediate action
+                  if (
+                    (varName.includes('glucose') && numValue > 300) || 
+                    (varName.includes('blood pressure') && numValue > 180) ||
+                    (varName.includes('heart rate') && (numValue > 150 || numValue < 40)) ||
+                    (varName.includes('temperature') && numValue > 103) ||
+                    (varName.includes('oxygen') && numValue < 85)
+                  ) {
+                    severity = 'red';
+                    alertStatus = true;
+                    alertReasons.push(`CRITICAL: ${key} is ${numValue}`);
+                  }
+                  // YELLOW level alerts - concerning but not immediately life-threatening
+                  else if (
+                    (varName.includes('glucose') && (numValue > 180 || numValue < 70)) || 
+                    (varName.includes('blood pressure') && (numValue > 140 || numValue < 90)) ||
+                    (varName.includes('heart rate') && (numValue > 100 || numValue < 50)) ||
+                    (varName.includes('temperature') && (numValue > 99.5 || numValue < 97)) ||
+                    (varName.includes('oxygen') && numValue < 92)
+                  ) {
+                    // Only upgrade to yellow if we're not already at red
+                    if (severity !== 'red') {
+                      severity = 'yellow';
+                      alertStatus = true;
+                      alertReasons.push(`ATTENTION: ${key} is ${numValue}`);
+                    }
+                  }
+                }
+              }
+            });
+          }
+          
+          // Use existing alert reasons if available and none were determined above
+          if (alertReasons.length === 0 && parsedRawData.alertReasons && parsedRawData.alertReasons.length > 0) {
+            alertReasons = parsedRawData.alertReasons;
+            
+            // Check if any of the existing reasons indicate severity
+            const containsCritical = alertReasons.some(reason => 
+              reason.toLowerCase().includes('critical') ||
+              reason.toLowerCase().includes('severe') ||
+              reason.toLowerCase().includes('emergency')
+            );
+            
+            if (containsCritical) {
+              severity = 'red';
+            } else if (alertReasons.length > 0) {
+              severity = 'yellow';
+            }
+            
+            alertStatus = true;
+          }
+        }
+        
+        // Use the isAlert field as a fallback
+        if (!alertStatus && patient.isAlert === 'true') {
+          alertStatus = true;
+          severity = 'yellow';  // Default to yellow for general alerts
+          
+          if (alertReasons.length === 0) {
+            alertReasons.push(`Alert for ${patient.condition}`);
+          }
+        }
+        
+        // Create patient data object with severity
+        const patientData = {
           id: `alert-${patient.id}`,
           patientId: patient.patientId,
           patientName: patient.name,
           age: patient.age,
           condition: patient.condition,
           createdAt: patient.createdAt,
-          variables: [],
-          status: "pending", // Default to pending
-          sentAt: null
+          variables: healthMetrics,
+          status: alertStatus ? "pending" : "healthy",
+          sentAt: null,
+          severity: severity,
+          alertReasons: alertReasons,
+          isAlert: alertStatus,
+          prompt: patient.prompt
         };
         
-        // Extract variables from rawData if available
-        if (patient.rawData) {
-          if (typeof patient.rawData === 'string') {
-            try {
-              patient.rawData = JSON.parse(patient.rawData);
-            } catch (e) {
-              console.warn(`Could not parse rawData for patient ${patient.patientId}:`, e);
-            }
-          }
-          
-          // Extract relevant measurements/variables from rawData
-          if (patient.rawData.variables) {
-            const variables = patient.rawData.variables;
-            Object.keys(variables).forEach(key => {
-              if (key !== 'patientId' && key !== 'name' && key !== 'age' && key !== 'condition') {
-                alertData.variables.push({
-                  name: key,
-                  value: variables[key],
-                  timestamp: patient.createdAt
-                });
-              }
-            });
-          }
-          
-          // Extract reasoning if available
-          if (patient.rawData.alertReasons && patient.rawData.alertReasons.length > 0) {
-            alertData.reasoning = patient.rawData.alertReasons.join('; ');
-          } else {
-            alertData.reasoning = `Abnormal ${patient.condition} readings`;
-          }
-        }
+        // Add message with the appropriate format for this severity
+        patientData.message = this.formatSmsMessage(patientData);
         
-        // Format the SMS message using the new template
-        alertData.message = this.formatSmsMessage(alertData);
+        // Store count of alerts
+        patientData.alertCount = alertReasons.length;
         
-        // Add to or update the patient in the map
-        if (patientAlertsMap.has(patient.patientId)) {
-          const existingPatient = patientAlertsMap.get(patient.patientId);
-          // Add this alert's variables to the existing patient
-          existingPatient.variables = [...existingPatient.variables, ...alertData.variables];
-          existingPatient.alertCount = (existingPatient.alertCount || 0) + 1;
-          
-          // Update the message to include all variables
-          existingPatient.message = this.formatSmsMessage(existingPatient);
-        } else {
-          // First alert for this patient
-          alertData.alertCount = 1;
-          patientAlertsMap.set(patient.patientId, alertData);
-        }
+        // Add to patient map (this will overwrite with the most recent patient data)
+        patientMap.set(patient.patientId, patientData);
       });
       
-      // Convert map to array
-      const groupedAlerts = Array.from(patientAlertsMap.values());
+      // Convert all patients to array and sort by severity (red → yellow → green)
+      const allPatientsArray = Array.from(patientMap.values());
       
-      console.log(`Found ${groupedAlerts.length} patients with alerts`);
-      return groupedAlerts;
+      // Sort by severity (red first, then yellow, then green)
+      allPatientsArray.sort((a, b) => {
+        const severityOrder = {
+          'red': 0,
+          'yellow': 1,
+          'green': 2
+        };
+        
+        return severityOrder[a.severity] - severityOrder[b.severity];
+      });
+      
+      console.log(`Processed ${allPatientsArray.length} patients: ` + 
+                 `${allPatientsArray.filter(p => p.severity === 'red').length} RED, ` +
+                 `${allPatientsArray.filter(p => p.severity === 'yellow').length} YELLOW, ` +
+                 `${allPatientsArray.filter(p => p.severity === 'green').length} GREEN`);
+                 
+      return allPatientsArray;
     } catch (error) {
       console.error("Error getting patient alerts:", error);
       return [];
     }
   }
   
-  // Format SMS message with the new template
+  // Format alert message based on severity level
   formatSmsMessage(alert: any): string {
-    const { patientName, age, variables, reasoning } = alert;
+    const { patientName, age, variables, alertReasons, severity } = alert;
     
-    // Build the variables section
+    // Select the appropriate prefix based on severity
+    let prefix = "";
+    if (severity === 'red') {
+      prefix = "🔴 URGENT ACTION REQUIRED";
+    } else if (severity === 'yellow') {
+      prefix = "🟡 ATTENTION NEEDED";
+    } else {
+      prefix = "🟢 ROUTINE CHECK";
+    }
+    
+    // Build the variables section - only include most important metrics based on severity
     let variablesText = '';
+    
     if (variables && variables.length > 0) {
-      variablesText = variables.map((v: any) => {
-        // Format timestamp if available
-        const timestamp = v.timestamp ? new Date(v.timestamp).toLocaleString() : 'unknown time';
-        return `• ${v.name}: ${v.value} at ${timestamp}`;
+      // For RED alerts, only show the critical variables
+      // For YELLOW alerts, show up to 3 important variables
+      // For GREEN, show just summary
+      
+      const variablesToShow = severity === 'red' ? 
+                              variables.filter((v: any) => alertReasons.some((r: string) => r.includes(v.name))) :
+                              severity === 'yellow' ? 
+                              variables.slice(0, 3) : 
+                              variables.slice(0, 1);
+                              
+      variablesText = variablesToShow.map((v: any) => {
+        return `• ${v.name}: ${v.value}`;
       }).join('\n');
     }
     
-    // Create the message using the new template
-    return `ALERT for ${patientName}, age ${age}:
-${variablesText}
-Reasoning: ${reasoning || 'Abnormal readings detected'}`;
+    // Create reasoning text - keep it concise based on severity
+    let reasoningText = '';
+    if (alertReasons && alertReasons.length > 0) {
+      if (severity === 'red') {
+        // For red alerts, include all critical reasons
+        reasoningText = alertReasons.filter(r => r.includes('CRITICAL')).join('\n');
+      } else if (severity === 'yellow') {
+        // For yellow alerts, include key attention reasons (max 2)
+        reasoningText = alertReasons.slice(0, 2).join('\n');
+      } else {
+        // For green alerts, provide a positive note
+        reasoningText = "No immediate health concerns, routine follow-up recommended";
+      }
+    } else if (severity === 'green') {
+      reasoningText = "Routine wellness check, all readings within normal range";
+    } else {
+      reasoningText = "Please review patient data";
+    }
+    
+    // Create the final message with appropriate length for severity
+    if (severity === 'red') {
+      // For RED alerts: Include all critical details
+      return `${prefix} for ${patientName}, age ${age}:\n${variablesText}\n${reasoningText}\nREQUIRES IMMEDIATE CLINICAL ATTENTION`;
+    } else if (severity === 'yellow') {
+      // For YELLOW alerts: Include key details
+      return `${prefix} for ${patientName}, age ${age}:\n${variablesText}\n${reasoningText}`;
+    } else {
+      // For GREEN alerts: Keep it brief
+      return `${prefix}: ${patientName}, age ${age}\n${reasoningText}`;
+    }
   }
   
   async sendAlert(alertId: string): Promise<any> {
