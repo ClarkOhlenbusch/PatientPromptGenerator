@@ -508,10 +508,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Generating report using latest patient data${patientId ? ` for patient ${patientId}` : ''}`);
 
+      // Import schema explicitly to avoid reference issues
+      const { patientBatches: batchesTable, patientPrompts: promptsTable } = await import("@shared/schema");
+      
       // Get the most recent batch
       const [latestBatch] = await db.select()
-        .from(patientBatches)
-        .orderBy(SQL`${patientBatches.createdAt} DESC`)
+        .from(batchesTable)
+        .orderBy(SQL`${batchesTable.createdAt} DESC`)
         .limit(1);
 
       if (!latestBatch) {
@@ -525,8 +528,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get patient data from this latest batch
       let periodPatients = await db.select()
-        .from(patientPrompts)
-        .where(eq(patientPrompts.batchId, latestBatch.batchId));
+        .from(promptsTable)
+        .where(eq(promptsTable.batchId, latestBatch.batchId));
 
       // Filter by patient ID if specified
       if (patientId) {
@@ -739,8 +742,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { year, month } = req.params;
       const patientId = req.query.patientId as string | undefined; // Optional patient ID for individual reports
 
+      // Import schema explicitly to avoid reference issues
+      const { patientPrompts: promptsTable } = await import("@shared/schema");
+      
       // Get all patient prompts from the database
-      const prompts = await db.select().from(patientPrompts);
+      const prompts = await db.select().from(promptsTable);
 
       // Filter to match the specified month/year if provided
       let filteredPrompts = prompts.filter(prompt => {
@@ -899,8 +905,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { year, month } = req.params;
 
+      // Import schema explicitly to avoid reference issues
+      const { patientPrompts: promptsTable } = await import("@shared/schema");
+      
       // Get all patient prompts from the database
-      const prompts = await db.select().from(patientPrompts);
+      const prompts = await db.select().from(promptsTable);
 
       // Filter to match the specified month/year if provided
       let filteredPrompts = prompts.filter(prompt => {
