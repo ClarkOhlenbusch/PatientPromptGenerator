@@ -12,7 +12,7 @@ import {
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql as SQL } from "drizzle-orm";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -372,103 +372,129 @@ Let's discuss this at your next appointment.`
     const countResult = await pool.query('SELECT COUNT(*) as count FROM patient_prompts');
     const patientCount = parseInt(countResult.rows[0].count as string, 10) || 0;
     
-    // If we have real data, use it to create sample reports
+    // Only use real data from the database to generate reports
     if (batches.length > 0) {
-      // Get the current month
-      const now = new Date();
-      const currentMonth = now.getMonth() + 1;
-      const currentYear = now.getFullYear();
+      // Group batches by month and year
+      const reportsByMonth: Record<string, any[]> = {};
       
-      // Create a report for the current month
-      return [
-        {
-          id: "report-current",
-          month: String(currentMonth).padStart(2, '0'),
-          year: currentYear,
-          status: "complete",
-          generatedAt: new Date(now.getTime() - 86400000).toISOString(), // Yesterday
-          downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth).padStart(2, '0')}`,
-          patientCount: patientCount,
-          fileSize: "1.2 MB"
+      for (const batch of batches) {
+        if (batch.createdAt) {
+          const batchDate = new Date(batch.createdAt);
+          const monthYear = `${batchDate.getFullYear()}-${String(batchDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (!reportsByMonth[monthYear]) {
+            reportsByMonth[monthYear] = [];
+          }
+          
+          reportsByMonth[monthYear].push(batch);
         }
-      ];
+      }
+      
+      // Create one report per month from actual data
+      const reports = Object.entries(reportsByMonth).map(([monthYear, monthBatches]) => {
+        const [year, month] = monthYear.split('-');
+        const batchCount = monthBatches.length;
+        // Estimate file size based on patient count
+        const estimatedFileSize = Math.max(0.2, Math.round(patientCount * 0.01 * 100) / 100).toFixed(1);
+        
+        return {
+          id: `report-${monthYear}`,
+          month,
+          year: parseInt(year),
+          status: "complete",
+          generatedAt: new Date(monthBatches[0].createdAt).toISOString(),
+          downloadUrl: `/api/download-report/${year}/${month}`,
+          patientCount,
+          batchCount,
+          fileSize: `${estimatedFileSize} MB`
+        };
+      });
+      
+      console.log(`Returning ${reports.length} reports based on actual uploaded data`);
+      return reports;
     }
     
-    // Otherwise, generate sample data for demonstration
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth() + 1;
-    const currentYear = currentDate.getFullYear();
-    
-    // Generate reports for the last 3 months
-    return [
-      {
-        id: "report-1",
-        month: String(currentMonth).padStart(2, '0'),
-        year: currentYear,
-        generatedAt: new Date(currentDate.getTime() - 2 * 86400000).toISOString(), // 2 days ago
-        downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth).padStart(2, '0')}`,
-        patientCount: 145,
-        status: "complete",
-        fileSize: "2.3 MB"
-      },
-      {
-        id: "report-2",
-        month: String(currentMonth - 1).padStart(2, '0'),
-        year: currentYear,
-        generatedAt: new Date(currentDate.getTime() - 32 * 86400000).toISOString(), // Previous month
-        downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth - 1).padStart(2, '0')}`,
-        patientCount: 138,
-        status: "complete",
-        fileSize: "2.1 MB"
-      },
-      {
-        id: "report-3",
-        month: String(currentMonth - 2).padStart(2, '0'),
-        year: currentYear,
-        generatedAt: new Date(currentDate.getTime() - 62 * 86400000).toISOString(), // 2 months ago
-        downloadUrl: `/api/download-report/${currentYear}/${String(currentMonth - 2).padStart(2, '0')}`,
-        patientCount: 129,
-        status: "complete",
-        fileSize: "2.0 MB"
-      }
-    ];
+    // If no batches exist, return an empty array
+    console.log('No patient batches found in the database, returning empty reports array');
+    return [];
   }
   
   async generateMonthlyReport(monthYear: string): Promise<any> {
-    // Extract month and year from the parameter
-    const [year, month] = monthYear.split('-');
-    
-    // Get actual patient count from database
-    const { pool } = await import('./db');
-    const countResult = await pool.query('SELECT COUNT(*) as count FROM patient_prompts');
-    const patientCount = parseInt(countResult.rows[0].count as string, 10) || 0;
-    
-    // Create a pending report using real patient data
-    const report = {
-      id: `report-${Date.now().toString(36)}`,
-      month,
-      year: parseInt(year),
-      status: "pending",
-      generatedAt: new Date().toISOString(),
-      patientCount: patientCount,
-      downloadUrl: `/api/download-report/${year}/${month}`
-    };
-    
-    // Simulate report generation completed after a few seconds
-    // (In a real implementation, this would be a background job)
-    setTimeout(async () => {
-      console.log(`Report for ${monthYear} generation completed with ${patientCount} patients.`);
+    try {
+      // Extract month and year from the parameter
+      const [year, month] = monthYear.split('-');
       
-      // In a real implementation, we would update a database record
-      // For now, we'll just print a message indicating the status change
-      console.log(`Report status updated from "pending" to "complete"`);
+      // Get patient data for the specific month and year
+      const targetDate = new Date(`${year}-${month}-01`);
+      const targetMonthStart = targetDate.toISOString().split('T')[0];
       
-      // We would also determine the file size based on the amount of data
-      const fileSizeKB = Math.round(patientCount * 2.5); // Roughly estimate size
-      console.log(`Report estimated size: ${fileSizeKB} KB`);
-    }, 5000);
-    
-    return report;
+      // Calculate the month end date
+      const targetMonthEnd = new Date(targetDate);
+      targetMonthEnd.setMonth(targetMonthEnd.getMonth() + 1);
+      targetMonthEnd.setDate(0); // Last day of the month
+      const targetMonthEndStr = targetMonthEnd.toISOString().split('T')[0];
+      
+      console.log(`Generating report for period: ${targetMonthStart} to ${targetMonthEndStr}`);
+      
+      // Get all patients created within the month
+      const periodPatients = await db.select({
+        id: patientPrompts.id,
+        patientId: patientPrompts.patientId,
+        createdAt: patientPrompts.createdAt
+      })
+      .from(patientPrompts)
+      .where(
+        SQL`${patientPrompts.createdAt} >= ${targetMonthStart} AND ${patientPrompts.createdAt} <= ${targetMonthEndStr}`
+      );
+      
+      // Get batch information for the period
+      const periodBatches = await db.select({
+        id: patientBatches.id,
+        batchId: patientBatches.batchId,
+        fileName: patientBatches.fileName,
+        createdAt: patientBatches.createdAt
+      })
+      .from(patientBatches)
+      .where(
+        SQL`${patientBatches.createdAt} >= ${targetMonthStart} AND ${patientBatches.createdAt} <= ${targetMonthEndStr}`
+      );
+      
+      // Get total patient count
+      const totalPatientCount = periodPatients.length;
+      console.log(`Found ${totalPatientCount} patients and ${periodBatches.length} batches for ${monthYear}`);
+      
+      // Create a pending report with actual data
+      const report = {
+        id: `report-${Date.now().toString(36)}`,
+        month,
+        year: parseInt(year),
+        status: "pending",
+        generatedAt: new Date().toISOString(),
+        patientCount: totalPatientCount,
+        batchCount: periodBatches.length,
+        batchNames: periodBatches.map(b => b.fileName).join(', '),
+        downloadUrl: `/api/download-report/${year}/${month}`
+      };
+      
+      // Simulate report generation completed after a short delay
+      // In a real implementation, this would be a background job
+      setTimeout(async () => {
+        console.log(`Report for ${monthYear} generation completed with ${totalPatientCount} patients.`);
+        
+        // In a real implementation, we would update a database record
+        // For now, we'll just print a message indicating the status change
+        console.log(`Report status updated from "pending" to "complete"`);
+        
+        // Calculate file size based on real data
+        const fileSizeKB = Math.max(10, Math.round(totalPatientCount * 2.5));
+        console.log(`Report estimated size: ${fileSizeKB} KB`);
+      }, 3000);
+      
+      return report;
+    } catch (error) {
+      console.error(`Error generating monthly report for ${monthYear}:`, error);
+      throw error;
+    }
   }
 }
 

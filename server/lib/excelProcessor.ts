@@ -215,8 +215,32 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
                  alertValue === 'Y';
       } else {
         // If no explicit IsAlert column, try to infer from other data
-        // For demo purposes, treat all rows as alerts
-        isAlert = true;
+        // Don't assume all rows are alerts - try to determine based on value thresholds
+        // Check if there's a "Value" column and use it to determine alert status
+        if (valueCol !== -1) {
+          const value = row.getCell(valueCol + 1).value;
+          const variable = String(row.getCell(conditionCol + 1).value || '').toLowerCase();
+          
+          // Only mark as alert if we have valid variable and value
+          if (value !== null && value !== undefined && typeof value !== 'object') {
+            const numValue = typeof value === 'number' ? value : 
+                            typeof value === 'string' ? parseFloat(value) || 0 : 0;
+            
+            // Apply some reasonable thresholds based on common health variables
+            if (
+              (variable.includes('glucose') && numValue > 180) || 
+              (variable.includes('blood pressure') && numValue > 140) ||
+              (variable.includes('heart rate') && (numValue > 100 || numValue < 50)) ||
+              (variable.includes('temperature') && numValue > 99.5) ||
+              (variable.includes('oxygen') && numValue < 92)
+            ) {
+              isAlert = true;
+            }
+          }
+        } else {
+          // Without any way to determine alert status, default to false
+          isAlert = false;
+        }
       }
       rowData.isAlert = isAlert;
 
