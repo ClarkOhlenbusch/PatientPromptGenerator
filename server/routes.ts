@@ -5,14 +5,14 @@ import multer from "multer";
 import path from "path";
 import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
-import { generatePrompt, getTokenUsageStats } from "./lib/openai";
+import { generatePrompt, getTokenUsageStats, generatePromptWithTemplate } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
 import ExcelJS from "exceljs";
 import { db } from "./db";
 import { patientPrompts, patientBatches } from "@shared/schema";
 import { setupAuth } from "./auth";
 import fs from "fs";
-import { eq, and, sql as SQL } from "drizzle-orm";
+import { eq, and, desc, sql as SQL } from "drizzle-orm";
 
 // Set up multer for file uploads
 const upload = multer({
