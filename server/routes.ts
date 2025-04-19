@@ -484,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Download monthly report as PDF
+  // Download monthly report (as Excel for now, PDFs are coming in next sprint)
   app.get("/api/download-report/:year/:month", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -494,14 +494,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { year, month } = req.params;
       const patientId = req.query.patientId as string | undefined; // Optional patient ID for individual reports
       
-      // Import the PDF generator
-      const { generatePatientMonthlyReport, generateConsolidatedMonthlyReport } = await import('./lib/pdfGenerator');
-      
       // Get all patient prompts from the database
       const prompts = await db.select().from(patientPrompts);
       
       // Filter to match the specified month/year if provided
-      const filteredPrompts = prompts.filter(prompt => {
+      let filteredPrompts = prompts.filter(prompt => {
         if (!prompt.createdAt) return false;
         
         try {
@@ -523,87 +520,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Get measurements for patients from their rawData
-      // In a real implementation, this would query a measurements table
-      const patientMeasurements: Record<string, any[]> = {};
-      
-      filteredPrompts.forEach(prompt => {
-        if (prompt.rawData) {
-          const patientId = prompt.patientId;
-          
-          if (!patientMeasurements[patientId]) {
-            patientMeasurements[patientId] = [];
-          }
-          
-          // Extract measurements from rawData
-          try {
-            const rawData = prompt.rawData as any;
-            
-            // Check for variables array in rawData
-            if (rawData.variables && typeof rawData.variables === 'object') {
-              Object.entries(rawData.variables).forEach(([variable, value]) => {
-                if (value !== null && value !== undefined) {
-                  patientMeasurements[patientId].push({
-                    patientId,
-                    timestamp: prompt.createdAt || new Date().toISOString(),
-                    variable,
-                    value: parseFloat(value as string) || 0,
-                    isAlert: prompt.isAlert === 'true'
-                  });
-                }
-              });
-            }
-          } catch (error) {
-            console.warn(`Failed to extract measurements for patient ${patientId}:`, error);
-          }
-        }
-      });
-      
-      let pdfBuffer: Buffer;
-      
-      // Generate individual report or consolidated report
+      // Filter by specific patient if requested
       if (patientId) {
-        // Find the specific patient
-        const patient = filteredPrompts.find(p => p.patientId === patientId);
+        filteredPrompts = filteredPrompts.filter(p => p.patientId === patientId);
         
-        if (!patient) {
+        if (filteredPrompts.length === 0) {
           return res.status(404).json({ 
             success: false, 
             message: `Patient ${patientId} not found for ${year}-${month}` 
           });
         }
-        
-        // Generate PDF for the specific patient
-        pdfBuffer = await generatePatientMonthlyReport(
-          patient,
-          patientMeasurements[patientId] || [],
-          month,
-          year
-        );
-        
-        // Set filename for individual report
-        res.setHeader('Content-Disposition', `attachment; filename="patient-report-${patientId}-${year}-${month}.pdf"`);
-      } else {
-        // Generate consolidated PDF for all patients
-        pdfBuffer = await generateConsolidatedMonthlyReport(
-          filteredPrompts,
-          patientMeasurements,
-          month,
-          year
-        );
-        
-        // Set filename for consolidated report
-        res.setHeader('Content-Disposition', `attachment; filename="monthly-report-${year}-${month}.pdf"`);
       }
       
-      // Set Content-Type for PDF
-      res.setHeader('Content-Type', 'application/pdf');
+      // Generate Excel file as a simpler initial approach (PDF coming in next sprint)
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Patient Monthly Report');
       
-      // Send the PDF
-      res.send(pdfBuffer);
+      // Add header with report title
+      worksheet.mergeCells('A1:G1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = `Monthly Health Report - ${month}/${year}`;
+      titleCell.font = { size: 16, bold: true };
+      titleCell.alignment = { horizontal: 'center' };
+      
+      // Add date generated
+      worksheet.mergeCells('A2:G2');
+      const dateCell = worksheet.getCell('A2');
+      dateCell.value = `Generated: ${new Date().toLocaleDateString()}`;
+      dateCell.font = { size: 10, italic: true };
+      dateCell.alignment = { horizontal: 'center' };
+      
+      // Add empty row
+      worksheet.addRow([]);
+      
+      // Add headers
+      const headerRow = worksheet.addRow([
+        'Patient ID', 
+        'Name', 
+        'Age', 
+        'Condition', 
+        'Health Status', 
+        'Alert Status', 
+        'Notes/Recommendations'
+      ]);
+      
+      // Style headers
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+      
+      // Set column widths
+      worksheet.columns = [
+        { key: 'patientId', width: 15 },
+        { key: 'name', width: 25 },
+        { key: 'age', width: 8 },
+        { key: 'condition', width: 20 },
+        { key: 'healthStatus', width: 15 },
+        { key: 'isAlert', width: 12 },
+        { key: 'notes', width: 50 }
+      ];
+      
+      // Add data rows
+      filteredPrompts.forEach(patient => {
+        const row = worksheet.addRow({
+          patientId: patient.patientId,
+          name: patient.name,
+          age: patient.age,
+          condition: patient.condition,
+          healthStatus: patient.healthStatus || 'Not Specified',
+          isAlert: patient.isAlert === 'true' ? 'ALERT' : 'Normal',
+          notes: patient.prompt
+        });
+        
+        // Color the alert status
+        const alertCell = row.getCell('isAlert');
+        if (patient.isAlert === 'true') {
+          alertCell.font = { color: { argb: 'FFFF0000' }, bold: true };
+        } else {
+          alertCell.font = { color: { argb: 'FF00AA00' } };
+        }
+        
+        // Add borders to the row
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+      });
+      
+      // Set Content-Type and attachment header
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      
+      // Set appropriate filename
+      if (patientId) {
+        res.setHeader('Content-Disposition', `attachment; filename="patient-report-${patientId}-${year}-${month}.xlsx"`);
+      } else {
+        res.setHeader('Content-Disposition', `attachment; filename="monthly-report-${year}-${month}.xlsx"`);
+      }
+      
+      // Write to response
+      await workbook.xlsx.write(res);
+      res.end();
       
     } catch (err) {
-      console.error("Error generating PDF report for download:", err);
+      console.error("Error generating report for download:", err);
       res.status(500).json({ 
         success: false, 
         message: `Error generating report: ${err instanceof Error ? err.message : String(err)}` 
@@ -624,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prompts = await db.select().from(patientPrompts);
       
       // Filter to match the specified month/year if provided
-      const filteredPrompts = prompts.filter(prompt => {
+      let filteredPrompts = prompts.filter(prompt => {
         if (!prompt.createdAt) return false;
         
         try {

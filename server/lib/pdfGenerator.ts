@@ -10,13 +10,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PatientPrompt } from '@shared/schema';
 
-// Define fonts for PDF
+// Define fonts for PDF - use a safer approach for Replit environment
 const fonts = {
-  Roboto: {
-    normal: path.join(process.cwd(), 'node_modules', 'pdfmake', 'build', 'fonts', 'Roboto-Regular.ttf'),
-    bold: path.join(process.cwd(), 'node_modules', 'pdfmake', 'build', 'fonts', 'Roboto-Medium.ttf'),
-    italics: path.join(process.cwd(), 'node_modules', 'pdfmake', 'build', 'fonts', 'Roboto-Italic.ttf'),
-    bolditalics: path.join(process.cwd(), 'node_modules', 'pdfmake', 'build', 'fonts', 'Roboto-MediumItalic.ttf')
+  Helvetica: {
+    normal: 'Helvetica',
+    bold: 'Helvetica-Bold',
+    italics: 'Helvetica-Oblique',
+    bolditalics: 'Helvetica-BoldOblique'
   }
 };
 
