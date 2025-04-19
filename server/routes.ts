@@ -378,21 +378,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ success: false, message: "Authentication required" });
       }
 
-      const { patientId, template } = req.body;
+      const { patientId, batchId } = req.body;
 
-      if (!patientId || !template) {
+      if (!patientId) {
         return res.status(400).json({
           success: false,
-          message: "Patient ID and template are required"
+          message: "Patient ID is required"
         });
       }
 
-      // For now, we'll just simulate a successful regeneration
-      // In a real implementation, this would use the template to generate a new prompt
+      // Get the patient data from our database
+      const prompt = batchId 
+        ? await storage.getPatientPromptByIds(batchId, patientId)
+        : (await db.select()
+            .from(patientPrompts)
+            .where(eq(patientPrompts.patientId, patientId))
+            .orderBy(desc(patientPrompts.createdAt))
+            .limit(1))[0];
+
+      if (!prompt) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+
+      // Get the saved template for this patient
+      const templateData = await storage.getPromptTemplate(patientId);
+      
+      if (!templateData) {
+        return res.status(404).json({
+          success: false,
+          message: "Template not found for this patient"
+        });
+      }
+
+      // Parse any raw data if available
+      let patientData: any = {
+        patientId: prompt.patientId,
+        name: prompt.name,
+        age: prompt.age,
+        condition: prompt.condition
+      };
+
+      // Also extract any raw data
+      if (prompt.rawData) {
+        try {
+          const rawData = typeof prompt.rawData === 'string' 
+            ? JSON.parse(prompt.rawData) 
+            : prompt.rawData;
+            
+          if (rawData.variables) {
+            patientData.variables = rawData.variables;
+          }
+          if (rawData.issues) {
+            patientData.issues = rawData.issues;
+          }
+          if (rawData.alertReasons) {
+            patientData.alertReasons = rawData.alertReasons;
+          }
+        } catch (e) {
+          console.warn("Error parsing raw data for regeneration:", e);
+        }
+      }
+
+      // Use the openai module to generate a new prompt with the template
+      const { generatePromptWithTemplate } = await import('./lib/openai');
+      const newPrompt = await generatePromptWithTemplate(patientData, templateData.template);
+
+      // Update the patient's prompt in the database
+      const updatedPatient = await storage.updatePatientPrompt(prompt.id, {
+        prompt: newPrompt
+      });
 
       return res.status(200).json({
         success: true,
-        message: "Prompt regenerated with custom template"
+        message: "Prompt regenerated with custom template",
+        prompt: newPrompt
       });
     } catch (err) {
       console.error("Error regenerating prompt with template:", err);

@@ -147,17 +147,45 @@ export class DatabaseStorage implements IStorage {
     return updatedPrompt;
   }
   
-  // Template methods - stub implementations that we'll replace with actual DB operations
+  // Template methods for storing, retrieving, and using custom prompt templates
   async getPromptTemplate(patientId: string): Promise<{ template: string, originalTemplate?: string } | null> {
-    // This would pull from a prompt_templates table in a real implementation
-    const [prompt] = await db.select().from(patientPrompts).where(eq(patientPrompts.patientId, patientId));
-    if (!prompt) {
-      return null;
+    try {
+      // Get the latest patient prompt for this patient ID
+      const [prompt] = await db.select().from(patientPrompts)
+        .where(eq(patientPrompts.patientId, patientId))
+        .orderBy(desc(patientPrompts.createdAt))
+        .limit(1);
+      
+      if (!prompt) {
+        return null;
+      }
+      
+      // If there's a custom template stored, return it
+      if (prompt.template) {
+        return {
+          template: prompt.template,
+          originalTemplate: this.getDefaultTemplate() // Always provide the original as a reference
+        };
+      }
+      
+      // If no custom template, return the default
+      return {
+        template: this.getDefaultTemplate(),
+        originalTemplate: this.getDefaultTemplate()
+      };
+    } catch (error) {
+      console.error(`Error getting template for patient ${patientId}:`, error);
+      // Fallback to default template
+      return {
+        template: this.getDefaultTemplate(),
+        originalTemplate: this.getDefaultTemplate()
+      };
     }
-    
-    // For now, we'll return a default template based on the prompt
-    return {
-      template: `Hello {name}, 
+  }
+  
+  // Helper for the default template
+  getDefaultTemplate(): string {
+    return `Hello {name}, 
 
 Based on your recent health data, I notice {reasoning}.
 
@@ -165,23 +193,64 @@ Current reading: {current}
 Trend: {slope}
 Compliance: {compliance}%
 
-Let's discuss this at your next appointment.`,
-      originalTemplate: `Hello {name}, 
-
-Based on your recent health data, I notice {reasoning}.
-
-Current reading: {current}
-Trend: {slope}
-Compliance: {compliance}%
-
-Let's discuss this at your next appointment.`
-    };
+Let's discuss this at your next appointment.`;
   }
   
   async updatePromptTemplate(patientId: string, template: string): Promise<void> {
-    // This would update a prompt_templates table in a real implementation
-    // For now, we'll just log that we received the update
-    console.log(`Updated template for patient ${patientId}:`, template);
+    try {
+      // First sanitize the template
+      const sanitizedTemplate = this.sanitizeTemplate(template);
+      
+      // Log that we received the update
+      console.log(`Updated template for patient ${patientId}:`, sanitizedTemplate);
+      
+      // Find the patient prompt(s) for this patient ID and update them
+      const [prompt] = await db.select().from(patientPrompts)
+        .where(eq(patientPrompts.patientId, patientId))
+        .orderBy(desc(patientPrompts.createdAt))
+        .limit(1);
+      
+      if (prompt) {
+        // Update the template field and updatedAt timestamp
+        await db.update(patientPrompts)
+          .set({ 
+            template: sanitizedTemplate,
+            updatedAt: new Date().toISOString()
+          })
+          .where(eq(patientPrompts.id, prompt.id));
+      } else {
+        console.warn(`No patient found with ID ${patientId} to update template`);
+      }
+    } catch (error) {
+      console.error(`Error updating template for patient ${patientId}:`, error);
+      throw error;
+    }
+  }
+  
+  // Helper to sanitize templates
+  sanitizeTemplate(template: string): string {
+    // Trim whitespace
+    let sanitized = template.trim();
+    
+    // Enforce maximum length
+    const MAX_TEMPLATE_LENGTH = 1000;
+    if (sanitized.length > MAX_TEMPLATE_LENGTH) {
+      sanitized = sanitized.substring(0, MAX_TEMPLATE_LENGTH);
+    }
+    
+    // Ensure templates contain required placeholders
+    const requiredPlaceholders = ['{name}'];
+    const missingPlaceholders = requiredPlaceholders.filter(
+      placeholder => !sanitized.includes(placeholder)
+    );
+    
+    if (missingPlaceholders.length > 0) {
+      // Add missing placeholders at the end
+      sanitized += `\n\n(Required placeholders added: ${missingPlaceholders.join(', ')})`;
+      sanitized += `\n${missingPlaceholders.join(' ')}`;
+    }
+    
+    return sanitized;
   }
   
   // Triage methods using real data from uploaded patient file with severity levels
