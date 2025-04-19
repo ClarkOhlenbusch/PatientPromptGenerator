@@ -377,6 +377,10 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
           patient.healthStatus = "healthy";
           // Override the condition to show "Healthy" instead of the original condition
           patient.condition = "Healthy";
+          // Set the severity explicitly to green
+          patient.severity = "green";
+          // Add alertReasons with a healthy message
+          patient.alertReasons = ["All readings within normal range"];
           
           uniquePatients.set(patient.patientId, patient);
           if (uniquePatients.size >= 20) break;

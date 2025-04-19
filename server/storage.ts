@@ -318,12 +318,24 @@ Let's discuss this at your next appointment.`
         }
         
         // Use the isAlert field as a fallback
-        if (!alertStatus && patient.isAlert === 'true') {
-          alertStatus = true;
-          severity = 'yellow';  // Default to yellow for general alerts
-          
-          if (alertReasons.length === 0) {
-            alertReasons.push(`Alert for ${patient.condition}`);
+        if (patient.isAlert === 'true') {
+          // Only set alert status if it wasn't already determined from variables
+          if (!alertStatus) {
+            alertStatus = true;
+            severity = 'yellow';  // Default to yellow for general alerts
+            
+            if (alertReasons.length === 0) {
+              alertReasons.push(`Alert for ${patient.condition}`);
+            }
+          }
+        } else {
+          // Explicitly mark as green/healthy if isAlert is false and no alert conditions were found
+          if (!alertStatus) {
+            alertStatus = false;
+            severity = 'green';
+            if (alertReasons.length === 0) {
+              alertReasons.push('All readings within normal range');
+            }
           }
         }
         
