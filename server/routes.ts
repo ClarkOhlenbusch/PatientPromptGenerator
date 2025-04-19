@@ -413,7 +413,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const date = req.query.date as string || new Date().toISOString().split('T')[0];
-      const alerts = await storage.getPatientAlerts(date);
+      
+      // Default to showing only the most recent batch for triage
+      const mostRecentBatchOnly = req.query.mostRecentBatchOnly !== 'false';
+      
+      // Pass the mostRecentBatchOnly flag to storage function
+      const alerts = await storage.getPatientAlerts(date, mostRecentBatchOnly);
 
       return res.status(200).json(alerts);
     } catch (err) {

@@ -12,7 +12,7 @@ import {
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { and, eq, sql, sql as SQL } from "drizzle-orm";
+import { and, eq, sql, sql as SQL, desc } from "drizzle-orm";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -185,16 +185,31 @@ Let's discuss this at your next appointment.`
   }
   
   // Triage methods using real data from uploaded patient file with severity levels
-  async getPatientAlerts(date: string): Promise<any[]> {
+  async getPatientAlerts(date: string, mostRecentBatchOnly: boolean = false): Promise<any[]> {
     try {
-      console.log(`Getting patient alerts for date: ${date}`);
+      console.log(`Getting patient alerts for date: ${date}${mostRecentBatchOnly ? ' (most recent batch only)' : ''}`);
       
       // Convert date string to Date object for comparison
       const requestDate = date ? new Date(date) : new Date();
       requestDate.setHours(0, 0, 0, 0); // Set to start of day
       
-      // Query database for all patient prompts
-      const allPatients = await db.select({
+      // Find the most recent batch if requested
+      let latestBatchId: string | null = null;
+      
+      if (mostRecentBatchOnly) {
+        const latestBatches = await db.select()
+          .from(patientBatches)
+          .orderBy(desc(patientBatches.createdAt))
+          .limit(1);
+          
+        if (latestBatches && latestBatches.length > 0) {
+          latestBatchId = latestBatches[0].batchId;
+          console.log(`Filtering alerts to most recent batch: ${latestBatchId}`);
+        }
+      }
+      
+      // Query database for patient prompts (with optional batch filter)
+      let query = db.select({
         id: patientPrompts.id,
         patientId: patientPrompts.patientId,
         name: patientPrompts.name,
@@ -204,8 +219,16 @@ Let's discuss this at your next appointment.`
         healthStatus: patientPrompts.healthStatus,
         createdAt: patientPrompts.createdAt,
         rawData: patientPrompts.rawData,
-        prompt: patientPrompts.prompt
+        prompt: patientPrompts.prompt,
+        batchId: patientPrompts.batchId
       }).from(patientPrompts);
+      
+      // Apply batch filter if requested and available
+      if (mostRecentBatchOnly && latestBatchId) {
+        query = query.where(eq(patientPrompts.batchId, latestBatchId));
+      }
+      
+      const allPatients = await query;
       
       // Group all patients by ID (not just alerts)
       const patientMap = new Map();
