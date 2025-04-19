@@ -338,48 +338,9 @@ Let's discuss this at your next appointment.`
         }
       }
       
-      // If we found real alerts, return them
-      if (alerts.length > 0) {
-        return alerts;
-      }
-      
-      // Otherwise, generate sample data as fallback (only for empty database situations)
-      return [
-        {
-          id: "alert-1",
-          patientId: "3164",
-          patientName: "Fabien Deniau",
-          age: 85,
-          condition: "Hypertension",
-          alertValue: "BP 180/95",
-          timestamp: new Date().toISOString(),
-          status: "pending",
-          message: "ALERT: Patient Fabien Deniau (85), with hypertension, has a blood pressure reading of 180/95. Please contact them to adjust medication and schedule a follow-up appointment."
-        },
-        {
-          id: "alert-2",
-          patientId: "3166",
-          patientName: "Amelia Rodriguez",
-          age: 72,
-          condition: "Diabetes",
-          alertValue: "Glucose 210 mg/dL",
-          timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-          status: "sent",
-          sentAt: new Date(Date.now() - 3300000).toISOString(), // 55 minutes ago
-          message: "ALERT: Patient Amelia Rodriguez (72), with diabetes, has an elevated blood glucose level of 210 mg/dL. Please contact them to discuss insulin adjustment and dietary recommendations."
-        },
-        {
-          id: "alert-3",
-          patientId: "3167",
-          patientName: "Robert Chen",
-          age: 68,
-          condition: "COPD",
-          alertValue: "SpO2 89%",
-          timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-          status: "failed",
-          message: "ALERT: Patient Robert Chen (68), with COPD, has a low oxygen saturation of 89%. Please contact them immediately to assess respiratory status and consider supplemental oxygen."
-        }
-      ];
+      // Return only the real alerts from the database
+      console.log(`Returning ${alerts.length} real patient alerts for date ${date || 'today'}`);
+      return alerts;
     } catch (error) {
       console.error("Error getting patient alerts:", error);
       return [];
