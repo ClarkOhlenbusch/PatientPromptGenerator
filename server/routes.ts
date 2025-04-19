@@ -730,18 +730,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Build the complete prompt with system instructions, variables list, and patient template
+      // Use the openai module to generate a new prompt with the template but pass system prompt separately
+      const { generatePromptWithSystemAndTemplate } = await import('./lib/openai');
+      
+      // Format the variables list for the AI to reference, but include it in the system prompt
       const variablesList = variables.map(v => 
         `${v.placeholder} — ${v.description}${v.example ? ` (Example: ${v.example})` : ''}`
       ).join('\n');
       
-      const fullPrompt = `${systemPrompt.prompt.trim()}\n\n` +
-        `Available placeholders:\n${variablesList}\n\n` +
-        templateData.template;
-      
-      // Use the openai module to generate a new prompt with the complete template
-      const { generatePromptWithTemplate } = await import('./lib/openai');
-      const newPrompt = await generatePromptWithTemplate(patientData, fullPrompt);
+      // Create the enhanced system prompt that includes the variables list
+      const enhancedSystemPrompt = `${systemPrompt.prompt.trim()}\n\n` +
+        `Available placeholders:\n${variablesList}`;
+        
+      // Generate the prompt using separate system instructions and template
+      const newPrompt = await generatePromptWithSystemAndTemplate(
+        patientData, 
+        enhancedSystemPrompt,
+        templateData.template
+      );
       
       // Update the patient's prompt in the database
       const updatedPatient = await storage.updatePatientPrompt(prompt.id, {

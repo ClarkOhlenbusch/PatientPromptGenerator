@@ -268,6 +268,190 @@ Suggest regular monitoring practices and follow-up care schedules. Emphasize the
  * This function takes a patient data object and a template string,
  * and replaces placeholders with actual patient data
  */
+/**
+ * Generate a prompt using a system prompt and a user template
+ * This function takes a patient data object, system instructions, and a template,
+ * separating AI instructions from the final user-facing content
+ */
+export async function generatePromptWithSystemAndTemplate(
+  patient: PatientData, 
+  systemPrompt: string, 
+  template: string
+): Promise<string> {
+  try {
+    console.log(`Generating prompt with system prompt and template for patient ${patient.patientId}`);
+    
+    // First, replace simple placeholders with patient data
+    let processedTemplate = template;
+    
+    // Replace basic patient data in the template
+    processedTemplate = processedTemplate
+      .replace(/\{name\}/g, patient.name)
+      .replace(/\{age\}/g, patient.age.toString())
+      .replace(/\{condition\}/g, patient.condition);
+    
+    // Find all remaining placeholders in the template
+    const placeholderRegex = /\{(\w+)\}/g;
+    const placeholdersToFill = new Set<string>();
+    let match;
+    
+    while ((match = placeholderRegex.exec(processedTemplate)) !== null) {
+      // Skip placeholders we already replaced
+      if (match[1] !== 'name' && match[1] !== 'age' && match[1] !== 'condition') {
+        placeholdersToFill.add(match[1]);
+      }
+    }
+    
+    // If we have complex placeholders, use OpenAI to fill them
+    if (placeholdersToFill.size > 0) {
+      // Prepare the user prompt with patient information
+      let userPrompt = `Generate content for placeholders in a template for patient ${patient.name}, age ${patient.age}, with ${patient.condition}.`;
+      
+      // Add any health issues or variables for context
+      if (patient.variables) {
+        userPrompt += `\nAvailable variables:\n`;
+        for (const [key, value] of Object.entries(patient.variables)) {
+          userPrompt += `${key}: ${value}\n`;
+        }
+      }
+      
+      if (patient.issues && patient.issues.length > 0) {
+        userPrompt += `\nHealth issues:\n- ${patient.issues.join('\n- ')}\n`;
+      }
+      
+      // Include a section for each placeholder we need to fill
+      userPrompt += `\nI need content for these placeholders:\n`;
+      
+      placeholdersToFill.forEach(placeholder => {
+        userPrompt += `\n{${placeholder}}:`;
+        
+        switch (placeholder) {
+          case 'reasoning':
+            userPrompt += ` A brief explanation of the patient's condition and why it requires attention or monitoring. Should be 1-2 sentences focused on the most important health aspect.`;
+            break;
+          case 'current':
+            userPrompt += ` The most relevant current health reading (with units) for this patient's condition.`;
+            break;
+          case 'slope':
+            userPrompt += ` A trend description for the patient's condition (improving, stable, or worsening).`;
+            break;
+          case 'compliance':
+            userPrompt += ` A percentage indicating how well the patient is following health recommendations.`;
+            break;
+        }
+      });
+      
+      userPrompt += `\nProvide your response as a JSON object with each placeholder as a key. For example:
+{
+  "reasoning": "Your blood pressure readings show slight elevation over the past month...",
+  "current": "Blood pressure: 140/90 mmHg",
+  "slope": "Stable with minor fluctuations",
+  "compliance": "85%"
+}
+Include only the placeholders I requested, and keep each value concise and focused.`;
+      
+      // Make the API call with retry logic
+      const placeholderValues = await generatePlaceholders(systemPrompt, userPrompt);
+      
+      // Replace placeholders with the generated values
+      for (const [key, value] of Object.entries(placeholderValues)) {
+        if (typeof value === 'string') {
+          processedTemplate = processedTemplate.replace(
+            new RegExp(`\\{${key}\\}`, 'g'),
+            value
+          );
+        }
+      }
+    }
+    
+    // Final cleanup: remove any remaining placeholders
+    processedTemplate = processedTemplate
+      .replace(/\{reasoning\}/g, `your recent health readings for ${patient.condition}`)
+      .replace(/\{current\}/g, `within expected range`)
+      .replace(/\{slope\}/g, `stable`)
+      .replace(/\{compliance\}/g, `good`);
+    
+    return processedTemplate;
+  } catch (error: unknown) {
+    console.error("Error generating prompt with system prompt and template:", error);
+    return template
+      .replace(/\{name\}/g, patient.name)
+      .replace(/\{age\}/g, patient.age.toString())
+      .replace(/\{condition\}/g, patient.condition)
+      .replace(/\{reasoning\}/g, `your recent health readings for ${patient.condition}`)
+      .replace(/\{current\}/g, `within expected range`)
+      .replace(/\{slope\}/g, `stable`)
+      .replace(/\{compliance\}/g, `good`);
+  }
+}
+
+async function generatePlaceholders(systemPrompt: string, userPrompt: string): Promise<Record<string, string>> {
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  while (attempts < maxAttempts) {
+    try {
+      // Calculate input tokens for tracking
+      totalApiCalls++;
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 500,
+        temperature: 0.5,
+      });
+      
+      const content = response.choices[0].message.content.trim();
+      
+      // Estimate tokens and log
+      const { estimateSinglePromptUsage } = await import("./tokenUsageEstimator");
+      const usageData = estimateSinglePromptUsage(systemPrompt + userPrompt, content);
+      totalInputTokens += usageData.inputTokens;
+      totalOutputTokens += usageData.outputTokens;
+      totalEstimatedCost += usageData.totalCost;
+      
+      console.log(`=== OpenAI Template Placeholder API Cost Estimate ===`);
+      console.log(`Input tokens: ${usageData.inputTokens} (est. $${usageData.inputCost.toFixed(6)})`);
+      console.log(`Output tokens: ${usageData.outputTokens} (est. $${usageData.outputCost.toFixed(6)})`);
+      console.log(`Total estimated cost: $${usageData.totalCost.toFixed(6)}`);
+      console.log(`===================================================`);
+      
+      try {
+        // Parse the JSON response
+        const placeholderValues = JSON.parse(content);
+        return placeholderValues;
+      } catch (jsonError) {
+        console.error("Error parsing OpenAI JSON response:", jsonError);
+        console.log("Raw response:", content);
+        attempts++;
+        
+        if (attempts >= maxAttempts) {
+          console.error("Failed to parse JSON response after multiple attempts");
+          return {};
+        }
+      }
+    } catch (apiError) {
+      attempts++;
+      
+      if (attempts >= maxAttempts) {
+        console.error("Failed to generate placeholder content after multiple attempts:", apiError);
+        return {};
+      }
+      
+      // Exponential backoff
+      const delay = Math.pow(2, attempts) * 1000;
+      console.warn(`Attempt ${attempts} failed. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return {};
+}
+
 export async function generatePromptWithTemplate(patient: PatientData, template: string): Promise<string> {
   try {
     console.log(`Generating prompt with custom template for patient ${patient.patientId}`);
