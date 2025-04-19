@@ -6,26 +6,38 @@ import * as schema from "@shared/schema";
 // Configure Neon database with WebSocket support
 neonConfig.webSocketConstructor = ws;
 
+import Database from 'better-sqlite3';
+import { drizzle as drizzleSQLite } from 'drizzle-orm/better-sqlite3';
+
 // Function to validate and get database URL
 function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL;
   
   if (!url) {
-    console.error("DATABASE_URL environment variable is not set");
-    
-    // For development mode, use a fallback connection string that will still allow the app to start
-    // but database functions won't work
-    if (process.env.NODE_ENV === 'development') {
-      console.warn("Using fallback database connection for development. Database operations will fail.");
-      return "postgresql://postgres:postgres@localhost:5432/postgres";
-    }
-    
-    throw new Error(
-      "DATABASE_URL must be set. Did you forget to provision a database?",
-    );
+    console.warn("DATABASE_URL not set, using SQLite fallback database");
+    return "sqlite";
   }
   
   return url;
+}
+
+// Function to create database client
+function createDatabaseClient() {
+  const url = getDatabaseUrl();
+  
+  if (url === "sqlite") {
+    const sqlite = new Database(':memory:');
+    return drizzleSQLite(sqlite, { schema });
+  }
+  
+  const pool = new Pool({ 
+    connectionString: url,
+    connect_timeout: 10,
+    max: 10,
+    idleTimeoutMillis: 30000
+  });
+  
+  return drizzle(pool, { schema });
 }
 
 // Create a safe connection pool
