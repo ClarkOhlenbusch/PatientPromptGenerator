@@ -68,6 +68,45 @@ export type InsertPatientBatch = z.infer<typeof insertPatientBatchSchema>;
 export type PatientPrompt = typeof patientPrompts.$inferSelect;
 export type InsertPatientPrompt = z.infer<typeof insertPatientPromptSchema>;
 
+// New tables for prompt sandbox customization
+export const systemPrompts = pgTable("system_prompts", {
+  id: serial("id").primaryKey(),
+  batchId: text("batch_id"),
+  prompt: text("prompt").notNull(),
+  createdAt: text("created_at").default(new Date().toISOString()),
+  updatedAt: text("updated_at"),
+});
+
+export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
+  id: true,
+});
+
+export const templateVariables = pgTable("template_variables", {
+  id: serial("id").primaryKey(),
+  batchId: text("batch_id"),
+  placeholder: text("placeholder").notNull(),
+  description: text("description").notNull(),
+  example: text("example"),
+  createdAt: text("created_at").default(new Date().toISOString()),
+  updatedAt: text("updated_at"),
+});
+
+export const insertTemplateVariableSchema = createInsertSchema(templateVariables).omit({
+  id: true,
+});
+
+export const templateVariableSchema = z.object({
+  placeholder: z.string(),
+  description: z.string(),
+  example: z.string().optional(),
+});
+
+export type SystemPrompt = typeof systemPrompts.$inferSelect;
+export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
+
+export type TemplateVariable = typeof templateVariables.$inferSelect;
+export type InsertTemplateVariable = z.infer<typeof insertTemplateVariableSchema>;
+
 export type FileUploadResponse = {
   success: boolean;
   batchId: string;

@@ -2,17 +2,23 @@ import {
   users,
   patientBatches,
   patientPrompts,
+  systemPrompts,
+  templateVariables,
   type User, 
   type InsertUser, 
   type PatientBatch, 
   type InsertPatientBatch, 
   type PatientPrompt, 
-  type InsertPatientPrompt 
+  type InsertPatientPrompt,
+  type SystemPrompt,
+  type InsertSystemPrompt,
+  type TemplateVariable,
+  type InsertTemplateVariable
 } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { and, eq, sql, sql as SQL, desc } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -32,9 +38,19 @@ export interface IStorage {
   getPatientPromptByIds(batchId: string, patientId: string): Promise<PatientPrompt | undefined>;
   updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt>;
   
-  // Template methods
+  // Patient Template methods
   getPromptTemplate(patientId: string): Promise<{ template: string, originalTemplate?: string } | null>;
   updatePromptTemplate(patientId: string, template: string): Promise<void>;
+  
+  // System Prompt methods
+  getSystemPrompt(batchId?: string): Promise<SystemPrompt | null>;
+  updateSystemPrompt(prompt: string, batchId?: string): Promise<SystemPrompt>;
+  
+  // Template Variables methods
+  getTemplateVariables(batchId?: string): Promise<TemplateVariable[]>;
+  createTemplateVariable(variable: InsertTemplateVariable): Promise<TemplateVariable>;
+  updateTemplateVariable(id: number, updates: Partial<InsertTemplateVariable>): Promise<TemplateVariable>;
+  deleteTemplateVariable(id: number): Promise<void>;
   
   // Triage methods
   getPatientAlerts(date: string): Promise<any[]>;
@@ -248,6 +264,234 @@ Let's discuss this at your next appointment.`;
       // Add missing placeholders at the end
       sanitized += `\n\n(Required placeholders added: ${missingPlaceholders.join(', ')})`;
       sanitized += `\n${missingPlaceholders.join(' ')}`;
+    }
+    
+    return sanitized;
+  }
+  
+  // System Prompt methods
+  async getSystemPrompt(batchId?: string): Promise<SystemPrompt | null> {
+    try {
+      let query = db.select().from(systemPrompts);
+      
+      // If batch ID is provided, try to get a batch-specific system prompt
+      if (batchId) {
+        const [batchPrompt] = await query.where(eq(systemPrompts.batchId, batchId));
+        if (batchPrompt) {
+          return batchPrompt;
+        }
+      }
+      
+      // Otherwise, get the global default prompt (null batchId)
+      const [defaultPrompt] = await db.select()
+        .from(systemPrompts)
+        .where(sql`${systemPrompts.batchId} IS NULL`)
+        .orderBy(desc(systemPrompts.createdAt))
+        .limit(1);
+      
+      return defaultPrompt || null;
+    } catch (error) {
+      console.error("Error fetching system prompt:", error);
+      return null;
+    }
+  }
+  
+  async updateSystemPrompt(promptText: string, batchId?: string): Promise<SystemPrompt> {
+    try {
+      // Sanitize the prompt
+      const sanitizedPrompt = this.sanitizeSystemPrompt(promptText);
+      
+      // Check if we have an existing system prompt for this batch
+      let existingPrompt: SystemPrompt | null = null;
+      if (batchId) {
+        [existingPrompt] = await db.select()
+          .from(systemPrompts)
+          .where(eq(systemPrompts.batchId, batchId));
+      } else {
+        [existingPrompt] = await db.select()
+          .from(systemPrompts)
+          .where(sql`${systemPrompts.batchId} IS NULL`)
+          .orderBy(desc(systemPrompts.createdAt))
+          .limit(1);
+      }
+      
+      // Update or insert
+      if (existingPrompt) {
+        // Update existing prompt
+        const [updatedPrompt] = await db.update(systemPrompts)
+          .set({
+            prompt: sanitizedPrompt,
+            updatedAt: new Date().toISOString()
+          })
+          .where(eq(systemPrompts.id, existingPrompt.id))
+          .returning();
+          
+        return updatedPrompt;
+      } else {
+        // Insert new prompt
+        const [newPrompt] = await db.insert(systemPrompts)
+          .values({
+            batchId: batchId || null,
+            prompt: sanitizedPrompt,
+            createdAt: new Date().toISOString()
+          })
+          .returning();
+          
+        return newPrompt;
+      }
+    } catch (error) {
+      console.error("Error updating system prompt:", error);
+      throw error;
+    }
+  }
+  
+  // Helper for sanitizing system prompts
+  sanitizeSystemPrompt(prompt: string): string {
+    // Trim whitespace
+    let sanitized = prompt.trim();
+    
+    // Enforce maximum length
+    const MAX_SYSTEM_PROMPT_LENGTH = 2000;
+    if (sanitized.length > MAX_SYSTEM_PROMPT_LENGTH) {
+      sanitized = sanitized.substring(0, MAX_SYSTEM_PROMPT_LENGTH);
+    }
+    
+    return sanitized;
+  }
+  
+  // Template Variables methods
+  async getTemplateVariables(batchId?: string): Promise<TemplateVariable[]> {
+    try {
+      // If batch ID is provided, get batch-specific variables
+      if (batchId) {
+        const batchVariables = await db.select()
+          .from(templateVariables)
+          .where(eq(templateVariables.batchId, batchId));
+          
+        if (batchVariables.length > 0) {
+          return batchVariables;
+        }
+      }
+      
+      // Otherwise, get global variables (null batchId)
+      const globalVariables = await db.select()
+        .from(templateVariables)
+        .where(sql`${templateVariables.batchId} IS NULL`);
+        
+      return globalVariables;
+    } catch (error) {
+      console.error("Error fetching template variables:", error);
+      return [];
+    }
+  }
+  
+  async createTemplateVariable(variable: InsertTemplateVariable): Promise<TemplateVariable> {
+    try {
+      // Sanitize the variable
+      const sanitizedVariable = {
+        ...variable,
+        placeholder: this.sanitizeVariablePlaceholder(variable.placeholder),
+        description: this.sanitizeVariableDescription(variable.description),
+        example: variable.example ? this.sanitizeVariableExample(variable.example) : null,
+        createdAt: new Date().toISOString(),
+      };
+      
+      // Insert the variable
+      const [newVariable] = await db.insert(templateVariables)
+        .values(sanitizedVariable)
+        .returning();
+        
+      return newVariable;
+    } catch (error) {
+      console.error("Error creating template variable:", error);
+      throw error;
+    }
+  }
+  
+  async updateTemplateVariable(id: number, updates: Partial<InsertTemplateVariable>): Promise<TemplateVariable> {
+    try {
+      // Sanitize the variable
+      const sanitizedUpdates: Record<string, any> = {};
+      
+      if (updates.placeholder) {
+        sanitizedUpdates.placeholder = this.sanitizeVariablePlaceholder(updates.placeholder);
+      }
+      if (updates.description) {
+        sanitizedUpdates.description = this.sanitizeVariableDescription(updates.description);
+      }
+      if (updates.example) {
+        sanitizedUpdates.example = this.sanitizeVariableExample(updates.example);
+      }
+      
+      sanitizedUpdates.updatedAt = new Date().toISOString();
+      
+      // Update the variable
+      const [updatedVariable] = await db.update(templateVariables)
+        .set(sanitizedUpdates)
+        .where(eq(templateVariables.id, id))
+        .returning();
+        
+      if (!updatedVariable) {
+        throw new Error(`Variable with id ${id} not found`);
+      }
+      
+      return updatedVariable;
+    } catch (error) {
+      console.error("Error updating template variable:", error);
+      throw error;
+    }
+  }
+  
+  async deleteTemplateVariable(id: number): Promise<void> {
+    try {
+      await db.delete(templateVariables)
+        .where(eq(templateVariables.id, id));
+    } catch (error) {
+      console.error("Error deleting template variable:", error);
+      throw error;
+    }
+  }
+  
+  // Helper functions for sanitizing variable inputs
+  sanitizeVariablePlaceholder(placeholder: string): string {
+    // Ensure placeholder starts and ends with braces
+    let sanitized = placeholder.trim();
+    if (!sanitized.startsWith('{')) sanitized = '{' + sanitized;
+    if (!sanitized.endsWith('}')) sanitized = sanitized + '}';
+    
+    // Remove any spaces
+    sanitized = sanitized.replace(/\s/g, '');
+    
+    // Enforce maximum length
+    const MAX_PLACEHOLDER_LENGTH = 50;
+    if (sanitized.length > MAX_PLACEHOLDER_LENGTH) {
+      sanitized = sanitized.substring(0, MAX_PLACEHOLDER_LENGTH - 1) + '}';
+    }
+    
+    return sanitized;
+  }
+  
+  sanitizeVariableDescription(description: string): string {
+    // Trim whitespace
+    let sanitized = description.trim();
+    
+    // Enforce maximum length
+    const MAX_DESCRIPTION_LENGTH = 200;
+    if (sanitized.length > MAX_DESCRIPTION_LENGTH) {
+      sanitized = sanitized.substring(0, MAX_DESCRIPTION_LENGTH);
+    }
+    
+    return sanitized;
+  }
+  
+  sanitizeVariableExample(example: string): string {
+    // Trim whitespace
+    let sanitized = example.trim();
+    
+    // Enforce maximum length
+    const MAX_EXAMPLE_LENGTH = 100;
+    if (sanitized.length > MAX_EXAMPLE_LENGTH) {
+      sanitized = sanitized.substring(0, MAX_EXAMPLE_LENGTH);
     }
     
     return sanitized;
