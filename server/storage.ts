@@ -237,6 +237,7 @@ Let's discuss this at your next appointment.`
           // Extract health variables
           if (parsedRawData.variables) {
             const variables = parsedRawData.variables;
+            let hasAbnormalValue = false;
             
             Object.keys(variables).forEach(key => {
               if (key !== 'patientId' && key !== 'name' && key !== 'age' && key !== 'condition') {
@@ -274,6 +275,7 @@ Let's discuss this at your next appointment.`
                   ) {
                     severity = 'red';
                     alertStatus = true;
+                    hasAbnormalValue = true;
                     alertReasons.push(`CRITICAL: ${key} is ${numValue}`);
                   }
                   // YELLOW level alerts - concerning but not immediately life-threatening
@@ -288,12 +290,22 @@ Let's discuss this at your next appointment.`
                     if (severity !== 'red') {
                       severity = 'yellow';
                       alertStatus = true;
+                      hasAbnormalValue = true;
                       alertReasons.push(`ATTENTION: ${key} is ${numValue}`);
                     }
                   }
                 }
               }
             });
+            
+            // If none of the values were abnormal, explicitly mark as green/healthy
+            if (!hasAbnormalValue) {
+              severity = 'green';
+              alertStatus = false; // Not an alert
+              if (alertReasons.length === 0) {
+                alertReasons.push('All readings within normal range');
+              }
+            }
           }
           
           // Use existing alert reasons if available and none were determined above

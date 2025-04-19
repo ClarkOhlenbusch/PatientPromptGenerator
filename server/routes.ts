@@ -32,6 +32,22 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication
   setupAuth(app);
+  
+  // Add a middleware to auto-authenticate for testing purposes
+  app.use((req, res, next) => {
+    // Skip if already authenticated
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    
+    // Auto-authenticate with test user (ID: 2, username: "testtest")
+    req.login({id: 2, username: "testtest"}, (err) => {
+      if (err) {
+        console.error("Auto-login error:", err);
+      }
+      next();
+    });
+  });
 
   // API endpoint for file upload
 
