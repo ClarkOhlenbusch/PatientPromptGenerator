@@ -491,52 +491,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === MONTHLY REPORTS ENDPOINTS ===
 
-  // Dedicated server-side monthly-report endpoint for PDF generation
+  // Dedicated server-side monthly-report endpoint for PDF generation using latest data
   app.get("/api/monthly-report", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ success: false, message: "Authentication required" });
       }
 
-      // Extract month and year from query parameters, default to current month
+      // Get the patient ID from query if provided - for individual patient reports
+      const patientId = req.query.patientId as string | undefined;
+      
+      // Current date info for filename
       const currentDate = new Date();
-      const month = req.query.month ? String(req.query.month) : String(currentDate.getMonth() + 1).padStart(2, '0');
-      const year = req.query.year ? String(req.query.year) : String(currentDate.getFullYear());
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const year = String(currentDate.getFullYear());
 
-      console.log(`Generating monthly report PDF for ${month}/${year}`);
+      console.log(`Generating report using latest patient data${patientId ? ` for patient ${patientId}` : ''}`);
 
-      // Get patient data for the specific month and year
-      const targetDate = new Date(`${year}-${month}-01`);
-      const targetMonthStart = targetDate.toISOString().split('T')[0];
+      // Get the most recent batch
+      const [latestBatch] = await db.select()
+        .from(patientBatches)
+        .orderBy(SQL`${patientBatches.createdAt} DESC`)
+        .limit(1);
 
-      // Calculate the month end date
-      const targetMonthEnd = new Date(targetDate);
-      targetMonthEnd.setMonth(targetMonthEnd.getMonth() + 1);
-      targetMonthEnd.setDate(0); // Last day of the month
-      const targetMonthEndStr = targetMonthEnd.toISOString().split('T')[0];
+      if (!latestBatch) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "No data uploads found. Please upload patient data first." 
+        });
+      }
 
-      // Get all patients created within the month (last 30 days of data)
-      const periodPatients = await db.select()
+      console.log(`Using most recent batch: ${latestBatch.batchId} from ${latestBatch.createdAt}`);
+
+      // Get patient data from this latest batch
+      let periodPatients = await db.select()
         .from(patientPrompts)
-        .where(
-          SQL`${patientPrompts.createdAt} >= ${targetMonthStart} AND ${patientPrompts.createdAt} <= ${targetMonthEndStr}`
-        );
+        .where(eq(patientPrompts.batchId, latestBatch.batchId));
+
+      // Filter by patient ID if specified
+      if (patientId) {
+        periodPatients = periodPatients.filter(p => p.patientId === patientId);
+        
+        if (periodPatients.length === 0) {
+          return res.status(404).json({ 
+            success: false, 
+            message: `Patient ${patientId} not found in the latest data` 
+          });
+        }
+      }
 
       if (periodPatients.length === 0) {
         return res.status(404).json({ 
           success: false, 
-          message: "No patient data found for the specified period" 
+          message: "No patient data found in the latest upload" 
         });
       }
 
       // Now generate PDF with patient data summary using pdfmake
       const pdfmake = await import('pdfmake');
+      // Use only core PDF built-in fonts to avoid file path issues
       const fonts = {
-        Roboto: {
-          normal: 'node_modules/pdfmake/fonts/Roboto/Roboto-Regular.ttf',
-          bold: 'node_modules/pdfmake/fonts/Roboto/Roboto-Medium.ttf',
-          italics: 'node_modules/pdfmake/fonts/Roboto/Roboto-Italic.ttf',
-          bolditalics: 'node_modules/pdfmake/fonts/Roboto/Roboto-MediumItalic.ttf'
+        // Primary font for body text
+        Helvetica: {
+          normal: 'Helvetica',
+          bold: 'Helvetica-Bold',
+          italics: 'Helvetica-Oblique',
+          bolditalics: 'Helvetica-BoldOblique'
+        },
+        // Alternative for headings
+        Times: {
+          normal: 'Times-Roman',
+          bold: 'Times-Bold',
+          italics: 'Times-Italic',
+          bolditalics: 'Times-BoldItalic'
+        },
+        // Fallback font
+        Courier: {
+          normal: 'Courier',
+          bold: 'Courier-Bold',
+          italics: 'Courier-Oblique',
+          bolditalics: 'Courier-BoldOblique'
         }
       };
 

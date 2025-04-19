@@ -2,73 +2,52 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { 
-  Calendar, 
-  Download, 
-  FileText, 
   FileUp, 
   Loader2, 
-  RefreshCw,
-  User
+  Activity,
+  PlusCircle
 } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-
-interface MonthlyReport {
-  id: string;
-  month: string;
-  year: number;
-  generatedAt: string;
-  downloadUrl: string;
-  patientCount: number;
-  status: "pending" | "complete" | "failed";
-  fileSize?: string;
-}
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function MonthlyReports() {
-  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const { toast } = useToast();
   
-  // Get current month/year for default selection
-  const currentDate = new Date();
-  const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-  
-  // Query to get all monthly reports
-  const { data: reports, isLoading } = useQuery({
-    queryKey: ["/api/monthly-reports"],
-    queryFn: async () => {
-      try {
-        const res = await apiRequest("GET", "/api/monthly-reports");
-        const data = await res.json();
-        console.log("Fetched monthly reports:", data);
-        return data;
-      } catch (error) {
-        console.error("Failed to fetch reports:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load monthly reports",
-          variant: "destructive"
-        });
-        return [];
-      }
-    }
-  });
-  
-  // Mutation to generate a new report
+  // Mutation for generating a PDF report from the latest upload data
   const generateReportMutation = useMutation({
-    mutationFn: async (monthYear: string) => {
-      const res = await apiRequest("POST", "/api/generate-monthly-report", { monthYear });
+    mutationFn: async (patientId?: string) => {
+      // If patientId is provided, generate report for just that patient
+      const endpoint = patientId 
+        ? `/api/monthly-report?patientId=${patientId}`
+        : `/api/monthly-report`;
+      
+      const res = await apiRequest("GET", endpoint);
       return await res.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Monthly report generation initiated",
-      });
-      // Invalidate reports query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/monthly-reports"] });
+    onSuccess: (data) => {
+      if (data.success && data.url) {
+        toast({
+          title: "Success",
+          description: "Monthly report generated successfully",
+        });
+        
+        // Create link to download the PDF and click it
+        const downloadLink = document.createElement('a');
+        downloadLink.href = data.url;
+        downloadLink.download = `monthly-health-report.pdf`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to generate report",
+          variant: "destructive"
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -79,248 +58,115 @@ export default function MonthlyReports() {
     }
   });
   
-  // Inside the export default function MonthlyReports()
-  // Add a new mutation for directly generating and downloading a PDF report
-  const generatePdfReportMutation = useMutation({
-    mutationFn: async (monthYear: string) => {
-      const [year, month] = monthYear.split('-');
-      const res = await apiRequest("GET", `/api/monthly-report?month=${month}&year=${year}`);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      if (data.success && data.url) {
-        toast({
-          title: "Success",
-          description: "Monthly report PDF generated successfully",
-        });
-        
-        // Create link to download the PDF and click it
-        const downloadLink = document.createElement('a');
-        downloadLink.href = data.url;
-        downloadLink.download = `monthly-report-${selectedMonth}.pdf`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        
-        // Invalidate reports query to refresh the list
-        queryClient.invalidateQueries({ queryKey: ["/api/monthly-reports"] });
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to generate PDF report",
-          variant: "destructive"
-        });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: `Failed to generate PDF report: ${error.message}`,
-        variant: "destructive"
-      });
-    }
-  });
-  
-  // Format month-year string for display
-  const formatMonthYear = (monthYearStr: string) => {
-    const [year, month] = monthYearStr.split('-');
-    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString(undefined, { 
-      month: 'long', 
-      year: 'numeric' 
-    });
-  };
-  
-  // Modify the handleGenerateReport function to use the new PDF generation
+  // Generate report for all patients or a specific patient
   const handleGenerateReport = () => {
-    if (!selectedMonth) {
-      setSelectedMonth(currentMonth);
-      generatePdfReportMutation.mutate(currentMonth);
+    if (selectedPatientId) {
+      generateReportMutation.mutate(selectedPatientId);
     } else {
-      generatePdfReportMutation.mutate(selectedMonth);
+      generateReportMutation.mutate();
     }
   };
   
   return (
-    <div className="container mx-auto">
-      <h1 className="text-3xl font-bold mb-6">AI-Powered Monthly Reports</h1>
-      <p className="text-gray-600 mb-8">
-        Generate and download comprehensive monthly reports with patient trends and insights.
-      </p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Generate New Report</CardTitle>
-            <CardDescription>Create a monthly report for a specific period</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="month-select" className="text-sm font-medium">
-                  Select Month and Year
-                </label>
-                <div className="flex items-center">
-                  <input
-                    id="month-select"
-                    type="month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="border rounded-md p-2 w-full"
-                    placeholder="YYYY-MM"
-                  />
-                </div>
-                <p className="text-xs text-gray-500">
-                  Select a month to generate a report for that period
-                </p>
-              </div>
-              
-              <Button 
-                className="w-full" 
-                onClick={handleGenerateReport}
-                disabled={generatePdfReportMutation.isPending}
-              >
-                {generatePdfReportMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating PDF...
-                  </>
-                ) : (
-                  <>
-                    <FileUp className="mr-2 h-4 w-4" />
-                    Generate & Download PDF
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Report Summary</CardTitle>
-            <CardDescription>
-              Overview of generated monthly reports
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <Calendar className="h-8 w-8 text-blue-600 mb-2" />
-                <span className="text-2xl font-bold text-blue-600">
-                  {isLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  ) : (
-                    reports?.length || 0
-                  )}
-                </span>
-                <span className="text-sm text-blue-800">Total Reports</span>
-              </div>
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <FileText className="h-8 w-8 text-indigo-600 mb-2" />
-                <span className="text-2xl font-bold text-indigo-600">
-                  {isLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  ) : (
-                    reports?.filter((r: MonthlyReport) => r.status === "complete").length || 0
-                  )}
-                </span>
-                <span className="text-sm text-indigo-800">Completed</span>
-              </div>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <User className="h-8 w-8 text-green-600 mb-2" />
-                <span className="text-2xl font-bold text-green-600">
-                  {isLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  ) : (
-                    // Sum of all patient counts from complete reports
-                    reports?.filter((r: MonthlyReport) => r.status === "complete")
-                      .reduce((sum: number, r: MonthlyReport) => sum + r.patientCount, 0) || 0
-                  )}
-                </span>
-                <span className="text-sm text-green-800">Patients Analyzed</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col items-center mb-8 text-center">
+        <Activity className="h-12 w-12 text-primary mb-4" />
+        <h1 className="text-3xl font-bold mb-3">Monthly Health Reports</h1>
+        <p className="text-muted-foreground max-w-2xl">
+          Generate comprehensive monthly health reports based on your most recently uploaded patient data. 
+          Reports include trend visualizations, health marker progression, and personalized insights.
+        </p>
       </div>
       
-      {/* Reports table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Available Reports</CardTitle>
+      <Card className="max-w-2xl mx-auto shadow-lg border-2">
+        <CardHeader className="bg-muted/30">
+          <CardTitle className="flex items-center">
+            <PlusCircle className="h-5 w-5 mr-2 text-primary" />
+            Generate New Monthly Report
+          </CardTitle>
           <CardDescription>
-            Download generated monthly reports for patients
+            Create a health report using your most recently uploaded data
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center py-8">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+        <CardContent className="pt-6">
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Select Patient (Optional)
+              </label>
+              <Select
+                value={selectedPatientId}
+                onValueChange={setSelectedPatientId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Patients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Patients</SelectItem>
+                  {/* To be replaced with actual patients from the latest batch */}
+                  <SelectItem value="1001">Patient #1001</SelectItem>
+                  <SelectItem value="1002">Patient #1002</SelectItem>
+                  <SelectItem value="1003">Patient #1003</SelectItem>
+                  <SelectItem value="Joe">Joe Butera</SelectItem>
+                  <SelectItem value="Diane">Diane Affre</SelectItem>
+                  <SelectItem value="Fabien">Fabien Deniau</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Leave empty to generate a report for all patients from the latest upload
+              </p>
             </div>
-          ) : reports?.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No reports have been generated yet.</p>
-              <p className="text-sm">Generate your first monthly report above.</p>
+            
+            <div className="space-y-4">
+              <p className="text-sm">
+                <strong>Report Contents:</strong> Health marker trending, condition-specific visualizations, 
+                progression graphs, and personalized recommendations.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                  <span>Green: Healthy Markers</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500 mr-2"></div>
+                  <span>Yellow: Needs Attention</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+                  <span>Red: Critical Markers</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                  <span>Blue: Trending Items</span>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead className="hidden md:table-cell">Generated</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Patients</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reports.map((report: MonthlyReport) => (
-                    <TableRow key={report.id}>
-                      <TableCell className="font-medium">
-                        {formatMonthYear(`${report.year}-${report.month}`)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {new Date(report.generatedAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        {report.status === "pending" && (
-                          <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200">
-                            Generating...
-                          </Badge>
-                        )}
-                        {report.status === "complete" && (
-                          <Badge variant="outline" className="bg-green-50 text-green-800 border-green-200">
-                            Complete
-                          </Badge>
-                        )}
-                        {report.status === "failed" && (
-                          <Badge variant="outline" className="bg-red-50 text-red-800 border-red-200">
-                            Failed
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {report.patientCount}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.open(report.downloadUrl, '_blank')}
-                          className="flex items-center"
-                        >
-                          <Download className="h-4 w-4 mr-1" />
-                          Download PDF
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+            
+            <Button 
+              className="w-full" 
+              size="lg"
+              onClick={handleGenerateReport}
+              disabled={generateReportMutation.isPending}
+            >
+              {generateReportMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Generating Report...
+                </>
+              ) : (
+                <>
+                  <FileUp className="mr-2 h-5 w-5" />
+                  Generate Report
+                </>
+              )}
+            </Button>
+            
+            <p className="text-xs text-center text-muted-foreground">
+              Reports use only your most recently uploaded data.
+              Please upload new patient data if you need updated reports.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

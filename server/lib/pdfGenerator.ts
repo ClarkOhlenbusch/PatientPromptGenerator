@@ -10,27 +10,31 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PatientPrompt } from '@shared/schema';
 
-// Define fonts for PDF - use standard fonts that don't require paths
-// Standard 14 PDF fonts that don't require external files
+// Define fonts for PDF - use only core PDF built-in fonts to avoid file path issues
+// These are the Standard 14 PDF fonts that are guaranteed to work without external files
 const fonts = {
+  // Default fallback font
   Courier: {
     normal: 'Courier',
     bold: 'Courier-Bold',
     italics: 'Courier-Oblique',
     bolditalics: 'Courier-BoldOblique'
   },
+  // Primary font for body text
   Helvetica: {
     normal: 'Helvetica',
     bold: 'Helvetica-Bold',
     italics: 'Helvetica-Oblique',
     bolditalics: 'Helvetica-BoldOblique'
   },
+  // Alternative for headings
   Times: {
     normal: 'Times-Roman',
     bold: 'Times-Bold',
     italics: 'Times-Italic',
     bolditalics: 'Times-BoldItalic'
   },
+  // Special character fonts
   Symbol: {
     normal: 'Symbol'
   },
