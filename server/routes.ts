@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import { processExcelFile } from "./lib/excelProcessor";
 import { generatePrompt, getTokenUsageStats } from "./lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
-import * as ExcelJS from "exceljs";
+import ExcelJS from "exceljs";
 import { db } from "./db";
 import { patientPrompts } from "@shared/schema";
 import { setupAuth } from "./auth";
