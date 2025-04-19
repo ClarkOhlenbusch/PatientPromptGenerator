@@ -1,0 +1,157 @@
+**Monthly Patient Overview Report — Detailed PDF Specification**
+
+**Goal:** Replace the current empty/placeholder PDF with a fully‑populated, multi‑section health report that matches the provided examples.
+
+---
+
+### 1. Document Header
+
+- **Title** centered, bold, 20–24 pt:
+    
+    > **Monthly Patient Overview Report**
+    
+- **Subtitle** beneath title, italic 12–14 pt:
+    
+    > _Example, Senior (2/10/2025 – 3/11/2025)_
+    
+- **Logo** in the top‑right corner: use your Signature Healthcare (or CalicoCare) logo at roughly 1.5 inches wide.
+    
+- **Horizontal rule** below header, light gray, 1 px.
+    
+
+---
+
+### 2. Summary Section
+
+- **Heading** “Summary:” bold, 14 pt.
+    
+- **Body text** 11–12 pt, single‑spaced, full‑width paragraph (4–6 sentences) covering:
+    
+    1. **Compliance** (e.g. “100% compliance…”).
+        
+    2. **Key trends** (“heart rate showed variability… oxygen saturation remained around 90.5%…”).
+        
+    3. **Any symptoms** reported (“no instances of shortness of breath…”).
+        
+    4. **Call to action** (“Continued monitoring is recommended…”).
+        
+
+---
+
+### 3. Biometric Trends (Repeatable Block)
+
+For each vital sign (e.g. Heart Rate, Oxygen Saturation, Glucose):
+
+1. **Sub‑heading**: e.g.
+    
+    > **Heart Rate (Beats/Min):**  
+    > bold, 12 pt.
+    
+2. **Line Chart** spanning full page‑width (or column width):
+    
+    - **Blue solid line** for readings over time.
+        
+    - **Red “X” markers** on points outside your normal thresholds (e.g. >100 bpm or <60 bpm).
+        
+    - **Black dashed trendline** (linear regression).
+        
+    - **X‑axis**: dates of the month, formatted M/D or M/D/YYYY.
+        
+    - **Y‑axis**: appropriate units (bpm, %, mg/dL), tick marks at sensible intervals.
+        
+3. **Stats Table** below the chart, one row:
+    
+    |Average|Minimum|Maximum|Std Dev|# Below / Above Thresholds|
+    |---|---|---|---|---|
+    |e.g.:|||||
+    |104.94 bpm|65 bpm|132 bpm|19.51 bpm|HR < 60 bpm: 0; HR > 100 bpm: 19|
+    
+4. **Compliance & Insights** (for that metric if desired):
+    
+    - If compliance is 100%, show “100% Compliance: data recorded every day.”
+        
+    - Otherwise, “Compliance: 85% (26/30 days).”
+        
+5. **Page Break** or continue on same page if there’s space.
+    
+
+---
+
+### 4. Additional Insights
+
+- **Heading:** “Additional Insights:” bold, 14 pt.
+    
+- **Bullet list** of any free‑text or symptom flags from the month (e.g. cough, chest pain).
+    
+- If none, display: “No symptoms such as shortness of breath, cough, phlegm, chest pain/pressure, or COPD‑zone changes were reported.”
+    
+
+---
+
+### 5. Footer
+
+- **Text:** “Confidential Health Information – For Patient Care Only”
+    
+- Centered, 8 pt, light gray.
+    
+- **Page numbering** on bottom right (“Page 1 of N”).
+    
+
+---
+
+### 6. Technical Implementation Notes
+
+- **Data Inputs:**
+    
+    - `patientData` object (name, ID, age, primary condition, raw prompt text)
+        
+    - `measurements` array for the selected month
+        
+    - Pre‑calculated summaries: trends (min/max/avg/stddev/slope/forecast), compliance rate, symptom flags.
+        
+- **Library Suggestions:**
+    
+    - Use **pdfmake** or **jsPDF** with **chartjs‑node‑canvas** (or Puppeteer + HTML/CSS template) to render charts inline.
+        
+    - Ensure all chart images are embedded as base64 or in‑memory buffers—no external URLs.
+        
+- **Styling:**
+    
+    - Use a clean, sans‑serif font (Helvetica or Arial).
+        
+    - Maintain 0.5″ margins on all sides.
+        
+    - Use brand colors for header/subhead (e.g. #2c3e50 for text, #1abc9c accent).
+        
+- **Error Handling:**
+    
+    - If the `measurements` array is empty, generate a one‑page PDF that says:
+        
+        > “No patient data available for {Month} {Year}. Please check data upload.”
+        
+    - Return HTTP 200 with the buffer, not a 404, so users still get a valid PDF.
+        
+
+---
+
+#### Example Section Flow
+
+```plaintext
+[Page Header with Title + Subtitle + Logo]
+
+Summary:
+The patient demonstrated consistent compliance in submitting data. Heart rate values showed notable variability, frequently exceeding 100 bpm (19 instances), but did not drop below 60 bpm. Oxygen saturation remained relatively stable, averaging around 90.5%, with 8 instances dropping below 90. Despite fluctuations in biometric data, no symptoms such as shortness of breath, cough, phlegm, or chest pain were reported, suggesting no immediate respiratory distress. The trendlines for both heart rate and oxygen saturation indicate mild fluctuations but no drastic long‑term decline. Continued monitoring is recommended to ensure stability.
+
+Heart Rate (Beats/Min):
+[Line chart with blue line, red X’s, black dashed trendline]
+| Average: 104.94 bpm | Min/Max: 65/132 | Std Dev: 19.51 | HR<60:0 | HR>100:19 |
+
+Oxygen Saturation (%):
+[Line chart with blue line, red X’s, black dashed trendline]
+| Average: 90.5% | Min/Max: 89%/93% | Std Dev:1.31% | SpO₂<90%:8 |
+
+Additional Insights:
+• No reported symptoms of shortness of breath, cough, phlegm, chest pain/pressure, or COPD zone changes.
+
+[Footer with confidentiality notice + page number]
+```
