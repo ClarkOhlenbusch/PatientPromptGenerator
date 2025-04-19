@@ -58,6 +58,8 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
       /condition/i.test(h) || /diagnosis/i.test(h) || /ailment/i.test(h) || /variable/i.test(h));
     let isAlertCol = headers.findIndex(h => 
       /is\s*alert/i.test(h) || /alert/i.test(h) || /flag/i.test(h));
+    let valueCol = headers.findIndex(h => 
+      /value/i.test(h) || /reading/i.test(h) || /result/i.test(h) || /measurement/i.test(h));
 
     // If required columns are not found, try to make an educated guess
     if (patientIdCol === -1) patientIdCol = 0; // Assume first column is ID
