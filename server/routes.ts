@@ -579,6 +579,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create PDF document definition
       const docDefinition = {
+        // Set default font to Helvetica to ensure no undefined fonts are used
+        defaultStyle: {
+          font: 'Helvetica' // Use our built-in font
+        },
         info: {
           title: `Monthly Patient Report - ${month}/${year}`,
           author: 'Patient Monitoring System',
@@ -621,17 +625,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           header: {
             fontSize: 22,
             bold: true,
-            margin: [0, 0, 0, 10]
+            margin: [0, 0, 0, 10],
+            font: 'Helvetica'
           },
           subheader: {
             fontSize: 16,
             bold: true,
-            margin: [0, 10, 0, 5]
+            margin: [0, 10, 0, 5],
+            font: 'Helvetica'
           },
           sectionHeader: {
             fontSize: 14,
             bold: true,
-            margin: [0, 15, 0, 10]
+            margin: [0, 15, 0, 10],
+            font: 'Helvetica'
           }
         }
       };
