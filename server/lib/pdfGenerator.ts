@@ -10,13 +10,32 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PatientPrompt } from '@shared/schema';
 
-// Define fonts for PDF - use a safer approach for Replit environment
+// Define fonts for PDF - use standard fonts that don't require paths
+// Standard 14 PDF fonts that don't require external files
 const fonts = {
+  Courier: {
+    normal: 'Courier',
+    bold: 'Courier-Bold',
+    italics: 'Courier-Oblique',
+    bolditalics: 'Courier-BoldOblique'
+  },
   Helvetica: {
     normal: 'Helvetica',
     bold: 'Helvetica-Bold',
     italics: 'Helvetica-Oblique',
     bolditalics: 'Helvetica-BoldOblique'
+  },
+  Times: {
+    normal: 'Times-Roman',
+    bold: 'Times-Bold',
+    italics: 'Times-Italic',
+    bolditalics: 'Times-BoldItalic'
+  },
+  Symbol: {
+    normal: 'Symbol'
+  },
+  ZapfDingbats: {
+    normal: 'ZapfDingbats'
   }
 };
 
@@ -133,6 +152,26 @@ function calculateComplianceRate(
   
   // Calculate compliance as percentage of days with readings
   return Math.min(100, Math.round((uniqueDays.size / daysInPeriod) * 100));
+}
+
+/**
+ * Helper function to convert a PDFKit document to a Buffer
+ * @param pdfDoc PDF document instance
+ * @returns Promise resolving to a Buffer with the PDF data
+ */
+function pdfDocToBuffer(pdfDoc: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const chunks: Buffer[] = [];
+      // Explicitly type the chunk parameter
+      pdfDoc.on('data', (chunk: any) => chunks.push(chunk as Buffer));
+      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+      pdfDoc.on('error', reject);
+      pdfDoc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 /**
@@ -288,18 +327,8 @@ export async function generatePatientMonthlyReport(
   // Create the PDF document
   const pdfDoc = printer.createPdfKitDocument(docDefinition);
   
-  // Write to buffer
-  return new Promise((resolve, reject) => {
-    try {
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', reject);
-      pdfDoc.end();
-    } catch (error) {
-      reject(error);
-    }
-  });
+  // Use the helper function to convert to Buffer
+  return pdfDocToBuffer(pdfDoc);
 }
 
 /**
@@ -382,7 +411,7 @@ export async function generateConsolidatedMonthlyReport(
         text: 'Summary Statistics',
         style: 'subheader',
         margin: [0, 20, 0, 10]
-      },
+      }
     ],
     styles: {
       header: {
@@ -420,16 +449,6 @@ export async function generateConsolidatedMonthlyReport(
   // Create the PDF document
   const pdfDoc = printer.createPdfKitDocument(docDefinition);
   
-  // Write to buffer
-  return new Promise((resolve, reject) => {
-    try {
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', reject);
-      pdfDoc.end();
-    } catch (error) {
-      reject(error);
-    }
-  });
+  // Use the helper function to convert to Buffer
+  return pdfDocToBuffer(pdfDoc);
 }
