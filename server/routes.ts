@@ -577,71 +577,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
-      // Create PDF document definition
-      const docDefinition = {
-        // Set default font to Helvetica to ensure no undefined fonts are used
-        defaultStyle: {
-          font: 'Helvetica' // Use our built-in font
-        },
-        info: {
-          title: `Monthly Patient Report - ${month}/${year}`,
-          author: 'Patient Monitoring System',
-          subject: 'Monthly Health Summary',
-          keywords: 'health, patients, monthly report',
-        },
-        content: [
-          { text: `Monthly Patient Report - ${month}/${year}`, style: 'header' },
-          { text: `Generated on ${new Date().toLocaleDateString()}`, style: 'subheader' },
-          { text: 'Patient Summary', style: 'sectionHeader' },
-          {
-            table: {
-              headerRows: 1,
-              widths: ['auto', 'auto', 'auto', 'auto', '*'],
-              body: [
-                ['Patient ID', 'Name', 'Age', 'Condition', 'Status'],
-                ...periodPatients.map(patient => [
-                  patient.patientId,
-                  patient.name,
-                  patient.age,
-                  patient.condition,
-                  patient.isAlert === 'true' ? 'ALERT' : 'Normal'
-                ])
-              ]
-            }
-          },
-          { text: 'Summary Statistics', style: 'sectionHeader', margin: [0, 20, 0, 10] },
-          {
-            ul: [
-              `Total Patients: ${periodPatients.length}`,
-              `Alerts: ${periodPatients.filter(p => p.isAlert === 'true').length}`,
-              `Compliance Rate: ${calculateComplianceRate(periodPatients)}%`,
-              `Average Age: ${calculateAverageAge(periodPatients)}`
-            ]
-          },
-          { text: 'Trends and Analysis', style: 'sectionHeader', margin: [0, 20, 0, 10] },
-          { text: trendsSummary(periodPatients) }
-        ],
-        styles: {
-          header: {
-            fontSize: 22,
-            bold: true,
-            margin: [0, 0, 0, 10],
-            font: 'Helvetica'
-          },
-          subheader: {
-            fontSize: 16,
-            bold: true,
-            margin: [0, 10, 0, 5],
-            font: 'Helvetica'
-          },
-          sectionHeader: {
-            fontSize: 14,
-            bold: true,
-            margin: [0, 15, 0, 10],
-            font: 'Helvetica'
-          }
-        }
-      };
+      // Import our enhanced PDF generator
+      const { generatePatientReportDefinition, generateSampleVitals } = await import('./lib/enhancedPdfGenerator');
+      
+      // Get the target patient for the report (use the first one if multiple)
+      const targetPatient = periodPatients[0];
+      
+      // Generate sample vitals data for the patient 
+      // In a production environment, this would fetch real patient measurements from the database
+      const patientVitals = generateSampleVitals(targetPatient);
+      
+      // Create the enhanced PDF document definition
+      const docDefinition = generatePatientReportDefinition(targetPatient, patientVitals);
 
       // Generate the PDF
       const printer = new pdfmake.default(fonts);
