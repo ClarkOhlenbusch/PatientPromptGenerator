@@ -112,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
 
             // Update processed patients count
-            await db.execute(sql`
+            await db.execute(SQL`
               UPDATE patient_batches 
               SET processed_patients = processed_patients + 1 
               WHERE batch_id = ${batchId}

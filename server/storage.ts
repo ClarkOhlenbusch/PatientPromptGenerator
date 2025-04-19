@@ -329,8 +329,17 @@ Let's discuss this at your next appointment.`
           }
         }
         
-        // Use the isAlert field as a fallback
-        if (patient.isAlert === 'true') {
+        // Check explicitly for healthStatus field first (highest priority)
+        if (patient.healthStatus === 'healthy') {
+          // Always override with healthy status if explicitly marked as such
+          alertStatus = false;
+          severity = 'green';
+          if (alertReasons.length === 0) {
+            alertReasons.push('All readings within normal range');
+          }
+        } 
+        // Then check isAlert field as a fallback
+        else if (patient.isAlert === 'true') {
           // Only set alert status if it wasn't already determined from variables
           if (!alertStatus) {
             alertStatus = true;
