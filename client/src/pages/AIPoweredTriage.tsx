@@ -26,6 +26,9 @@ interface PatientAlert {
   createdAt: string;
   variables?: { name: string; value: string; timestamp?: string }[];
   reasoning?: string;
+  severity?: 'red' | 'yellow' | 'green';
+  alertReasons?: string[];
+  isAlert?: boolean;
 }
 
 export default function AIPoweredTriage() {
@@ -140,27 +143,44 @@ export default function AIPoweredTriage() {
             <CardDescription>Overview of patient alerts</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-amber-600">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Red alerts */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-red-600">
                   {isLoading ? (
                     <RefreshCw className="h-6 w-6 animate-spin" />
                   ) : (
-                    alerts?.filter((a: PatientAlert) => a.status === "pending").length || 0
+                    alerts?.filter((a: PatientAlert) => a.severity === "red").length || 0
                   )}
                 </span>
-                <span className="text-sm text-amber-800">Pending Alerts</span>
+                <span className="text-sm text-red-800">URGENT</span>
               </div>
+              
+              {/* Yellow alerts */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-yellow-600">
+                  {isLoading ? (
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                  ) : (
+                    alerts?.filter((a: PatientAlert) => a.severity === "yellow").length || 0
+                  )}
+                </span>
+                <span className="text-sm text-yellow-800">ATTENTION</span>
+              </div>
+
+              {/* Green (healthy) status */}
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col items-center justify-center">
                 <span className="text-2xl font-bold text-green-600">
                   {isLoading ? (
                     <RefreshCw className="h-6 w-6 animate-spin" />
                   ) : (
-                    alerts?.filter((a: PatientAlert) => a.status === "sent").length || 0
+                    alerts?.filter((a: PatientAlert) => a.severity === "green").length || 0
                   )}
                 </span>
-                <span className="text-sm text-green-800">Sent Alerts</span>
+                <span className="text-sm text-green-800">HEALTHY</span>
               </div>
+              
+              {/* Date picker */}
               <div className="border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center">
                 <span className="text-2xl font-bold text-gray-700">
                   <input
@@ -174,25 +194,54 @@ export default function AIPoweredTriage() {
               </div>
             </div>
             
-            <div className="mt-4 flex justify-end">
-              <Button
-                onClick={handleSendAllAlerts}
-                disabled={sendAlertsMutation.isPending || !alerts?.some((a: PatientAlert) => a.status === "pending")}
-                className="flex items-center"
-              >
-                {sendAlertsMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send All Alerts
-                  </>
-                )}
-              </Button>
+            {/* Status of message sending */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex justify-between items-center">
+                <div>
+                  <span className="text-amber-800 font-medium">Pending SMS</span>
+                  <span className="ml-2 text-xl font-bold text-amber-600">
+                    {isLoading ? (
+                      <RefreshCw className="inline h-5 w-5 animate-spin" />
+                    ) : (
+                      alerts?.filter((a: PatientAlert) => a.status === "pending" && a.isAlert).length || 0
+                    )}
+                  </span>
+                </div>
+                <Button 
+                  size="sm" 
+                  className="bg-amber-600 hover:bg-amber-700"
+                  onClick={handleSendAllAlerts}
+                  disabled={sendAlertsMutation.isPending || !alerts?.some((a: PatientAlert) => a.status === "pending" && a.isAlert)}
+                >
+                  {sendAlertsMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-1 h-3 w-3" />
+                      Send All
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex justify-between items-center">
+                <div>
+                  <span className="text-green-800 font-medium">Sent SMS</span>
+                  <span className="ml-2 text-xl font-bold text-green-600">
+                    {isLoading ? (
+                      <RefreshCw className="inline h-5 w-5 animate-spin" />
+                    ) : (
+                      alerts?.filter((a: PatientAlert) => a.status === "sent").length || 0
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
+            
+
           </CardContent>
         </Card>
       </div>
@@ -221,27 +270,56 @@ export default function AIPoweredTriage() {
                 <Card key={alert.id} className={
                   alert.status === "sent" ? "border-green-200 bg-green-50" : 
                   alert.status === "failed" ? "border-red-200 bg-red-50" : 
+                  alert.severity === "red" ? "border-red-300 bg-red-50" :
+                  alert.severity === "yellow" ? "border-yellow-300 bg-yellow-50" :
+                  alert.severity === "green" ? "border-green-300 bg-green-50" :
                   "border-amber-200 bg-amber-50"
                 }>
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-lg">{alert.patientName}</CardTitle>
+                        <div className="flex items-center">
+                          {alert.severity === 'red' && (
+                            <span className="w-4 h-4 mr-2 rounded-full bg-red-500 animate-pulse" title="Urgent" />
+                          )}
+                          {alert.severity === 'yellow' && (
+                            <span className="w-4 h-4 mr-2 rounded-full bg-yellow-400" title="Attention needed" />
+                          )}
+                          {alert.severity === 'green' && (
+                            <span className="w-4 h-4 mr-2 rounded-full bg-green-500" title="Healthy" />
+                          )}
+                          <CardTitle className="text-lg">{alert.patientName}</CardTitle>
+                        </div>
                         <CardDescription>
                           ID: {alert.patientId} • Age: {alert.age} • 
-                          Alerts: {alert.alertCount || 1} • 
-                          Last reading: {new Date(alert.createdAt).toLocaleString()}
+                          {alert.alertReasons && alert.alertReasons.length > 0 ? 
+                            ` Alerts: ${alert.alertReasons.length}` : 
+                            alert.alertCount ? ` Alerts: ${alert.alertCount}` : ''}
+                          {alert.createdAt && ` • Last reading: ${new Date(alert.createdAt).toLocaleString()}`}
                         </CardDescription>
                       </div>
-                      <Badge variant="outline" className={
-                        alert.status === "sent" ? "bg-green-100 text-green-800 border-green-200" : 
-                        alert.status === "failed" ? "bg-red-100 text-red-800 border-red-200" : 
-                        "bg-amber-100 text-amber-800 border-amber-200"
-                      }>
-                        {alert.status === "sent" ? "Sent" : 
-                         alert.status === "failed" ? "Failed" : 
-                         "Pending"}
-                      </Badge>
+                      <div className="flex flex-col gap-1 items-end">
+                        <Badge variant="outline" className={
+                          alert.severity === "red" ? "bg-red-100 text-red-800 border-red-300" :
+                          alert.severity === "yellow" ? "bg-yellow-100 text-yellow-800 border-yellow-300" :
+                          alert.severity === "green" ? "bg-green-100 text-green-800 border-green-300" :
+                          alert.status === "sent" ? "bg-green-100 text-green-800 border-green-200" : 
+                          alert.status === "failed" ? "bg-red-100 text-red-800 border-red-200" : 
+                          "bg-amber-100 text-amber-800 border-amber-200"
+                        }>
+                          {alert.severity === "red" ? "URGENT" :
+                          alert.severity === "yellow" ? "ATTENTION" :
+                          alert.severity === "green" ? "HEALTHY" :
+                          alert.status === "sent" ? "Sent" : 
+                          alert.status === "failed" ? "Failed" : 
+                          "Pending"}
+                        </Badge>
+                        {alert.status === "pending" && alert.isAlert && (
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                            Requires SMS
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
