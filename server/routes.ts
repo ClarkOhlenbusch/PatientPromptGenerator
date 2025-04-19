@@ -646,27 +646,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate the PDF
       const printer = new pdfmake.default(fonts);
       const pdfDoc = printer.createPdfKitDocument(docDefinition);
-
-      // Generate a unique filename for the PDF
-      const timestamp = Date.now();
-      const pdfFilename = `monthly-report-${year}-${month}-${timestamp}.pdf`;
-      const pdfPath = path.join(process.cwd(), 'public', 'reports', pdfFilename);
-
-      // Ensure the reports directory exists
-      const reportsDir = path.join(process.cwd(), 'public', 'reports');
-      await fs.promises.mkdir(reportsDir, { recursive: true });
-
-      // Pipe the PDF to a file
-      pdfDoc.pipe(fs.createWriteStream(pdfPath));
-      pdfDoc.end();
-
-      // Return the URL to the generated PDF
-      const pdfUrl = `/reports/${pdfFilename}`;
-      return res.status(200).json({ 
-        success: true, 
-        url: pdfUrl,
-        message: "Monthly report generated successfully"
+      
+      // Instead of writing to a file, collect the chunks in memory
+      const chunks: any[] = [];
+      let result: Buffer;
+      
+      pdfDoc.on('data', (chunk) => {
+        chunks.push(chunk);
       });
+      
+      pdfDoc.on('end', () => {
+        result = Buffer.concat(chunks);
+        
+        // Send the PDF directly to the browser with proper headers
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="monthly-report-${year}-${month}.pdf"`);
+        res.setHeader('Content-Length', result.length);
+        
+        res.end(result);
+      });
+      
+      // Finalize the PDF
+      pdfDoc.end();
     } catch (err) {
       console.error("Error generating monthly report PDF:", err);
       return res.status(500).json({

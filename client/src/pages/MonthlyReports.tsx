@@ -75,30 +75,17 @@ export default function MonthlyReports() {
         ? `/api/monthly-report?patientId=${patientId}`
         : `/api/monthly-report`;
       
-      const res = await apiRequest("GET", endpoint);
-      return await res.json();
+      // For direct PDF response, we need to open in a new tab/window
+      window.open(endpoint, '_blank');
+      
+      // Return success since we're handling the download through window.open
+      return { success: true };
     },
-    onSuccess: (data) => {
-      if (data.success && data.url) {
-        toast({
-          title: "Success",
-          description: "Monthly report generated successfully",
-        });
-        
-        // Create link to download the PDF and click it
-        const downloadLink = document.createElement('a');
-        downloadLink.href = data.url;
-        downloadLink.download = `monthly-health-report.pdf`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to generate report",
-          variant: "destructive"
-        });
-      }
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Monthly report generated successfully. If your PDF doesn't open automatically, please check your popup blocker settings.",
+      });
     },
     onError: (error: Error) => {
       toast({
