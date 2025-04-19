@@ -12,7 +12,7 @@ import {
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { and, eq, sql as SQL } from "drizzle-orm";
+import { and, eq, sql, sql as SQL } from "drizzle-orm";
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -328,10 +328,9 @@ Reasoning: ${reasoning || 'Abnormal readings detected'}`;
       createdAt: patientBatches.createdAt
     }).from(patientBatches);
     
-    // Get count from database directly using raw query
-    const { pool } = await import('./db');
-    const countResult = await pool.query('SELECT COUNT(*) as count FROM patient_prompts');
-    const patientCount = parseInt(countResult.rows[0].count as string, 10) || 0;
+    // Get count from database using drizzle ORM instead of raw query
+    const countResult = await db.select({ count: sql`COUNT(*)` }).from(patientPrompts);
+    const patientCount = parseInt(String(countResult[0]?.count || '0'), 10) || 0;
     
     // Only use real data from the database to generate reports
     if (batches.length > 0) {

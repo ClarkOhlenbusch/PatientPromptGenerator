@@ -2,10 +2,28 @@
 import { db } from '../db';
 import { users, patientBatches, patientPrompts } from '@shared/schema';
 import { sql } from 'drizzle-orm';
+import { scrypt, randomBytes } from 'crypto';
+import { promisify } from 'util';
 
+const scryptAsync = promisify(scrypt);
+
+/**
+ * Hash a password for secure storage
+ */
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('hex');
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString('hex')}.${salt}`;
+}
+
+/**
+ * Initialize database tables and add a test user if needed
+ */
 export async function initializeDatabase() {
   try {
-    // Create users table
+    console.log('Database client initialized successfully');
+    
+    // Create users table first
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -44,6 +62,41 @@ export async function initializeDatabase() {
         updated_at TEXT
       );
     `);
+
+    // Check if sessions table exists, if not create it
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+      );
+    `);
+    
+    // Add a test user if no users exist
+    const existingUsers = await db.select().from(users);
+    
+    if (!existingUsers.length) {
+      const hashedPassword = await hashPassword('password123');
+      
+      await db.insert(users).values({
+        username: 'testuser',
+        password: hashedPassword
+      });
+      
+      console.log('Created test user: testuser / password123');
+    } else {
+      console.log(`${existingUsers.length} users already exist in the database`);
+    }
+    
+    // Check that tables were created properly
+    const tableCheck = await db.execute(sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+    
+    console.log('Available tables:', tableCheck.rows.map(row => row.table_name).join(', '));
 
     console.log('Database tables initialized successfully');
   } catch (error) {

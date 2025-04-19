@@ -1,0 +1,71 @@
+Your login is failing because the app can’t actually see the `users` table in the database it’s talking to—even though you’ve created one in your Neon/Postgres instance, your code is still pointing at a different (empty) SQLite store. Hence the SQLite error:  
+   
+```
+500: {"message":"no such table: users"}
+```  
+
+---
+
+## What’s Happening
+
+1. **Default Adapter**  
+   By default, NextAuth (or your custom auth code) is using SQLite (e.g. `file:./dev.db`) because you haven’t overridden its connection string or run your Postgres migrations.
+
+2. **Wrong DATABASE_URL**  
+   Your `.env` (or Vercel Environment Variables) probably sets `DATABASE_URL` for your Neon/Postgres, but the auth adapter isn’t picking it up—so it spins up SQLite, which never had a `users` table created.
+
+3. **Migrations Never Ran**  
+   Even in your Postgres DB you see a `users` table, but since your code isn’t connected to that DB at runtime, it’s irrelevant to the running app.
+
+---
+
+## How to Fix It
+
+1. **Point NextAuth (and Prisma/Knex) at Your Postgres**  
+   - In your `nextauth` config (usually in `/pages/api/auth/[...nextauth].ts`), ensure the adapter is initialized with your ORM instance—e.g. for Prisma:  
+     ```ts
+     import { PrismaAdapter } from "@next-auth/prisma-adapter"
+     import { prisma } from "../../../lib/prisma"
+
+     export default NextAuth({
+       adapter: PrismaAdapter(prisma),
+       // …
+     })
+     ```
+   - In `lib/prisma.ts` (or wherever you create your Prisma client), read from `process.env.DATABASE_URL`.  
+
+2. **Set & Verify `DATABASE_URL`**  
+   - **Locally:** in `.env.local` at your project root, add or update:  
+     ```
+     DATABASE_URL="postgresql://user:pass@your-neon-host/dbname?schema=public"
+     NEXTAUTH_URL="http://localhost:3000"
+     NEXTAUTH_SECRET="a‑long,random‑secret"
+     ```
+   - **In Vercel:** add the exact same `DATABASE_URL`, `NEXTAUTH_URL`, and `NEXTAUTH_SECRET` in your project’s Environment Variables dashboard.
+
+3. **Run Your Migrations**  
+   - If you use Prisma:  
+     ```bash
+     npx prisma migrate deploy
+     ```
+   - If you use Knex:  
+     ```bash
+     npx knex migrate:latest
+     ```
+   This will create the `users`, `sessions`, and any other tables your adapter expects.
+
+4. **Restart & Test**  
+   - Stop your dev server, then `npm run dev` (so it picks up the new `.env.local`).  
+   - Hit your `/api/auth/signin` page, log in with one of the users you seeded in Postgres—now it should succeed.
+
+---
+
+### Quick Checklist
+
+- [ ] NextAuth adapter uses **PrismaAdapter(prisma)** (or correct ORM adapter)  
+- [ ] `lib/prisma.ts` (or your DB client) reads from `process.env.DATABASE_URL` only  
+- [ ] `.env.local` & Vercel ENV vars both contain the same `DATABASE_URL` and `NEXTAUTH_SECRET`  
+- [ ] Migrations have been applied (`prisma migrate deploy` or `knex migrate:latest`)  
+- [ ] After restart, `/api/auth/signin` no longer throws “no such table: users”
+
+Once those are in place, your login endpoint will connect to the same Postgres that actually contains the `users` table, and you’ll be able to sign in.
