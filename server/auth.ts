@@ -14,6 +14,9 @@ declare global {
   }
 }
 
+const ADMIN_USERNAME = "CalicoCare";
+const ADMIN_PASSWORD = "CalicoCare";
+
 const scryptAsync = promisify(scrypt);
 
 async function hashPassword(password: string) {
@@ -56,19 +59,27 @@ export function setupAuth(app: Express) {
     new LocalStrategy(async (username, password, done) => {
       try {
         console.log(`Login attempt for username: ${username}`);
-        const user = await storage.getUserByUsername(username);
-        if (!user) {
-          console.log(`Login failed: User ${username} not found`);
+        
+        // Only allow admin login
+        if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+          console.log(`Login failed: Invalid credentials`);
           return done(null, false);
-        } else if (!(await comparePasswords(password, user.password))) {
-          console.log(`Login failed: Invalid password for ${username}`);
-          return done(null, false);
-        } else {
-          console.log(`Login successful for ${username}`);
-          return done(null, user);
         }
+
+        // Create or get admin user
+        let user = await storage.getUserByUsername(ADMIN_USERNAME);
+        if (!user) {
+          user = await storage.createUser({
+            username: ADMIN_USERNAME,
+            password: await hashPassword(ADMIN_PASSWORD),
+            role: 'admin'
+          });
+        }
+
+        console.log(`Login successful for admin user`);
+        return done(null, user);
       } catch (err) {
-        console.error(`Login error for ${username}:`, err);
+        console.error(`Login error:`, err);
         return done(err);
       }
     }),
@@ -82,30 +93,6 @@ export function setupAuth(app: Express) {
     } catch (err) {
       console.error(`Error deserializing user ID ${id}:`, err);
       done(err);
-    }
-  });
-
-  app.post("/api/register", async (req, res, next) => {
-    try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).json({ success: false, message: "Username already exists" });
-      }
-
-      const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
-      });
-
-      req.login(user, (err) => {
-        if (err) return next(err);
-        // Don't return the password hash to the client
-        const { password, ...userWithoutPassword } = user;
-        res.status(201).json({ success: true, user: userWithoutPassword });
-      });
-    } catch (err) {
-      console.error("Registration error:", err);
-      next(err);
     }
   });
 
@@ -126,7 +113,7 @@ export function setupAuth(app: Express) {
           console.error("Session login error:", err);
           return next(err);
         }
-        console.log(`User ${user.username} successfully logged in`);
+        console.log(`Admin user successfully logged in`);
         // Don't return the password hash to the client
         const { password, ...userWithoutPassword } = user;
         
