@@ -1,260 +1,229 @@
 # Patient Prompt Generator
 
-A web application that transforms patient medical data from Excel files into AI-powered insights through intelligent processing and advanced analytics.
-
+A comprehensive healthcare monitoring system that transforms patient medical data into actionable insights through AI-powered analysis and automated alerts.
 
 ## Overview
 
-The Patient Prompt Generator is a specialized tool designed for healthcare professionals at Calico Care. It processes patient data from Excel spreadsheets to generate tailored and engaging, AI-powered prompts for each patient based on their medical conditions and health indicators. 
+The Patient Prompt Generator is a specialized healthcare monitoring tool designed for healthcare professionals. It processes patient data from Excel spreadsheets to generate personalized health insights, identify patients requiring attention, and automate communication with caregivers.
 
 ### Key Features
 
 - **Excel Data Processing**: Upload and process Excel files containing patient data
-- **AI-Powered Insights**: Generate customized prompts for patients using OpenAI's GPT models
-- **Patient Filtering**: Focus on patients with alert conditions that require attention
-- **Data Aggregation**: Combine multiple issues for the same patient into comprehensive prompts
-- **Batch Processing**: Handle multiple patients efficiently in a single upload
-- **Export Capability**: Export the generated prompts to CSV for easier integration with other systems
+- **AI-Powered Insights**: Generate customized health insights using OpenAI's GPT models
+- **Real-time Triage**: Identify and prioritize patients requiring immediate attention
+- **Automated Alerts**: Send SMS notifications to caregivers for critical conditions
+- **Comprehensive Reporting**: Generate detailed monthly PDF reports with patient analytics
+- **Secure Authentication**: Robust user authentication and session management
+- **Data Persistence**: Complete storage of patient records and health metrics
 
 ## Technology Stack
 
-- **Frontend**: React with TypeScript, TailwindCSS, Shadcn UI components
-- **Backend**: Node.js with Express
-- **AI Integration**: OpenAI API
-- **Data Processing**: Excel file parsing with automata-style workflow
-- **Database**: In-memory storage (ready for PostgreSQL integration)
-- **Build Tools**: Vite, ESBuild
+- **Frontend**: 
+  - React with TypeScript
+  - TailwindCSS for styling
+  - Shadcn UI components
+  - React Query for data fetching
+  - Wouter for routing
 
-## Getting Started
+- **Backend**: 
+  - Node.js with Express
+  - Passport.js for authentication
+  - ExcelJS for Excel processing
+  - pdfmake for PDF generation
+  - Drizzle ORM for database operations
 
-### Prerequisites
+- **Database**: 
+  - PostgreSQL (via Drizzle ORM)
+  - Session storage with connect-pg-simple
 
+- **External Services**:
+  - OpenAI API for AI analysis
+  - Twilio for SMS notifications
+
+## Prerequisites
+
+- Windows 10/11
 - Node.js 16+ and npm
+- PostgreSQL 12+
 - OpenAI API key
+- Twilio account (for SMS functionality)
 
-### Installation
+## Windows Installation Guide
 
-1. Clone the repository:
-   ```bash
+### 1. Install Required Software
+
+1. **Install Node.js**:
+   - Download Node.js from [nodejs.org](https://nodejs.org/)
+   - Run the installer and follow the prompts
+   - Verify installation:
+     ```powershell
+     node --version
+     npm --version
+     ```
+
+2. **Install PostgreSQL**:
+   - Download PostgreSQL from [postgresql.org](https://www.postgresql.org/download/windows/)
+   - Run the installer
+   - Note down the password you set for the postgres user
+   - Keep the default port (5432)
+
+3. **Install Git**:
+   - Download Git from [git-scm.com](https://git-scm.com/download/win)
+   - Run the installer
+   - Verify installation:
+     ```powershell
+     git --version
+     ```
+
+### 2. Clone and Setup the Project
+
+1. **Clone the repository**:
+   ```powershell
    git clone https://github.com/yourusername/patient-prompt-generator.git
    cd patient-prompt-generator
    ```
 
-2. Install dependencies:
-   ```bash
+2. **Install dependencies**:
+   ```powershell
    npm install
    ```
 
-3. Set up environment variables:
-   - Create a `.env` file in the root directory
-   - Add your OpenAI API key:
-     ```
-     OPENAI_API_KEY=your_api_key_here
-     ```
+3. **Create environment variables**:
+   Create a `.env` file in the root directory with:
+   ```
+   DATABASE_URL=postgresql://postgres:your_password@localhost:5432/patient_prompt
+   OPENAI_API_KEY=your_openai_api_key
+   TWILIO_ACCOUNT_SID=your_twilio_sid
+   TWILIO_AUTH_TOKEN=your_twilio_token
+   TWILIO_PHONE_NUMBER=your_twilio_phone
+   SESSION_SECRET=your_session_secret
+   ```
 
-4. Start the development server:
-   ```bash
+4. **Initialize the database**:
+   ```powershell
+   npm run db:push
+   ```
+
+### 3. Start the Application
+
+1. **Start the development server**:
+   ```powershell
    npm run dev
    ```
 
-5. Open your browser and navigate to `http://localhost:5000`
+2. **Access the application**:
+   - Open your browser and navigate to `http://localhost:3000`
+   - The application should be running and ready for use
 
 ## Usage Guide
 
-### Uploading Data
+### 1. Authentication
 
-1. Navigate to the home page
-2. Click on the "Choose File" button or drop your Excel file in the designated area
-3. The file should follow the expected format (see sample data structure below)
-4. Click "Upload" to start processing
+- Register a new account or use the default test credentials:
+  - Username: testuser
+  - Password: password123
+- All sensitive operations require authentication
 
-### Viewing Results
+### 2. Uploading Patient Data
 
-1. After processing, you'll be redirected to the results page
-2. Browse through the list of patients and their generated prompts
-3. Use the search functionality to find specific patients
-4. Click on a patient to view their full prompt details
+1. Navigate to the upload page
+2. Select an Excel file with patient data
+3. The file should contain:
+   - Patient ID
+   - Name
+   - Date of Birth
+   - Health measurements
+   - Alert indicators
 
-### Regenerating Prompts
+### 3. Triage System
 
-1. On the results page, you can regenerate prompts for specific patients by clicking the "Regenerate" button
-2. To regenerate all prompts, use the "Regenerate All" button
+- View patients requiring attention
+- Grouped by severity (Red → Yellow → Green)
+- Send SMS alerts to caregivers
+- View detailed patient metrics
 
-Customizing prompt:
-Find the openai.ts file under the server -> lib. Search for the prompt and make desiered changes.
+### 4. Monthly Reports
 
-### Exporting Data
+1. Navigate to the Reports page
+2. Select a month and year
+3. Generate and download PDF reports containing:
+   - Patient compliance rates
+   - Health trend analysis
+   - Alert statistics
+   - Individual patient summaries
 
-1. On the results page, click the "Export CSV" button
-2. A CSV file containing all patient prompts will be downloaded
+## Data Structure
 
-## Data Format
-
-The application expects Excel files with the following column structure:
+### Excel File Format
+The application expects Excel files with these columns:
 - Patient ID (unique identifier)
 - Name (patient name)
 - Date of Birth (patient age)
-- Date and Time Stamp (when data was collected)
-- Variable (i.e., Weight, Steps, Distance, Activity Calories, etc.)
-- Is Alert (boolean flag indicating if row data vitals are concerning)
-- Additional metrics and measurements (will be included in the prompt if relevant)
+- Timestamp (when data was collected)
+- Variable (health metric name)
+- Value (measurement value)
+- Is Alert (boolean flag)
 
-### Sample Data Row
-```
-PatientID: "12345"
-Name: "John, Doe (11/12/1965)"
-Date and Time Stamp: 3/1/2025 3:03
-Variable: "Weight"
-Value: 195
-Is Alert: FALSE
-```
+### Database Schema
+The application uses several tables:
+- users (authentication)
+- patient_batches (upload history)
+- patient_prompts (generated insights)
+- patient_alerts (triage data)
+- monthly_reports (report history)
 
-## Deployment
+## Testing
 
-This application is configured to be deployed on Replit.
-
-### Replit Deployment
-
-1. Fork this repository to your Replit account
-2. Add your OpenAI API key as a secret:
-   - Name: `OPENAI_API_KEY`
-   - Value: your actual OpenAI API key
-3. Click the "Run" button to start the application
-4. Access the application at: Patient-Prompt-Generator.replit.app
-
-### Accessing the Live Demo
-
-The application is currently deployed and accessible at:
-- [[Patient-Prompt-Generator.replit.app](https://Patient-Prompt-Generator.replit.app)
-](https://calicocare-agent-response.replit.app/)
-#### Using the Demo
-
-1. Visit the deployed application
-2. Use the "Demo Data with PatientID.xlsx" file (included in the repository) to test the functionality
-3. Upload the file using the drag-and-drop interface
-4. View the generated prompts for each patient
-5. Regenerate prompts as needed or export to CSV
-
-## Project Structure
-
-```
-├── client/                 # Frontend code
-│   ├── public/             # Static assets
-│   └── src/                # React application source
-│       ├── components/     # UI components
-│       ├── hooks/          # Custom React hooks
-│       ├── lib/            # Utility functions
-│       └── pages/          # Application pages
-├── server/                 # Backend code
-│   ├── lib/                # Server utilities
-│   │   ├── excelProcessor.js  # Excel file processing logic
-│   │   └── openai.js       # OpenAI integration
-│   ├── index.ts            # Server entry point
-│   └── routes.ts           # API routes
-├── shared/                 # Shared code between client and server
-│   └── schema.ts           # Data models and types
-└── package.json            # Project dependencies
-```
-
-## Automata-Style Workflow
-
-The Excel processor follows an automata-style workflow:
-- S0: Initialize processing
-- S1: Read Excel file
-- S2: Identify headers and structure
-- S3: Process rows
-- S4: Filter for alert conditions
-- S5: Aggregate by patient ID
-- S6: Generate prompts
-- S7: Format results
-- S8: Return processed data
-
-## Performance Optimizations
-
-- Processing is limited to 20 unique patient-condition combinations per batch
-- Caching is implemented for condition-specific prompts to reduce API calls
-- Token length is optimized for faster OpenAI API responses
-- Data is filtered early in the process to focus only on relevant patients
-
-## Future Enhancements
-
-### Alexa Integration
-
-The next phase of this project will integrate with Amazon Alexa to enable voice-based delivery of patient prompts. The planned features include:
-
-1. **Alexa Calling Method Integration**: Automated calls to patients using Alexa's communication system
-2. **Voice Output**: Converting text prompts to natural-sounding voice responses
-3. **Patient Interaction**: Enabling patients to respond to prompts and ask follow-up questions
-4. **Scheduling System**: Setting up regular check-ins with patients based on their condition
-5. **Emergency Escalation**: Detecting urgent situations and escalating to healthcare providers
-
-This integration will make the patient prompts more accessible, especially for elderly patients or those with visual impairments, and provide a more personal touch to healthcare monitoring.
-
-### Database Integration
-
-While the current version uses in-memory storage for simplicity and demonstration purposes, future versions will integrate with PostgreSQL for persistent storage of:
-
-1. Patient records and historical prompt data
-2. Response analytics and effectiveness metrics
-3. Patient feedback and interaction history
-
-## Recent Improvements
-
-We've made several important improvements to enhance the application's functionality and reliability:
-
-### 1. Authentication Enhancements
-
-- **Robust Error Logging**: Added comprehensive error logging for authentication, helping to diagnose login issues in production.
-- **Session Security**: Improved session handling with proper cookie settings and secure configuration.
-- **Protected Routes**: All sensitive API endpoints are now properly protected, redirecting unauthenticated users to the login screen.
-
-To test authentication:
-```bash
-# Run the smoke test to verify authentication is working
+Run the smoke test to verify core functionality:
+```powershell
 npm run smoke-test
 ```
 
-### 2. Monthly Reports
+This will test:
+- Authentication flow
+- Report generation
+- PDF download functionality
 
-The application now generates comprehensive PDF monthly reports with:
+## Troubleshooting
 
-- **30-Day Patient Data Analysis**: Consolidation of patient data from the last 30 days.
-- **Compliance Tracking**: Calculation of patient compliance rates.
-- **Trend Analysis**: Identification of trends in patient health metrics.
-- **PDF Generation**: Server-side generation of professional PDF reports using pdfmake.
+### Common Issues
 
-To generate a monthly report:
-1. Navigate to the "Monthly Reports" tab
-2. Select the month/year or use the current month
-3. Click "Generate & Download PDF"
-4. The report will be generated and automatically downloaded
+1. **Database Connection Issues**:
+   - Verify PostgreSQL is running
+   - Check DATABASE_URL in .env
+   - Ensure correct credentials
 
-### 3. Triage System Improvements
+2. **Authentication Problems**:
+   - Clear browser cookies
+   - Verify SESSION_SECRET in .env
+   - Check server logs for errors
 
-The triage system has been completely redesigned for better usability:
+3. **Excel Processing Errors**:
+   - Verify file format matches requirements
+   - Check for empty or malformed cells
+   - Ensure proper column headers
 
-- **Patient-Centric Grouping**: Alerts are now grouped by patient rather than by row, providing a clearer overview.
-- **Improved SMS Formatting**: SMS messages now follow a clear, consistent template:
-  ```
-  ALERT for {name}, age {age}:
-  • {Variable1}: {Value1} at {Timestamp1}
-  • {Variable2}: {Value2} at {Timestamp2}
-  Reasoning: {reasoning}
-  ```
-- **Detailed View**: Each patient card includes a "View Details" option to expand and see all alert information.
-- **Batch or Individual Messaging**: Send SMS alerts to individual patients or in batch to multiple patients.
+### Logs and Debugging
 
-### 4. Data Persistence
+- Server logs are available in the console
+- Authentication errors are logged with details
+- Excel processing errors include row numbers
+- API errors include request details
 
-- **Complete Data Storage**: All uploaded Excel data is now properly persisted in the database.
-- **No Data Limitations**: Removed the arbitrary limit on the number of patients processed.
-- **Error Handling**: Improved error handling and logging throughout the data processing pipeline.
+## Security Considerations
+
+- All API endpoints are protected
+- Passwords are hashed using scrypt
+- Sessions use secure cookies
+- Database queries use parameterized statements
+- File uploads are validated and sanitized
 
 ## Acknowledgments
 
-- OpenAI for providing the API for generating patient prompts
+- OpenAI for providing the API for generating insights
 - Calico Care for the project requirements and domain expertise
+- The open-source community for the tools and libraries used
 
 ---
 
-*Note: This project is for demonstration purposes. In a production environment, additional security measures should be implemented, particularly for handling sensitive patient data.*
+*Note: This application handles sensitive patient data. Ensure proper security measures are in place before deploying to production.*
