@@ -73,21 +73,9 @@ export async function initializeDatabase() {
       );
     `);
     
-    // Add a test user if no users exist
+    // Check if any users exist, but don't automatically create test users
     const existingUsers = await db.select().from(users);
-    
-    if (!existingUsers.length) {
-      const hashedPassword = await hashPassword('password123');
-      
-      await db.insert(users).values({
-        username: 'testuser',
-        password: hashedPassword
-      });
-      
-      console.log('Created test user: testuser / password123');
-    } else {
-      console.log(`${existingUsers.length} users already exist in the database`);
-    }
+    console.log(`${existingUsers.length} users already exist in the database`);
     
     // Check that tables were created properly
     const tableCheck = await db.execute(sql`

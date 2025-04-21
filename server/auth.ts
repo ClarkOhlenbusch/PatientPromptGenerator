@@ -39,14 +39,15 @@ export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: sessionSecret,
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: false, // Don't create session until something stored
     store: storage.sessionStore,
     proxy: true,
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: 'lax',
-      path: '/'
+      maxAge: 2 * 60 * 60 * 1000, // Reduced to 2 hours instead of 24
+      sameSite: 'strict', // Changed from 'lax' to 'strict' for better security
+      path: '/',
+      httpOnly: true // Prevents client-side JS from reading the cookie
     }
   };
 
@@ -71,8 +72,7 @@ export function setupAuth(app: Express) {
         if (!user) {
           user = await storage.createUser({
             username: ADMIN_USERNAME,
-            password: await hashPassword(ADMIN_PASSWORD),
-            role: 'admin'
+            password: await hashPassword(ADMIN_PASSWORD)
           });
         }
 
@@ -137,7 +137,24 @@ export function setupAuth(app: Express) {
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
       if (err) return next(err);
-      res.status(200).json({ success: true, message: "Logged out successfully" });
+      
+      // Destroy the session to ensure it's completely removed
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Error destroying session:", err);
+          return next(err);
+        }
+        
+        // Clear the cookie on the client side
+        res.clearCookie('connect.sid', {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: 'strict'
+        });
+        
+        res.status(200).json({ success: true, message: "Logged out successfully" });
+      });
     });
   });
 
