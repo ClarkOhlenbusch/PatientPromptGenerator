@@ -1,4 +1,4 @@
-import { FaEnvelope, FaPhone } from "react-icons/fa";
+import { FaEnvelope, FaPhone, FaLinkedin } from "react-icons/fa";
 import { HelpCircle } from "lucide-react";
 
 export default function Footer() {
@@ -18,6 +18,15 @@ export default function Footer() {
             <a href="tel:+15551234567" className="ml-6 text-gray-400 hover:text-primary flex items-center">
               <FaPhone className="h-5 w-5" />
               <span className="ml-1 text-sm">555-123-4567</span>
+            </a>
+            <a 
+              href="https://www.linkedin.com/in/clark-ohlenbusch-bb8b60253" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="ml-6 text-gray-400 hover:text-primary flex items-center"
+            >
+              <FaLinkedin className="h-5 w-5" />
+              <span className="ml-1 text-sm">Built by Clark Ohlenbusch</span>
             </a>
           </div>
           <div className="mt-8 md:mt-0 md:order-1">
