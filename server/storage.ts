@@ -201,15 +201,18 @@ export class DatabaseStorage implements IStorage {
   
   // Helper for the default template
   getDefaultTemplate(): string {
-    return `Hello {name}, 
+    return `Hello {name},
 
-Based on your recent health data, I notice {reasoning}.
+Based on your recent health data, I notice {condition}.
 
-Current reading: {current}
-Trend: {slope}
-Compliance: {compliance}%
+{current_values}
 
-Let's discuss this at your next appointment.`;
+Your compliance rate is {compliance}%. {trend_analysis}
+
+Let's discuss this at your next appointment to ensure you're on track with your treatment plan.
+
+Best regards,
+Your Healthcare Provider`;
   }
   
   async updatePromptTemplate(patientId: string, template: string): Promise<void> {
