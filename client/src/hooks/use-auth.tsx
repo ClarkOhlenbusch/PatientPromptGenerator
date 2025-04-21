@@ -34,13 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: response,
     error,
     isLoading,
-  } = useQuery({
+  } = useQuery<{success: boolean, user?: User, message?: string}>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
   // Extract user from response if it exists
-  const user = response?.success ? response.user : null;
+  const user = response?.success && response.user ? response.user : null;
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
@@ -98,8 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.setQueryData(["/api/user"], null);
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      // Clear all query cache to ensure no data persists after logout
+      queryClient.setQueryData(["/api/user"], { success: false, message: "Not authenticated" });
+      queryClient.invalidateQueries();
+      
+      // Clear localStorage if anything is stored there
+      localStorage.clear();
+      
+      // Reload the page to ensure a completely fresh state
+      window.location.href = '/auth';
     },
     onError: (error: Error) => {
       toast({
@@ -107,6 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
+      
+      // Even on error, try to clear client-side state
+      queryClient.setQueryData(["/api/user"], { success: false, message: "Not authenticated" });
+      localStorage.clear();
     },
   });
 

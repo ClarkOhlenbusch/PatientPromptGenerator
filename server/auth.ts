@@ -48,7 +48,9 @@ export function setupAuth(app: Express) {
       sameSite: 'strict', // Changed from 'lax' to 'strict' for better security
       path: '/',
       httpOnly: true // Prevents client-side JS from reading the cookie
-    }
+    },
+    name: 'calico_session', // Custom session name (not the default connect.sid)
+    rolling: false // Don't extend session lifetime on each request
   };
 
   app.set("trust proxy", 1);
@@ -89,10 +91,18 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
+      
+      // If user no longer exists in the database (e.g., deleted)
+      if (!user) {
+        console.log(`User ID ${id} no longer exists in the database`);
+        return done(null, false);
+      }
+      
       done(null, user);
     } catch (err) {
       console.error(`Error deserializing user ID ${id}:`, err);
-      done(err);
+      // Instead of propagating the error, return false to indicate authentication failure
+      done(null, false);
     }
   });
 
@@ -146,7 +156,7 @@ export function setupAuth(app: Express) {
         }
         
         // Clear the cookie on the client side
-        res.clearCookie('connect.sid', {
+        res.clearCookie('calico_session', {
           path: '/',
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
