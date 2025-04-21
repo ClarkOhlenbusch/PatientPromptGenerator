@@ -1,15 +1,18 @@
 import { useState, useEffect } from "react";
 import ResultsSection from "@/components/ResultsSection";
 import PromptModal from "@/components/PromptModal";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PatientPrompt } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export default function PatientPrompts() {
   const { id } = useParams();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPatient, setCurrentPatient] = useState<PatientPrompt | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,24 +21,24 @@ export default function PatientPrompts() {
   const itemsPerPage = 10;
 
   // Get patient prompts
-  const { data: patientPrompts = [], isLoading } = useQuery({
+  const { data: patientPrompts = [], isLoading } = useQuery<PatientPrompt[]>({
     queryKey: [`/api/patient-prompts/${id}`],
     enabled: !!id,
   });
 
   useEffect(() => {
-    if (patientPrompts.length > 0) {
+    if (patientPrompts && patientPrompts.length > 0) {
       filterPrompts();
     }
   }, [patientPrompts, searchTerm]);
 
   const filterPrompts = () => {
     if (!searchTerm) {
-      setFilteredPrompts(patientPrompts);
+      setFilteredPrompts(patientPrompts || []);
       return;
     }
 
-    const filtered = patientPrompts.filter((patient: PatientPrompt) => {
+    const filtered = (patientPrompts || []).filter((patient: PatientPrompt) => {
       const searchTermLower = searchTerm.toLowerCase();
       return (
         patient.patientId.toLowerCase().includes(searchTermLower) ||
@@ -155,6 +158,17 @@ export default function PatientPrompts() {
 
   return (
     <>
+      <div className="mb-6">
+        <Button 
+          variant="outline" 
+          onClick={() => setLocation('/')}
+          className="flex items-center"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Upload Patient Data
+        </Button>
+      </div>
+
       <ResultsSection
         patientPrompts={paginatedPrompts}
         isLoading={isLoading}
