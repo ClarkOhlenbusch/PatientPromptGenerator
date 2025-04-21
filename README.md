@@ -1,10 +1,10 @@
-# Patient Prompt Generator
+# Caretaker Prompt Generator
 
 A comprehensive healthcare monitoring system that transforms patient medical data into actionable insights through AI-powered analysis and automated alerts.
 
 ## Overview
 
-The Patient Prompt Generator is a specialized healthcare monitoring tool designed for healthcare professionals. It processes patient data from Excel spreadsheets to generate personalized health insights, identify patients requiring attention, and automate communication with caregivers.
+The Caretaker Prompt Generator is a specialized healthcare monitoring tool designed for healthcare professionals. It processes patient data from Excel spreadsheets to generate personalized health insights, identify patients requiring attention, and automate communication with caregivers.
 
 ### Key Features
 

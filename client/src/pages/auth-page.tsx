@@ -128,7 +128,7 @@ export default function AuthPage() {
       <div className="relative hidden w-0 flex-1 lg:block">
         <div className="absolute inset-0 h-full w-full bg-gradient-to-br from-[#3498DB] to-[#F5A443] flex flex-col justify-center items-center text-white p-12">
           <div className="max-w-xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-6">Patient Prompt Generator</h1>
+            <h1 className="text-4xl font-bold mb-6">Caretaker Prompt Generator</h1>
             <p className="text-xl mb-8">
               Transform your medical data into personalized patient communication with AI-powered prompt generation.
             </p>

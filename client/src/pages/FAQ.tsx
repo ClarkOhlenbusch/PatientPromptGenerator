@@ -10,24 +10,24 @@ export default function FAQ() {
             Frequently Asked Questions
           </h1>
           <p className="mt-4 text-lg text-gray-500">
-            Find answers to common questions about the Patient Prompt Generator
+            Find answers to common questions about the Caretaker Prompt Generator
           </p>
         </div>
 
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="item-1">
             <AccordionTrigger className="text-left">
-              What is the Patient Prompt Generator?
+              What is the Caretaker Prompt Generator?
             </AccordionTrigger>
             <AccordionContent>
-              The Patient Prompt Generator is a tool designed to process patient data from Excel files and create 
+              The Caretaker Prompt Generator is a tool designed to process patient data from Excel files and create 
               customized AI prompts for each patient based on their medical conditions and health indicators.
             </AccordionContent>
           </AccordionItem>
 
           <AccordionItem value="item-2">
             <AccordionTrigger className="text-left">
-              How do I use the Patient Prompt Generator?
+              How do I use the Caretaker Prompt Generator?
             </AccordionTrigger>
             <AccordionContent>
               Simply upload your Excel file containing patient data on the home page. The system will process the
