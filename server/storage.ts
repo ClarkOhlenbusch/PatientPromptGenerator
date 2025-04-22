@@ -4,6 +4,7 @@ import {
   patientPrompts,
   systemPrompts,
   templateVariables,
+  systemSettings,
   type User, 
   type InsertUser, 
   type PatientBatch, 
@@ -13,7 +14,8 @@ import {
   type SystemPrompt,
   type InsertSystemPrompt,
   type TemplateVariable,
-  type InsertTemplateVariable
+  type InsertTemplateVariable,
+  type SystemSettings
 } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -823,14 +825,121 @@ Your Healthcare Provider`;
     }
   }
   
+  // System Settings methods
+  async getSetting(key: string): Promise<string | null> {
+    try {
+      const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, key));
+      return setting?.value || null;
+    } catch (error) {
+      console.error(`Error getting setting ${key}:`, error);
+      return null;
+    }
+  }
+
+  async updateSetting(key: string, value: string): Promise<SystemSettings> {
+    try {
+      // Check if setting exists
+      const existing = await this.getSetting(key);
+      
+      if (existing !== null) {
+        // Update existing setting
+        const [updated] = await db.update(systemSettings)
+          .set({ value })
+          .where(eq(systemSettings.key, key))
+          .returning();
+        return updated;
+      } else {
+        // Insert new setting
+        const [newSetting] = await db.insert(systemSettings)
+          .values({ key, value })
+          .returning();
+        return newSetting;
+      }
+    } catch (error) {
+      console.error(`Error updating setting ${key}:`, error);
+      throw error;
+    }
+  }
+
+  async getAlertPhone(): Promise<string | null> {
+    return this.getSetting('alertPhone');
+  }
+
+  async updateAlertPhone(phone: string): Promise<SystemSettings> {
+    return this.updateSetting('alertPhone', phone);
+  }
+
   async sendAlert(alertId: string): Promise<any> {
-    // This would update a patient_alerts table and call SMS service in a real implementation
-    return { success: true, patientName: "Test Patient" };
+    try {
+      // Get the configured alert phone number
+      const alertPhone = await this.getAlertPhone();
+      
+      if (!alertPhone) {
+        throw new Error("Alert phone number not configured");
+      }
+      
+      // Get alert details from patient alerts
+      const alerts = await this.getPatientAlerts(new Date().toISOString().split('T')[0]);
+      const alert = alerts.find(a => a.id === alertId);
+      
+      if (!alert) {
+        throw new Error(`No alert found with ID ${alertId}`);
+      }
+      
+      const messageText = this.formatSmsMessage(alert);
+      
+      try {
+        // Check for Twilio credentials
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+        
+        if (!accountSid || !authToken || !twilioPhone) {
+          throw new Error("Twilio credentials not configured");
+        }
+        
+        // Initialize Twilio client
+        const twilio = require('twilio')(accountSid, authToken);
+        
+        // Send the message
+        const message = await twilio.messages.create({
+          body: messageText,
+          from: twilioPhone,
+          to: alertPhone
+        });
+        
+        console.log(`SMS alert sent: ${messageText} (SID: ${message.sid})`);
+        
+        return {
+          success: true,
+          message: `Alert sent to ${alertPhone} for patient ${alert.patientName}`,
+          alertId: alertId,
+          sid: message.sid, // Include the Twilio SID in the response
+          patientName: alert.patientName
+        };
+      } catch (error) {
+        console.error(`Error sending SMS via Twilio:`, error);
+        throw error; // Re-throw the error for the route handler to catch
+      }
+    } catch (error) {
+      console.error(`Error in sendAlert:`, error);
+      throw error;
+    }
   }
   
   async sendAllAlerts(alertIds: string[]): Promise<{ sent: number }> {
-    // This would update multiple patient_alerts and call SMS service in a real implementation
-    return { sent: alertIds.length };
+    let sentCount = 0;
+    
+    for (const alertId of alertIds) {
+      try {
+        await this.sendAlert(alertId);
+        sentCount++;
+      } catch (error) {
+        console.error(`Error sending alert ${alertId}:`, error);
+      }
+    }
+    
+    return { sent: sentCount };
   }
   
   // Monthly reports methods with sample data for demonstration
