@@ -52,6 +52,12 @@ export interface IStorage {
   updateTemplateVariable(id: number, updates: Partial<InsertTemplateVariable>): Promise<TemplateVariable>;
   deleteTemplateVariable(id: number): Promise<void>;
   
+  // System Settings methods
+  getSetting(key: string): Promise<string | null>;
+  updateSetting(key: string, value: string): Promise<SystemSettings>;
+  getAlertPhone(): Promise<string | null>;
+  updateAlertPhone(phone: string): Promise<SystemSettings>;
+  
   // Triage methods
   getPatientAlerts(date: string): Promise<any[]>;
   sendAlert(alertId: string): Promise<any>;
