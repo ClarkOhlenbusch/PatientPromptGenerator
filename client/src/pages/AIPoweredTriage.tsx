@@ -8,6 +8,8 @@ import { AlertTriangle, MessageSquare, RefreshCw, Loader2, Send, Shield } from "
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 type AlertStatus = "pending" | "sent" | "failed";
 
@@ -95,7 +97,7 @@ export default function AIPoweredTriage() {
         description: `Sent ${data.sent} SMS alerts successfully`,
       });
       // Invalidate alerts query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/triage/alerts", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/triage/alerts", selectedBatchId] });
     },
     onError: (error: Error) => {
       toast({
@@ -118,7 +120,7 @@ export default function AIPoweredTriage() {
         description: `SMS alert sent successfully to ${data.patientName}`,
       });
       // Invalidate alerts query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/triage/alerts", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["/api/triage/alerts", selectedBatchId] });
     },
     onError: (error: Error) => {
       toast({
@@ -150,10 +152,10 @@ export default function AIPoweredTriage() {
   const handleSendSingleAlert = (alertId: string) => {
     sendSingleAlertMutation.mutate(alertId);
   };
-  
-  // Handle date change
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedDate(e.target.value);
+
+  // Handle batch selection change
+  const handleBatchChange = (value: string) => {
+    setSelectedBatchId(value);
   };
   
   return (
@@ -207,17 +209,27 @@ export default function AIPoweredTriage() {
                 <span className="text-sm text-green-800">HEALTHY</span>
               </div>
               
-              {/* Date picker */}
+              {/* Batch selector */}
               <div className="border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-gray-700">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={handleDateChange}
-                    className="border rounded p-1 text-sm"
-                  />
-                </span>
-                <span className="text-sm text-gray-600 mt-1">Selected Date</span>
+                <div className="space-y-2 w-full">
+                  <Label htmlFor="batch-select" className="text-xs text-center w-full block">Data Batch</Label>
+                  <Select
+                    value={selectedBatchId}
+                    onValueChange={handleBatchChange}
+                    disabled={batchesLoading}
+                  >
+                    <SelectTrigger id="batch-select" className="text-sm">
+                      <SelectValue placeholder="Select batch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patientBatches?.map((batch: any) => (
+                        <SelectItem key={batch.id} value={batch.batchId}>
+                          {new Date(batch.createdAt).toLocaleDateString()} ({batch.fileName})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
             
@@ -288,7 +300,7 @@ export default function AIPoweredTriage() {
           ) : alerts?.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No alerts for the selected date.</p>
+              <p>No alerts for the selected batch.</p>
               <p className="text-sm">All patients are stable.</p>
             </div>
           ) : (
@@ -371,54 +383,71 @@ export default function AIPoweredTriage() {
                               <p className="text-gray-500">No specific variables recorded</p>
                             )}
                             
-                            {alert.reasoning && (
-                              <div>
-                                <div className="font-medium mt-3">Reasoning:</div>
-                                <p className="text-gray-700">{alert.reasoning}</p>
-                              </div>
+                            <div className="font-medium mt-3">Alert Reasons:</div>
+                            {alert.alertReasons && alert.alertReasons.length > 0 ? (
+                              <ul className="list-disc pl-5 space-y-1">
+                                {alert.alertReasons.map((reason, index) => (
+                                  <li key={index}>{reason}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-gray-500">No specific alert reasons recorded</p>
                             )}
                             
-                            <div className="font-medium mt-3">Message Preview:</div>
-                            <div className="border p-3 rounded-md bg-gray-50 whitespace-pre-wrap text-gray-700">
-                              {alert.message}
-                            </div>
+                            {alert.reasoning && (
+                              <>
+                                <div className="font-medium mt-3">Clinical Reasoning:</div>
+                                <p className="text-gray-700">{alert.reasoning}</p>
+                              </>
+                            )}
+                            
+                            {alert.condition && (
+                              <>
+                                <div className="font-medium mt-3">Condition:</div>
+                                <p className="text-gray-700">{alert.condition}</p>
+                              </>
+                            )}
                           </div>
                         </AccordionContent>
                       </AccordionItem>
+                      <AccordionItem value="message">
+                        <AccordionTrigger>View SMS Message</AccordionTrigger>
+                        <AccordionContent>
+                          <div className="p-3 bg-gray-50 rounded-md whitespace-pre-wrap font-mono text-sm">
+                            {alert.message || "No message preview available"}
+                          </div>
+                          
+                          {alert.status === "pending" && alert.isAlert && (
+                            <div className="mt-3">
+                              <Button 
+                                size="sm" 
+                                className="w-full bg-blue-600 hover:bg-blue-700"
+                                onClick={() => handleSendSingleAlert(alert.id)}
+                                disabled={sendSingleAlertMutation.isPending}
+                              >
+                                {sendSingleAlertMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <MessageSquare className="mr-1 h-4 w-4" />
+                                    Send SMS Alert
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                          
+                          {alert.status === "sent" && alert.sentAt && (
+                            <div className="mt-3 text-xs text-green-600">
+                              ✓ Sent at {new Date(alert.sentAt).toLocaleString()}
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
                     </Accordion>
-                    
-                    {alert.status === "pending" && (
-                      <Button
-                        className="w-full mt-3"
-                        variant="outline"
-                        onClick={() => handleSendSingleAlert(alert.id)}
-                        disabled={sendSingleAlertMutation.isPending}
-                      >
-                        {sendSingleAlertMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Sending SMS...
-                          </>
-                        ) : (
-                          <>
-                            <MessageSquare className="mr-2 h-4 w-4" />
-                            Send SMS Alert
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    
-                    {alert.status === "failed" && (
-                      <Button
-                        className="w-full mt-3 text-red-600 border-red-200"
-                        variant="outline"
-                        onClick={() => handleSendSingleAlert(alert.id)}
-                        disabled={sendSingleAlertMutation.isPending}
-                      >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Retry Sending
-                      </Button>
-                    )}
                   </CardContent>
                 </Card>
               ))}
