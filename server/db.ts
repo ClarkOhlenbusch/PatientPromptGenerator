@@ -1,26 +1,13 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import pkg from 'pg';
+const { Pool } = pkg;
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
-import Database from 'better-sqlite3';
-import { drizzle as drizzleSQLite } from 'drizzle-orm/better-sqlite3';
-
-// Configure Neon database with WebSocket support
-neonConfig.webSocketConstructor = ws;
 
 // Function to create database client
 function createDatabaseClient() {
-  const url = process.env.DATABASE_URL;
-
-  if (!url) {
-    console.warn("DATABASE_URL not set, using SQLite fallback database");
-    const sqlite = new Database(':memory:');
-    return drizzleSQLite(sqlite, { schema });
-  }
-
-  const pool = new Pool({ 
-    connectionString: url,
-    connect_timeout: 10,
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || "postgres://postgres:clarkee1@localhost:5432/caretaker_prompt",
+    ssl: false,
     max: 10,
     idleTimeoutMillis: 30000
   });

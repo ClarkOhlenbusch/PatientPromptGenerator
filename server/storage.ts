@@ -72,9 +72,14 @@ export class DatabaseStorage implements IStorage {
     const PostgresSessionStore = connectPg(session);
     this.sessionStore = new PostgresSessionStore({
       conObject: {
-        connectionString: process.env.DATABASE_URL,
+        host: process.env.PGHOST || 'localhost',
+        port: parseInt(process.env.PGPORT || '5432'),
+        user: process.env.PGUSER || 'postgres',
+        password: process.env.PGPASSWORD || 'clarkee1',
+        database: process.env.PGDATABASE || 'caretaker_prompt'
       },
       createTableIfMissing: true,
+      tableName: 'session'
     });
   }
 
