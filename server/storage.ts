@@ -62,7 +62,7 @@ export interface IStorage {
   updateAlertPhone(phone: string): Promise<SystemSettings>;
   
   // Triage methods
-  getPatientAlerts(date: string): Promise<any[]>;
+  getPatientAlerts(batchId?: string): Promise<any[]>;
   sendAlert(alertId: string): Promise<any>;
   sendAllAlerts(alertIds: string[]): Promise<{ sent: number }>;
   
@@ -510,26 +510,23 @@ Your Healthcare Provider`;
   }
   
   // Triage methods using real data from uploaded patient file with severity levels
-  async getPatientAlerts(date: string, mostRecentBatchOnly: boolean = false): Promise<any[]> {
+  async getPatientAlerts(batchId?: string): Promise<any[]> {
     try {
-      console.log(`Getting patient alerts for date: ${date}${mostRecentBatchOnly ? ' (most recent batch only)' : ''}`);
+      console.log(`Getting patient alerts for batch: ${batchId || 'most recent'}`);
       
-      // Convert date string to Date object for comparison
-      const requestDate = date ? new Date(date) : new Date();
-      requestDate.setHours(0, 0, 0, 0); // Set to start of day
+      // Find the most recent batch if no batchId is provided
+      let targetBatchId: string | null = batchId || null;
       
-      // Find the most recent batch if requested
-      let latestBatchId: string | null = null;
-      
-      if (mostRecentBatchOnly) {
+      // If no batchId provided, get the most recent batch
+      if (!targetBatchId) {
         const latestBatches = await db.select()
           .from(patientBatches)
           .orderBy(desc(patientBatches.createdAt))
           .limit(1);
           
         if (latestBatches && latestBatches.length > 0) {
-          latestBatchId = latestBatches[0].batchId;
-          console.log(`Filtering alerts to most recent batch: ${latestBatchId}`);
+          targetBatchId = latestBatches[0].batchId;
+          console.log(`Using most recent batch: ${targetBatchId}`);
         }
       }
       
@@ -548,9 +545,9 @@ Your Healthcare Provider`;
         batchId: patientPrompts.batchId
       }).from(patientPrompts);
       
-      // Apply batch filter if requested and available
-      if (mostRecentBatchOnly && latestBatchId) {
-        query = query.where(eq(patientPrompts.batchId, latestBatchId));
+      // Apply batch filter if available
+      if (targetBatchId) {
+        query = query.where(eq(patientPrompts.batchId, targetBatchId));
       }
       
       const allPatients = await query;
@@ -879,8 +876,8 @@ Your Healthcare Provider`;
         throw new Error("Alert phone number not configured");
       }
       
-      // Get alert details from patient alerts
-      const alerts = await this.getPatientAlerts(new Date().toISOString().split('T')[0]);
+      // Get alert details from patient alerts (using the most recent batch)
+      const alerts = await this.getPatientAlerts();
       const alert = alerts.find(a => a.id === alertId);
       
       if (!alert) {
