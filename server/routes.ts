@@ -10,6 +10,7 @@ import {
   getTokenUsageStats,
   generatePromptWithTemplate,
 } from "./lib/openai";
+import twilio from "twilio";
 import { createObjectCsvStringifier } from "csv-writer";
 import ExcelJS from "exceljs";
 import { db } from "./db";
@@ -1570,10 +1571,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Initialize Twilio client
-      const twilio = require('twilio')(accountSid, authToken);
+      const twilioClient = twilio(accountSid, authToken);
       
       // Send a test message
-      const message = await twilio.messages.create({
+      const message = await twilioClient.messages.create({
         body: "🔔 This is a test alert message from CalicoCare Patient Prompt Generator. Your alerts are working correctly!",
         from: twilioPhone,
         to: phone
