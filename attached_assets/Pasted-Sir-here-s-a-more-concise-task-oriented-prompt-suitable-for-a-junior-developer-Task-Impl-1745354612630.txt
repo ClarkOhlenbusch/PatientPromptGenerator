@@ -1,0 +1,105 @@
+Sir, here's a more concise, task-oriented prompt suitable for a junior developer:
+
+---
+
+# Task: Implement Alert System & Settings Management
+
+## Objective
+Enhance the PatientPromptGenerator to support configurable alert phone numbers and improve the alert system. This will allow administrators to set up SMS notifications for patient alerts.
+
+## Tasks
+
+### 1. Database Setup
+- Create a new table called `system_settings` with columns:
+  - `key` (TEXT, PRIMARY KEY)
+  - `value` (TEXT)
+  - `updated_at` (TIMESTAMP WITH TIME ZONE, DEFAULT CURRENT_TIMESTAMP)
+- Add an initial alert phone number: '+15555555555'
+
+### 2. Server-Side Changes
+1. Add new API endpoints in `server/routes.ts`:
+   ```typescript
+   // GET /api/settings/alertPhone
+   // Returns current alert phone number
+   
+   // POST /api/settings/alertPhone
+   // Updates alert phone number
+   // Request body: { phone: string }
+   // Response: { success: boolean, phone: string }
+   ```
+
+2. Add phone number validation:
+   - Use E.164 format (e.g., +1234567890)
+   - Return 400 error for invalid formats
+
+3. Implement Twilio integration:
+   - Install twilio package
+   - Add environment variables:
+     ```
+     TWILIO_ACCOUNT_SID=your_sid
+     TWILIO_AUTH_TOKEN=your_token
+     TWILIO_PHONE_NUMBER=your_number
+     ```
+
+### 3. Client-Side Changes
+1. Create a new `SettingsModal` component:
+   - Location: `client/src/components/SettingsModal.tsx`
+   - Features:
+     - Display current alert phone number
+     - Input field for new phone number
+     - Save button
+     - Error handling
+     - Loading states
+
+2. Add React Query integration:
+   - Use `useQuery` for fetching current phone number
+   - Use `useMutation` for updating phone number
+   - Implement optimistic updates
+
+### 4. Testing Requirements
+1. Test Cases:
+   - Can view current alert phone number
+   - Can update phone number
+   - Invalid phone numbers are rejected
+   - Success/error messages display correctly
+   - Loading states work properly
+
+2. Edge Cases:
+   - Empty phone number
+   - Invalid format
+   - Network errors
+   - Database errors
+
+### 5. Documentation
+1. Update README.md with:
+   - New environment variables
+   - New API endpoints
+   - Setup instructions for Twilio
+
+## Resources
+- [Twilio Documentation](https://www.twilio.com/docs)
+- [React Query Documentation](https://tanstack.com/query/latest)
+- [E.164 Phone Number Format](https://en.wikipedia.org/wiki/E.164)
+
+## Time Estimate
+- Database setup: 1 hour
+- Server implementation: 2-3 hours
+- Client implementation: 2-3 hours
+- Testing: 1-2 hours
+- Documentation: 1 hour
+
+## Questions to Consider
+1. How will you handle phone number validation?
+2. What error messages should users see?
+3. How will you test the Twilio integration?
+4. What happens if the database connection fails?
+
+## Deliverables
+1. Working alert phone number configuration
+2. Updated documentation
+3. Test cases
+4. Code review ready implementation
+
+---
+
+This prompt provides clear, actionable tasks while still maintaining enough context for a junior developer to understand the purpose and scope of the changes. Would you like me to modify any part of this prompt?

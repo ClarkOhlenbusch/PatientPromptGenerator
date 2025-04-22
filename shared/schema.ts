@@ -1,4 +1,11 @@
-import { pgTable, text, serial, integer, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  jsonb,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,16 +28,18 @@ export type User = typeof users.$inferSelect;
 export const patientBatches = pgTable("patient_batches", {
   id: serial("id").primaryKey(),
   batchId: text("batch_id").notNull().unique(),
-  fileName: text("file_name").notNull().default('unknown'),
+  fileName: text("file_name").notNull().default("unknown"),
   createdAt: text("created_at").notNull(),
   totalPatients: integer("total_patients").default(0),
   processedPatients: integer("processed_patients").default(0),
   userId: integer("user_id").default(-1),
 });
 
-export const insertPatientBatchSchema = createInsertSchema(patientBatches).omit({
-  id: true,
-});
+export const insertPatientBatchSchema = createInsertSchema(patientBatches).omit(
+  {
+    id: true,
+  },
+);
 
 // Patient Prompt schema
 export const patientPrompts = pgTable("patient_prompts", {
@@ -49,7 +58,9 @@ export const patientPrompts = pgTable("patient_prompts", {
   updatedAt: text("updated_at"),
 });
 
-export const insertPatientPromptSchema = createInsertSchema(patientPrompts).omit({
+export const insertPatientPromptSchema = createInsertSchema(
+  patientPrompts,
+).omit({
   id: true,
 });
 
@@ -91,7 +102,9 @@ export const templateVariables = pgTable("template_variables", {
   updatedAt: text("updated_at"),
 });
 
-export const insertTemplateVariableSchema = createInsertSchema(templateVariables).omit({
+export const insertTemplateVariableSchema = createInsertSchema(
+  templateVariables,
+).omit({
   id: true,
 });
 
@@ -105,10 +118,46 @@ export type SystemPrompt = typeof systemPrompts.$inferSelect;
 export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
 
 export type TemplateVariable = typeof templateVariables.$inferSelect;
-export type InsertTemplateVariable = z.infer<typeof insertTemplateVariableSchema>;
+export type InsertTemplateVariable = z.infer<
+  typeof insertTemplateVariableSchema
+>;
 
 export type FileUploadResponse = {
   success: boolean;
   batchId: string;
   message?: string;
 };
+
+/**
+ * System-wide settings table.
+ * Expected keys:
+ * - alertPhone: E.164 formatted phone number for SMS alerts
+ * - supportEmail: Support contact email (future)
+ *
+ * Note: This is not intended for general configuration storage.
+ * Keep the number of keys minimal and well-documented.
+ */
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const insertSystemSettingsSchema = createInsertSchema(
+  systemSettings,
+).omit({
+  updatedAt: true,
+});
+
+export type SystemSettings = typeof systemSettings.$inferSelect;
+export type InsertSystemSettings = z.infer<typeof insertSystemSettingsSchema>;
+
+// Add phone validation schema
+export const phoneSchema = z
+  .string()
+  .regex(
+    /^\+[1-9]\d{1,14}$/,
+    "Phone number must be in E.164 format (e.g., +1234567890)",
+  );

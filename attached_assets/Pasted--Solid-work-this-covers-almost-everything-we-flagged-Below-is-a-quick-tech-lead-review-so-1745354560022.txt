@@ -1,0 +1,85 @@
+### Solid work—this covers almost everything we flagged.  
+Below is a quick **tech‑lead review** so you can tighten the plan before you start coding.
+
+---
+
+## 1  Schema & Migration
+
+| Item | Feedback |
+|------|----------|
+| **`updatedAt` default** | `new Date().toISOString()` in the Drizzle column definition will lock the default to *build time*. Swap to `sql\`now()\`` so Postgres timestamps each update automatically. |
+| **`text('key')` vs enum** | OK for now, but add a short comment that we expect very few keys (“alertPhone”, maybe “supportEmail”) so future devs know not to treat it as free‑text config. |
+| **Migration filename** | Use UTC prefix `20250422...` to avoid collisions with earlier migrations in CI. |
+
+---
+
+## 2  Back‑end routes
+
+| Endpoint | Feedback |
+|----------|----------|
+| **`/api/batches`** | ✔️ Good. Remember to **SELECT `batchId`** only if you truly store both `id` and `batchId`. If the PK *is* the batch id, return just one field. |
+| **Settings POST** | After `phoneSchema.safeParse`, return `422 Unprocessable Entity` instead of `400` to be consistent with the rest of the API validation errors. |
+| **Error handling** | Instead of every route doing `try/catch`, consider re‑using our `asyncHandler` wrapper (`utils/handler.ts`) so unhandled errors bubble to the central error middleware and keep route bodies clean. |
+
+---
+
+## 3  `storage.ts` helpers
+
+* `getAlertPhone()`—perfect.  
+* `sendAlert()`—catch & re‑throw ✔️.  
+  *Tiny nit*: include the Twilio `sid` in the success payload `{ sid, patientName }` so UI could show a hover debug panel one day.
+
+---
+
+## 4  React components
+
+| Component | Feedback |
+|-----------|----------|
+| **BatchSelector** | Remember to convert `value` to `number` if that’s what your route expects, otherwise query string will send `"123"` (string) and Drizzle integer comparison will fail silently. |
+| **SettingsModal** | Pre‑fill the input: `useEffect(() => setPhone(currentPhone?.phone ?? ''), [currentPhone]);` |
+| **Toast on save** | After POST succeeds, trigger a React‑Query `invalidateQueries(['/api/settings/alertPhone'])` so downstream mutations pick up the new phone if multiple tabs are open. |
+
+---
+
+## 5  Twilio & front‑end error flow
+
+*API change*: `sendAlert()` should return **non‑200** if SMS fails. Confirm the front‑end toast logic checks `response.ok` and not only a JSON `{ success: false }`.
+
+---
+
+## 6  Testing
+
+Good start. Add one more unit test:
+
+```ts
+test('sendAlert throws if alertPhone is null', async () => {
+  vi.spyOn(storage, 'getAlertPhone').mockResolvedValue(null);
+  await expect(storage.sendAlert('dummy')).rejects.toThrow('Alert phone number not configured');
+});
+```
+
+This will keep us safe if someone clears the setting via DB console.
+
+---
+
+## 7  Documentation / Dev On‑Ramps
+
+* Update `README.md` **Setup** section with the new `pnpm drizzle:migrate` step and the new env vars.  
+* Add a short ADR (architecture‑decision record) file `docs/adr/0002-global-settings.md` explaining why we picked a single‑row key/value table. Future contributors will thank you.
+
+---
+
+## 8  Acceptance Checklist (merge this into your PR template)
+
+- [ ] Migration runs cleanly on fresh `docker-compose up db`.
+- [ ] `/api/batches` returns latest first and is used by BatchSelector.
+- [ ] Switching batch updates cards *and* summary counters.
+- [ ] Settings modal shows current phone at open, validates E.164, saves and persists.
+- [ ] SMS success returns 200 with Twilio SID; failure returns 500 and UI shows red toast.
+- [ ] Unit tests & lint pass (`pnpm test && pnpm lint`).
+- [ ] README + ENV_CONFIG updated.
+
+---
+
+### Green light once you apply the tweaks above.  
+Ping me for a quick look at the migration file before you push to develop.
