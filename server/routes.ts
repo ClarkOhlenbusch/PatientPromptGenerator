@@ -1470,7 +1470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // === SYSTEM SETTINGS ENDPOINTS ===
 
   // Get alert phone number
-  app.get("/api/settings/alert-phone", async (req, res) => {
+  app.get("/api/settings/alertPhone", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res
@@ -1493,7 +1493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update alert phone number
-  app.post("/api/settings/alert-phone", async (req, res) => {
+  app.post("/api/settings/alertPhone", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res
