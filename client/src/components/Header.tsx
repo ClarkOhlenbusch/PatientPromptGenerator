@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, User, Loader2, Menu, X } from "lucide-react";
+import { LogOut, User, Loader2, Menu, X, Settings } from "lucide-react";
 
 export default function Header() {
   const { user, logoutMutation, isLoading } = useAuth();
@@ -58,6 +58,12 @@ export default function Header() {
               <Link href="/monthly-reports">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                   Monthly Reports
+                </span>
+              </Link>
+              <Link href="/settings">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/settings" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  <Settings className="inline h-3 w-3 mr-1" />
+                  Settings
                 </span>
               </Link>
             </nav>

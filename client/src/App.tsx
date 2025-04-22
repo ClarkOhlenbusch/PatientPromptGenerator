@@ -14,6 +14,7 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import PromptEditingSandbox from "@/pages/PromptEditingSandbox";
 import AIPoweredTriage from "@/pages/AIPoweredTriage";
 import MonthlyReports from "@/pages/MonthlyReports";
+import SettingsPage from "@/pages/settings-page";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
             <ProtectedRoute path="/prompt-editing" component={PromptEditingSandbox} />
             <ProtectedRoute path="/triage" component={AIPoweredTriage} />
             <ProtectedRoute path="/monthly-reports" component={MonthlyReports} />
+            <ProtectedRoute path="/settings" component={SettingsPage} />
             <Route path="/auth" component={AuthPage} />
             <Route path="/faq" component={FAQ} />
             <Route component={NotFound} />
