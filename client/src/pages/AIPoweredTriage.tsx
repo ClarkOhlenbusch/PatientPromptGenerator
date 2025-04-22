@@ -32,15 +32,41 @@ interface PatientAlert {
 }
 
 export default function AIPoweredTriage() {
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedBatchId, setSelectedBatchId] = useState<string>("");
   const { toast } = useToast();
   
-  // Query to get today's alerts
-  const { data: alerts, isLoading } = useQuery({
-    queryKey: ["/api/triage/alerts", selectedDate],
+  // Query to get all patient batches
+  const { data: patientBatches, isLoading: batchesLoading } = useQuery({
+    queryKey: ["/api/batches"],
     queryFn: async () => {
       try {
-        const res = await apiRequest("GET", `/api/triage/alerts?date=${selectedDate}`);
+        const res = await apiRequest("GET", "/api/batches");
+        const batches = await res.json();
+        
+        // If batches available, auto-select the most recent one
+        if (batches && batches.length > 0 && !selectedBatchId) {
+          setSelectedBatchId(batches[0].batchId);
+        }
+        
+        return batches;
+      } catch (error) {
+        console.error("Failed to fetch batches:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load patient batches",
+          variant: "destructive"
+        });
+        return [];
+      }
+    }
+  });
+  
+  // Query to get alerts for selected batch
+  const { data: alerts, isLoading } = useQuery({
+    queryKey: ["/api/triage/alerts", selectedBatchId],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", `/api/triage/alerts${selectedBatchId ? `?batchId=${selectedBatchId}` : ''}`);
         const data = await res.json();
         console.log("Fetched patient alerts:", data);
         return data;
@@ -53,7 +79,8 @@ export default function AIPoweredTriage() {
         });
         return [];
       }
-    }
+    },
+    enabled: !!selectedBatchId
   });
   
   // Mutation to send SMS alerts

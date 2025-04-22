@@ -860,14 +860,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ success: false, message: "Authentication required" });
       }
 
-      const date =
-        (req.query.date as string) || new Date().toISOString().split("T")[0];
+      // Use batchId if provided, otherwise use most recent batch
+      const batchId = req.query.batchId as string;
 
-      // Default to showing only the most recent batch for triage
-      const mostRecentBatchOnly = req.query.mostRecentBatchOnly !== "false";
-
-      // Pass the mostRecentBatchOnly flag to storage function
-      const alerts = await storage.getPatientAlerts(date, mostRecentBatchOnly);
+      // Get alerts for the specified batch or most recent if none provided
+      const alerts = await storage.getPatientAlerts(batchId);
 
       return res.status(200).json(alerts);
     } catch (err) {
