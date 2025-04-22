@@ -900,10 +900,10 @@ Your Healthcare Provider`;
         }
         
         // Initialize Twilio client
-        const twilio = require('twilio')(accountSid, authToken);
+        const twilioClient = twilio(accountSid, authToken);
         
         // Send the message
-        const message = await twilio.messages.create({
+        const message = await twilioClient.messages.create({
           body: messageText,
           from: twilioPhone,
           to: alertPhone
