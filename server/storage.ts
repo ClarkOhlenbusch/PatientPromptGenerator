@@ -1028,7 +1028,7 @@ Your Healthcare Provider`;
       })
       .from(patientPrompts)
       .where(
-        SQL`${patientPrompts.createdAt} >= ${targetMonthStart} AND ${patientPrompts.createdAt} <= ${targetMonthEndStr}`
+        sql`${patientPrompts.createdAt} >= ${targetMonthStart} AND ${patientPrompts.createdAt} <= ${targetMonthEndStr}`
       );
       
       // Get batch information for the period
@@ -1040,7 +1040,7 @@ Your Healthcare Provider`;
       })
       .from(patientBatches)
       .where(
-        SQL`${patientBatches.createdAt} >= ${targetMonthStart} AND ${patientBatches.createdAt} <= ${targetMonthEndStr}`
+        sql`${patientBatches.createdAt} >= ${targetMonthStart} AND ${patientBatches.createdAt} <= ${targetMonthEndStr}`
       );
       
       // Get total patient count

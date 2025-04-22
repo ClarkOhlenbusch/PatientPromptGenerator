@@ -17,6 +17,7 @@ import { patientPrompts, patientBatches } from "@shared/schema";
 import { setupAuth } from "./auth";
 import fs from "fs";
 import { eq, and, desc, sql as SQL } from "drizzle-orm";
+import { phoneSchema } from "@shared/schema";
 
 // Set up multer for file uploads
 const upload = multer({
@@ -1462,6 +1463,166 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({
         success: false,
         message: `Error generating monthly report: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // === SYSTEM SETTINGS ENDPOINTS ===
+
+  // Get alert phone number
+  app.get("/api/settings/alert-phone", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const phone = await storage.getAlertPhone();
+      return res.status(200).json({
+        success: true,
+        phone,
+      });
+    } catch (err) {
+      console.error("Error fetching alert phone:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error fetching alert phone: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Update alert phone number
+  app.post("/api/settings/alert-phone", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { phone } = req.body;
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required",
+        });
+      }
+
+      // Validate phone number using the schema from shared/schema.ts
+      const phoneResult = phoneSchema.safeParse(phone);
+      
+      if (!phoneResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid phone number format. Please use E.164 format (e.g., +12345678901)",
+          errors: phoneResult.error.errors,
+        });
+      }
+
+      // Update the phone number in the database
+      const result = await storage.updateAlertPhone(phone);
+      
+      return res.status(200).json({
+        success: true,
+        result,
+        message: "Alert phone number updated successfully",
+      });
+    } catch (err) {
+      console.error("Error updating alert phone:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating alert phone: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Send test SMS alert
+  app.post("/api/settings/send-test-sms", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+      
+      // Check if alert phone is configured
+      const phone = await storage.getAlertPhone();
+      
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Alert phone number not configured. Please set it first.",
+        });
+      }
+      
+      // Check for Twilio credentials
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (!accountSid || !authToken || !twilioPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Twilio credentials not configured. Please check your environment variables.",
+        });
+      }
+      
+      // Initialize Twilio client
+      const twilio = require('twilio')(accountSid, authToken);
+      
+      // Send a test message
+      const message = await twilio.messages.create({
+        body: "🔔 This is a test alert message from CalicoCare Patient Prompt Generator. Your alerts are working correctly!",
+        from: twilioPhone,
+        to: phone
+      });
+      
+      return res.status(200).json({
+        success: true,
+        sid: message.sid,
+        message: `Test SMS sent successfully to ${phone}`,
+      });
+    } catch (err) {
+      console.error("Error sending test SMS:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error sending test SMS: ${err instanceof Error ? err.message : String(err)}`,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  // Check Twilio configuration
+  app.get("/api/settings/twilio-status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+      
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      
+      const isConfigured = Boolean(accountSid && authToken && twilioPhone);
+      
+      // Check if alert phone is configured
+      const phone = await storage.getAlertPhone();
+      
+      return res.status(200).json({
+        success: true,
+        isConfigured,
+        phoneConfigured: Boolean(phone),
+        twilioPhone: twilioPhone || null,
+      });
+    } catch (err) {
+      console.error("Error checking Twilio status:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error checking Twilio status: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });
