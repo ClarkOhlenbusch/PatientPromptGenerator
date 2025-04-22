@@ -133,6 +133,12 @@ export default function Header() {
                     Monthly Reports
                   </span>
                 </Link>
+                <Link href="/settings" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/settings" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    <Settings className="inline h-3 w-3 mr-1" />
+                    Settings
+                  </span>
+                </Link>
                 <Link href="/faq" onClick={() => setMobileMenuOpen(false)}>
                   <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
                 </Link>
