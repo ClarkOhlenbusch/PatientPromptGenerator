@@ -179,7 +179,7 @@ export default function AIPoweredTriage() {
                   {isLoading ? (
                     <RefreshCw className="h-6 w-6 animate-spin" />
                   ) : (
-                    alerts?.filter((a: PatientAlert) => a.severity === "red").length || 0
+                    (alerts || []).filter((a: PatientAlert) => a.severity === "red").length || 0
                   )}
                 </span>
                 <span className="text-sm text-red-800">URGENT</span>
@@ -191,7 +191,7 @@ export default function AIPoweredTriage() {
                   {isLoading ? (
                     <RefreshCw className="h-6 w-6 animate-spin" />
                   ) : (
-                    alerts?.filter((a: PatientAlert) => a.severity === "yellow").length || 0
+                    (alerts || []).filter((a: PatientAlert) => a.severity === "yellow").length || 0
                   )}
                 </span>
                 <span className="text-sm text-yellow-800">ATTENTION</span>
@@ -203,7 +203,7 @@ export default function AIPoweredTriage() {
                   {isLoading ? (
                     <RefreshCw className="h-6 w-6 animate-spin" />
                   ) : (
-                    alerts?.filter((a: PatientAlert) => a.severity === "green").length || 0
+                    (alerts || []).filter((a: PatientAlert) => a.severity === "green").length || 0
                   )}
                 </span>
                 <span className="text-sm text-green-800">HEALTHY</span>
@@ -242,7 +242,7 @@ export default function AIPoweredTriage() {
                     {isLoading ? (
                       <RefreshCw className="inline h-5 w-5 animate-spin" />
                     ) : (
-                      alerts?.filter((a: PatientAlert) => a.status === "pending" && a.isAlert).length || 0
+                      (alerts || []).filter((a: PatientAlert) => a.status === "pending" && a.isAlert).length || 0
                     )}
                   </span>
                 </div>
@@ -250,7 +250,7 @@ export default function AIPoweredTriage() {
                   size="sm" 
                   className="bg-amber-600 hover:bg-amber-700"
                   onClick={handleSendAllAlerts}
-                  disabled={sendAlertsMutation.isPending || !alerts?.some((a: PatientAlert) => a.status === "pending" && a.isAlert)}
+                  disabled={sendAlertsMutation.isPending || !(alerts || []).some((a: PatientAlert) => a.status === "pending" && a.isAlert)}
                 >
                   {sendAlertsMutation.isPending ? (
                     <>
@@ -273,7 +273,7 @@ export default function AIPoweredTriage() {
                     {isLoading ? (
                       <RefreshCw className="inline h-5 w-5 animate-spin" />
                     ) : (
-                      alerts?.filter((a: PatientAlert) => a.status === "sent").length || 0
+                      (alerts || []).filter((a: PatientAlert) => a.status === "sent").length || 0
                     )}
                   </span>
                 </div>
@@ -297,7 +297,7 @@ export default function AIPoweredTriage() {
             <div className="flex justify-center items-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : alerts?.length === 0 ? (
+          ) : !alerts || alerts.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               <p>No alerts for the selected batch.</p>
@@ -305,7 +305,7 @@ export default function AIPoweredTriage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {alerts.map((alert: PatientAlert) => (
+              {(alerts || []).map((alert: PatientAlert) => (
                 <Card key={alert.id} className={
                   alert.status === "sent" ? "border-green-200 bg-green-50" : 
                   alert.status === "failed" ? "border-red-200 bg-red-50" : 
