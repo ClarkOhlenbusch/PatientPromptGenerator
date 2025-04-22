@@ -557,6 +557,9 @@ Your Healthcare Provider`;
       
       // Process all patients to categorize by severity
       allPatients.forEach(patient => {
+        // Add debug logging for all patients
+        console.log(`Processing patient ${patient.patientId}: isAlert=${patient.isAlert}, healthStatus=${patient.healthStatus}`);
+        
         // Default severity is 'green' (healthy)
         let severity = 'green';
         let alertStatus = false;
@@ -684,7 +687,8 @@ Your Healthcare Provider`;
           }
         } 
         // Then check isAlert field as a fallback
-        else if (patient.isAlert === 'true') {
+        else if (patient.isAlert === 'true' || patient.isAlert === true) {
+          console.log(`Detected isAlert for patient ${patient.patientId}: ${patient.isAlert} of type ${typeof patient.isAlert}`);
           // Only set alert status if it wasn't already determined from variables
           if (!alertStatus) {
             alertStatus = true;
