@@ -126,35 +126,38 @@ export default function AuthPage() {
       
       {/* Right column - Hero section */}
       <div className="relative hidden w-0 flex-1 lg:block">
-        <div className="absolute inset-0 h-full w-full bg-gradient-to-br from-[#3498DB] to-[#F5A443] flex flex-col justify-center items-center text-white p-12">
-          <div className="max-w-xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-6">Caretaker Prompt Generator</h1>
-            <p className="text-xl mb-8">
-              Transform your medical data into personalized patient communication with AI-powered prompt generation.
-            </p>
-            <div className="grid grid-cols-1 gap-6 text-left">
-              <h2 className="font-bold text-2xl mb-2">Caretaker Prompt Generator</h2>
-              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">1. Upload Excel Data</h3>
-                <p className="opacity-90 text-sm">
+        <div className="absolute inset-0 h-full bg-gradient-to-br from-[#3498DB] to-[#F5A443] flex flex-col justify-center overflow-y-auto">
+          <div className="p-6 md:p-8 lg:p-12 max-w-xl mx-auto">
+            <div className="text-center text-white">
+              <h1 className="text-3xl md:text-4xl font-bold mb-4 md:mb-6">Caretaker Prompt Generator</h1>
+              <p className="text-lg md:text-xl mb-6 md:mb-8">
+                Transform your medical data into personalized patient communication with AI-powered prompt generation.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4 md:gap-6 text-white">
+              {/* Removed duplicate heading that appeared in the screenshot */}
+              <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">1. Upload Excel Data</h3>
+                <p className="opacity-90 text-xs md:text-sm">
                   Import patient data from Excel files to start the prompt generation workflow.
                 </p>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">2. AI-Powered Triage</h3>
-                <p className="opacity-90 text-sm">
+              <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">2. AI-Powered Triage</h3>
+                <p className="opacity-90 text-xs md:text-sm">
                   Automatically prioritize patients based on health metrics and send SMS alerts.
                 </p>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">3. AI-Prompt Editing</h3>
-                <p className="opacity-90 text-sm">
+              <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">3. AI-Prompt Editing</h3>
+                <p className="opacity-90 text-xs md:text-sm">
                   Edit and customize prompt templates in a secure sandbox environment.
                 </p>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
-                <h3 className="font-semibold text-lg mb-2">4. AI-Powered Monthly Reports</h3>
-                <p className="opacity-90 text-sm">
+              <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">4. AI-Powered Monthly Reports</h3>
+                <p className="opacity-90 text-xs md:text-sm">
                   Generate comprehensive monthly analysis reports with patient trends and insights.
                 </p>
               </div>
