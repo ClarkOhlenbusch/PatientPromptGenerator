@@ -1,458 +1,240 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, MessageSquare, RefreshCw, Loader2, Send, Shield } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Eye, RotateCw, FileDown, Copy } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 
-type AlertStatus = "pending" | "sent" | "failed";
-
-interface PatientAlert {
-  id: string;
-  patientId: string;
+interface PatientPrompt {
+  id: number;
   patientName: string;
   age: number;
   condition: string;
-  alertValue: string;
-  timestamp: string;
-  status: AlertStatus;
-  message: string;
-  sentAt?: string;
-  alertCount?: number;
-  createdAt: string;
-  variables?: { name: string; value: string; timestamp?: string }[];
-  reasoning?: string;
-  severity?: 'red' | 'yellow' | 'green';
-  alertReasons?: string[];
-  isAlert?: boolean;
+  promptText: string;
+  reasoning: string;
+  isAlert: boolean;
+  status: 'healthy' | 'alert';
 }
 
 export default function AIPoweredTriage() {
-  const [selectedBatchId, setSelectedBatchId] = useState<string>("");
   const { toast } = useToast();
-  
-  // Query to get all patient batches
-  const { data: patientBatches, isLoading: batchesLoading } = useQuery({
-    queryKey: ["/api/batches"],
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Query to get the latest batch
+  const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
+    queryKey: ["/api/batches/latest"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/batches/latest");
+      return await res.json();
+    }
+  });
+
+  // Query to get all patient prompts
+  const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
+    queryKey: ["/api/prompts", latestBatch?.batchId],
     queryFn: async () => {
       try {
-        const res = await apiRequest("GET", "/api/batches");
-        const batches = await res.json();
-        
-        // If batches available, auto-select the most recent one
-        if (batches && batches.length > 0 && !selectedBatchId) {
-          setSelectedBatchId(batches[0].batchId);
+        if (!latestBatch?.batchId) {
+          return [];
         }
-        
-        return batches;
+        const res = await apiRequest("GET", `/api/prompts?batchId=${latestBatch.batchId}`);
+        return await res.json();
       } catch (error) {
-        console.error("Failed to fetch batches:", error);
+        console.error("Failed to fetch prompts:", error);
         toast({
           title: "Error",
-          description: "Failed to load patient batches",
-          variant: "destructive"
-        });
-        return [];
-      }
-    }
-  });
-  
-  // Query to get alerts for selected batch
-  const { data: alerts, isLoading } = useQuery({
-    queryKey: ["/api/triage/alerts", selectedBatchId],
-    queryFn: async () => {
-      try {
-        const res = await apiRequest("GET", `/api/triage/alerts${selectedBatchId ? `?batchId=${selectedBatchId}` : ''}`);
-        const data = await res.json();
-        console.log("Fetched patient alerts:", data);
-        return data;
-      } catch (error) {
-        console.error("Failed to fetch alerts:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load patient alerts",
+          description: "Failed to load patient prompts",
           variant: "destructive"
         });
         return [];
       }
     },
-    enabled: !!selectedBatchId
+    enabled: !!latestBatch?.batchId
   });
-  
-  // Mutation to send SMS alerts
-  const sendAlertsMutation = useMutation({
-    mutationFn: async (alertIds: string[]) => {
-      const res = await apiRequest("POST", "/api/triage/send-alerts", { alertIds });
+
+  // Mutation for regenerating prompts
+  const regeneratePromptMutation = useMutation({
+    mutationFn: async (patientId: number) => {
+      const res = await apiRequest("POST", `/api/prompts/${patientId}/regenerate`);
       return await res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
       toast({
         title: "Success",
-        description: `Sent ${data.sent} SMS alerts successfully`,
+        description: "Prompt regenerated successfully",
       });
-      // Invalidate alerts query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/triage/alerts", selectedBatchId] });
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: `Failed to send alerts: ${error.message}`,
+        description: `Failed to regenerate prompt: ${error.message}`,
         variant: "destructive"
       });
     }
   });
-  
-  // Mutation to send a single SMS alert
-  const sendSingleAlertMutation = useMutation({
-    mutationFn: async (alertId: string) => {
-      const res = await apiRequest("POST", "/api/triage/send-alert", { alertId });
+
+  // Mutation for regenerating all prompts
+  const regenerateAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/prompts/regenerate-all");
       return await res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
       toast({
         title: "Success",
-        description: `SMS alert sent successfully to ${data.patientName}`,
-      });
-      // Invalidate alerts query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/triage/alerts", selectedBatchId] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: `Failed to send alert: ${error.message}`,
-        variant: "destructive"
+        description: "All prompts regenerated successfully",
       });
     }
   });
-  
-  // Handle sending all pending alerts
-  const handleSendAllAlerts = () => {
-    const pendingAlertIds = alerts
-      .filter((alert: PatientAlert) => alert.status === "pending")
-      .map((alert: PatientAlert) => alert.id);
-    
-    if (pendingAlertIds.length === 0) {
-      toast({
-        title: "Info",
-        description: "No pending alerts to send",
-      });
-      return;
-    }
-    
-    sendAlertsMutation.mutate(pendingAlertIds);
-  };
-  
-  // Handle sending a single alert
-  const handleSendSingleAlert = (alertId: string) => {
-    sendSingleAlertMutation.mutate(alertId);
+
+  // Filter prompts based on search query
+  const filteredPrompts = prompts?.filter(prompt => 
+    prompt.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    prompt.condition.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
+
+  // Handle copying prompt to clipboard
+  const handleCopyPrompt = (prompt: string) => {
+    navigator.clipboard.writeText(prompt);
+    toast({
+      title: "Copied",
+      description: "Prompt copied to clipboard",
+    });
   };
 
-  // Handle batch selection change
-  const handleBatchChange = (value: string) => {
-    setSelectedBatchId(value);
-  };
-  
   return (
-    <div className="container mx-auto">
-      <h1 className="text-3xl font-bold mb-6">AI-Powered Triage</h1>
-      <p className="text-gray-600 mb-8">
-        Monitor patient alerts and send SMS notifications to caregivers for immediate action.
-      </p>
-      
-      <div className="flex flex-col md:flex-row gap-6 mb-8">
-        <Card className="flex-1">
-          <CardHeader>
-            <CardTitle>Alert Summary</CardTitle>
-            <CardDescription>Overview of patient alerts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Red alerts */}
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-red-600">
-                  {isLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  ) : (
-                    (alerts || []).filter((a: PatientAlert) => a.severity === "red").length || 0
-                  )}
-                </span>
-                <span className="text-sm text-red-800">URGENT</span>
-              </div>
-              
-              {/* Yellow alerts */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-yellow-600">
-                  {isLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  ) : (
-                    (alerts || []).filter((a: PatientAlert) => a.severity === "yellow").length || 0
-                  )}
-                </span>
-                <span className="text-sm text-yellow-800">ATTENTION</span>
-              </div>
-
-              {/* Green (healthy) status */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-green-600">
-                  {isLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
-                  ) : (
-                    (alerts || []).filter((a: PatientAlert) => a.severity === "green").length || 0
-                  )}
-                </span>
-                <span className="text-sm text-green-800">HEALTHY</span>
-              </div>
-              
-              {/* Batch selector */}
-              <div className="border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center">
-                <div className="space-y-2 w-full">
-                  <Label htmlFor="batch-select" className="text-xs text-center w-full block">Data Batch</Label>
-                  <Select
-                    value={selectedBatchId}
-                    onValueChange={handleBatchChange}
-                    disabled={batchesLoading}
-                  >
-                    <SelectTrigger id="batch-select" className="text-sm">
-                      <SelectValue placeholder="Select batch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {patientBatches?.map((batch: any) => (
-                        <SelectItem key={batch.id} value={batch.batchId}>
-                          {new Date(batch.createdAt).toLocaleDateString()} ({batch.fileName})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-            
-            {/* Status of message sending */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex justify-between items-center">
-                <div>
-                  <span className="text-amber-800 font-medium">Pending SMS</span>
-                  <span className="ml-2 text-xl font-bold text-amber-600">
-                    {isLoading ? (
-                      <RefreshCw className="inline h-5 w-5 animate-spin" />
-                    ) : (
-                      (alerts || []).filter((a: PatientAlert) => a.status === "pending" && a.isAlert).length || 0
-                    )}
-                  </span>
-                </div>
-                <Button 
-                  size="sm" 
-                  className="bg-amber-600 hover:bg-amber-700"
-                  onClick={handleSendAllAlerts}
-                  disabled={sendAlertsMutation.isPending || !(alerts || []).some((a: PatientAlert) => a.status === "pending" && a.isAlert)}
-                >
-                  {sendAlertsMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="mr-1 h-3 w-3" />
-                      Send All
-                    </>
-                  )}
-                </Button>
-              </div>
-              
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex justify-between items-center">
-                <div>
-                  <span className="text-green-800 font-medium">Sent SMS</span>
-                  <span className="ml-2 text-xl font-bold text-green-600">
-                    {isLoading ? (
-                      <RefreshCw className="inline h-5 w-5 animate-spin" />
-                    ) : (
-                      (alerts || []).filter((a: PatientAlert) => a.status === "sent").length || 0
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-
-          </CardContent>
-        </Card>
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Generated Patient Prompts</h1>
+          <p className="text-gray-600 mt-2">
+            Total patients: {prompts?.length || 0}
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Handle CSV export
+              // Implementation needed
+            }}
+          >
+            <FileDown className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => regenerateAllMutation.mutate()}
+            disabled={regenerateAllMutation.isPending}
+          >
+            <RotateCw className={`w-4 h-4 mr-2 ${regenerateAllMutation.isPending ? 'animate-spin' : ''}`} />
+            Regenerate All
+          </Button>
+        </div>
       </div>
-      
+
+      <div className="mb-6">
+        <Input
+          placeholder="Search patients..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-md"
+        />
+      </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle>Patient Alerts</CardTitle>
-          <CardDescription>
-            Patients with critical alerts that need attention
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : !alerts || alerts.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No alerts for the selected batch.</p>
-              <p className="text-sm">All patients are stable.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(alerts || []).map((alert: PatientAlert) => (
-                <Card key={alert.id} className={
-                  alert.status === "sent" ? "border-green-200 bg-green-50" : 
-                  alert.status === "failed" ? "border-red-200 bg-red-50" : 
-                  alert.severity === "red" ? "border-red-300 bg-red-50" :
-                  alert.severity === "yellow" ? "border-yellow-300 bg-yellow-50" :
-                  alert.severity === "green" ? "border-green-300 bg-green-50" :
-                  "border-amber-200 bg-amber-50"
-                }>
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center">
-                          {alert.severity === 'red' && (
-                            <span className="w-4 h-4 mr-2 rounded-full bg-red-500 animate-pulse" title="Urgent" />
-                          )}
-                          {alert.severity === 'yellow' && (
-                            <span className="w-4 h-4 mr-2 rounded-full bg-yellow-400" title="Attention needed" />
-                          )}
-                          {alert.severity === 'green' && (
-                            <span className="w-4 h-4 mr-2 rounded-full bg-green-500" title="Healthy" />
-                          )}
-                          <CardTitle className="text-lg">{alert.patientName}</CardTitle>
-                        </div>
-                        <CardDescription>
-                          ID: {alert.patientId} • Age: {alert.age} • 
-                          {alert.alertReasons && alert.alertReasons.length > 0 ? 
-                            ` Alerts: ${alert.alertReasons.length}` : 
-                            alert.alertCount ? ` Alerts: ${alert.alertCount}` : ''}
-                          {alert.createdAt && ` • Last reading: ${new Date(alert.createdAt).toLocaleString()}`}
-                        </CardDescription>
-                      </div>
-                      <div className="flex flex-col gap-1 items-end">
-                        <Badge variant="outline" className={
-                          alert.severity === "red" ? "bg-red-100 text-red-800 border-red-300" :
-                          alert.severity === "yellow" ? "bg-yellow-100 text-yellow-800 border-yellow-300" :
-                          alert.severity === "green" ? "bg-green-100 text-green-800 border-green-300" :
-                          alert.status === "sent" ? "bg-green-100 text-green-800 border-green-200" : 
-                          alert.status === "failed" ? "bg-red-100 text-red-800 border-red-200" : 
-                          "bg-amber-100 text-amber-800 border-amber-200"
-                        }>
-                          {alert.severity === "red" ? "URGENT" :
-                          alert.severity === "yellow" ? "ATTENTION" :
-                          alert.severity === "green" ? "HEALTHY" :
-                          alert.status === "sent" ? "Sent" : 
-                          alert.status === "failed" ? "Failed" : 
-                          "Pending"}
-                        </Badge>
-                        {alert.status === "pending" && alert.isAlert && (
-                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
-                            Requires SMS
-                          </Badge>
-                        )}
-                      </div>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Patient Name</TableHead>
+                <TableHead>Age</TableHead>
+                <TableHead>Condition</TableHead>
+                <TableHead className="w-[40%]">Generated Prompt</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isPromptsLoading || isBatchLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex justify-center items-center">
+                      <RotateCw className="w-6 h-6 animate-spin text-gray-400" />
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Accordion type="single" collapsible className="bg-white rounded-md">
-                      <AccordionItem value="details">
-                        <AccordionTrigger>View Details</AccordionTrigger>
-                        <AccordionContent>
-                          <div className="space-y-2 text-sm">
-                            <div className="font-medium">Alert Variables:</div>
-                            {alert.variables && alert.variables.length > 0 ? (
-                              <ul className="list-disc pl-5 space-y-1">
-                                {alert.variables.map((variable, index) => (
-                                  <li key={index}>
-                                    <span className="font-medium">{variable.name}:</span> {variable.value}
-                                    {variable.timestamp && (
-                                      <span className="text-gray-500 text-xs"> at {new Date(variable.timestamp).toLocaleString()}</span>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-gray-500">No specific variables recorded</p>
-                            )}
-                            
-                            <div className="font-medium mt-3">Alert Reasons:</div>
-                            {alert.alertReasons && alert.alertReasons.length > 0 ? (
-                              <ul className="list-disc pl-5 space-y-1">
-                                {alert.alertReasons.map((reason, index) => (
-                                  <li key={index}>{reason}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-gray-500">No specific alert reasons recorded</p>
-                            )}
-                            
-                            {alert.reasoning && (
-                              <>
-                                <div className="font-medium mt-3">Clinical Reasoning:</div>
-                                <p className="text-gray-700">{alert.reasoning}</p>
-                              </>
-                            )}
-                            
-                            {alert.condition && (
-                              <>
-                                <div className="font-medium mt-3">Condition:</div>
-                                <p className="text-gray-700">{alert.condition}</p>
-                              </>
-                            )}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                      <AccordionItem value="message">
-                        <AccordionTrigger>View SMS Message</AccordionTrigger>
-                        <AccordionContent>
-                          <div className="p-3 bg-gray-50 rounded-md whitespace-pre-wrap font-mono text-sm">
-                            {alert.message || "No message preview available"}
-                          </div>
-                          
-                          {alert.status === "pending" && alert.isAlert && (
-                            <div className="mt-3">
-                              <Button 
-                                size="sm" 
-                                className="w-full bg-blue-600 hover:bg-blue-700"
-                                onClick={() => handleSendSingleAlert(alert.id)}
-                                disabled={sendSingleAlertMutation.isPending}
-                              >
-                                {sendSingleAlertMutation.isPending ? (
-                                  <>
-                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                    Sending...
-                                  </>
-                                ) : (
-                                  <>
-                                    <MessageSquare className="mr-1 h-4 w-4" />
-                                    Send SMS Alert
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                          
-                          {alert.status === "sent" && alert.sentAt && (
-                            <div className="mt-3 text-xs text-green-600">
-                              ✓ Sent at {new Date(alert.sentAt).toLocaleString()}
-                            </div>
-                          )}
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                  </TableCell>
+                </TableRow>
+              ) : !latestBatch?.batchId ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    No batch found. Please upload a patient data file first.
+                  </TableCell>
+                </TableRow>
+              ) : filteredPrompts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    No prompts found in the current batch.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredPrompts.map((prompt) => (
+                  <TableRow key={prompt.id}>
+                    <TableCell>{prompt.id}</TableCell>
+                    <TableCell>{prompt.patientName}</TableCell>
+                    <TableCell>{prompt.age}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        prompt.status === 'healthy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {prompt.condition}
+                      </span>
+                    </TableCell>
+                    <TableCell className="max-w-md">
+                      <div className="truncate">{prompt.promptText}</div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            toast({
+                              title: "Reasoning",
+                              description: prompt.reasoning,
+                            });
+                          }}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCopyPrompt(prompt.promptText)}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => regeneratePromptMutation.mutate(prompt.id)}
+                          disabled={regeneratePromptMutation.isPending}
+                        >
+                          <RotateCw className={`w-4 h-4 ${
+                            regeneratePromptMutation.isPending ? 'animate-spin' : ''
+                          }`} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

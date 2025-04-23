@@ -11,15 +11,12 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PatientData } from '@shared/types';
 
 // Define types for patients
-interface Patient {
+interface Patient extends PatientData {
   id: number;
-  patientId: string;
-  name: string;
   batchId: string;
-  age: number;
-  condition: string;
 }
 
 export default function MonthlyReports() {

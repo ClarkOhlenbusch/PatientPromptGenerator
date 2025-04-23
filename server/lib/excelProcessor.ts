@@ -1,39 +1,22 @@
 import ExcelJS from 'exceljs';
+import { PatientData, AggregatedPatientData } from '@shared/types';
 
-// Enhanced PatientData interface to include alert status and variable values
-interface PatientData {
-  patientId: string;
-  name: string;
-  age: number;
-  condition: string;
-  isAlert?: boolean;
-  variables?: { [key: string]: any };
-  issues?: string[]; // Array to store all issues for a patient
-  healthStatus?: 'healthy' | 'alert'; // To mark patients explicitly as healthy
+// Define a type for row data that includes dynamic properties
+interface RowData extends PatientData {
   [key: string]: any;
-}
-
-// Interface for aggregated patient data
-interface AggregatedPatientData {
-  patientId: string;
-  name: string;
-  age: number;
-  variables: { [key: string]: any }[];
-  conditions: string[];
-  issues: string[];
-  alertReasons: string[];
-  rawData: any[];
 }
 
 /**
  * Process Excel file using automata-style workflow
  * S0 -> S1 -> S2 -> S3 -> S4/S5 -> S6 -> S7 -> S8
  */
-export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
+export async function processExcelFile(buffer: Buffer | ArrayBuffer): Promise<PatientData[]> {
   try {
     // S0->S1: Start Excel file processing
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    // Convert ArrayBuffer to Buffer if needed
+    const excelBuffer = buffer instanceof Buffer ? buffer : Buffer.from(buffer);
+    await workbook.xlsx.load(excelBuffer);
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -69,14 +52,14 @@ export async function processExcelFile(buffer: Buffer): Promise<PatientData[]> {
 
     // S2: Prepare to iterate over rows
     const patientDataMap = new Map<string, AggregatedPatientData>();
-    const allPatientsData: PatientData[] = [];
+    const allPatientsData: RowData[] = [];
 
     // Process rows (skip header)
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // Skip header row
 
       // Create a data object for this row
-      const rowData: PatientData = {
+      const rowData: RowData = {
         patientId: '',
         name: '',
         age: 0,

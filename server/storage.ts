@@ -39,6 +39,7 @@ export interface IStorage {
   createPatientPrompt(prompt: InsertPatientPrompt): Promise<PatientPrompt>;
   getPatientPromptsByBatchId(batchId: string): Promise<PatientPrompt[]>;
   getPatientPromptByIds(batchId: string, patientId: string): Promise<PatientPrompt | undefined>;
+  getPatientPromptById(id: number): Promise<PatientPrompt | undefined>;
   updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt>;
   
   // Patient Template methods
@@ -125,6 +126,7 @@ export class DatabaseStorage implements IStorage {
       age: insertPrompt.age,
       condition: insertPrompt.condition,
       prompt: insertPrompt.prompt,
+      reasoning: insertPrompt.reasoning || null,
       isAlert: insertPrompt.isAlert ? "true" : "false",
       healthStatus: insertPrompt.healthStatus || "alert",
       rawData: insertPrompt.rawData ?? null,
@@ -148,11 +150,18 @@ export class DatabaseStorage implements IStorage {
     return prompt;
   }
 
+  async getPatientPromptById(id: number): Promise<PatientPrompt | undefined> {
+    const [prompt] = await db.select().from(patientPrompts)
+      .where(eq(patientPrompts.id, id));
+    return prompt;
+  }
+
   async updatePatientPrompt(id: number, updates: Partial<InsertPatientPrompt>): Promise<PatientPrompt> {
     // Create a cleaned up version of the update data that matches our schema
     const updateData: Record<string, any> = {};
     
     if (updates.prompt) updateData.prompt = updates.prompt;
+    if (updates.reasoning) updateData.reasoning = updates.reasoning;
     if (updates.isAlert !== undefined) updateData.isAlert = updates.isAlert ? "true" : "false";
     if (updates.healthStatus) updateData.healthStatus = updates.healthStatus;
     if (updates.condition) updateData.condition = updates.condition;

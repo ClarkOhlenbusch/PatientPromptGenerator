@@ -1,19 +1,10 @@
 import OpenAI from "openai";
 import { logPromptCostEstimate, estimateSinglePromptUsage } from "./tokenUsageEstimator";
+import { PatientData } from '@shared/types';
+import { DatabaseStorage } from "../storage";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
-
-interface PatientData {
-  patientId: string;
-  name: string;
-  age: number;
-  condition: string;
-  isAlert?: boolean;
-  healthStatus?: 'healthy' | 'alert';
-  issues?: string[];
-  [key: string]: any;
-}
 
 // Use a cache to store generated prompts by condition type
 const promptCache = new Map<string, string>();
@@ -38,170 +29,93 @@ export function getTokenUsageStats() {
   };
 }
 
-export async function generatePrompt(patient: PatientData): Promise<string> {
+export async function generatePrompt(patient: PatientData, batchId?: string): Promise<string> {
   try {
-    // Handle the case where we have aggregated issues from multiple alerts
-    const hasAggregatedIssues = patient.issues && patient.issues.length > 0;
-    
-    // Check if the patient has no alerts/issues - positive health status
-    const hasNoIssues = ((!patient.issues || patient.issues.length === 0) && (patient.isAlert === undefined || patient.isAlert === false)) 
-                      || patient.healthStatus === "healthy";
-    
-    // Create a unique cache key based on health status
-    let cacheKey;
-    if (hasNoIssues) {
-      cacheKey = `healthy_${patient.patientId}`;
-    } else if (hasAggregatedIssues) {
-      cacheKey = `aggregated_${patient.patientId}_${patient.issues?.length}`;
-    } else {
-      cacheKey = `${patient.condition}`;
-    }
-
+    // Check if we have a cached prompt for this condition type
+    const cacheKey = `${patient.healthStatus}_${patient.patientId}`;
     if (promptCache.has(cacheKey)) {
-      const cachedPrompt = promptCache.get(cacheKey);
-      // Personalize the cached prompt with patient name
-      return cachedPrompt!
-        .replace(/\{name\}/g, patient.name)
-        .replace(/\{age\}/g, patient.age.toString());
+      return promptCache.get(cacheKey)!;
     }
 
-    // Skip OpenAI call if API key is not set
-    if (!process.env.OPENAI_API_KEY) {
-      if (hasNoIssues) {
-        return `Good news, {name}! Your health indicators are all within normal ranges. At {age} years old, it's important to continue your healthy lifestyle with regular exercise, balanced nutrition, and routine check-ups. Keep up the great work!`;
-      }
-      return generateFallbackPrompt(patient);
-    }
-
-    // Prepare content for the prompt
-    let userContent = "";
-    let systemContent = "";
-    
-    if (hasNoIssues) {
-      // Generate positive health message for patients with no alerts
-      systemContent = `You are a healthcare assistant that creates personalized positive health messages. 
-      These messages will be sent to patients who have no health alerts or concerns.
-      Generate an encouraging, uplifting message that:
-      1. Congratulates the patient on their good health status
-      2. Provides age-appropriate advice for maintaining health
-      3. Suggests preventive measures and healthy habits
-      4. Reminds them about the importance of regular check-ups
-      
-      Keep the tone warm, positive, and supportive. Make the message 1-2 paragraphs long.
-      IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age.`;
-      
-      userContent = `Generate a positive health message for a patient with no health concerns. The patient is {age} years old. Use {name} as a placeholder for the patient's name.`;
-    }
-    else if (hasAggregatedIssues) {
-      // For aggregated patient data with multiple issues
-      console.log(
-        `Processing aggregated data with ${patient.issues?.length || 0} issues for patient ${patient.patientId}`,
-      );
-
-      systemContent = `You are a healthcare assistant that generates personalized patient care prompts using structured input data similar to our Demo Data. Each patient’s name field includes their full name and date of birth (e.g., "John Doe (MM/DD/YYYY)"). Use the Date and Time Stamp to calculate the patient’s age (ignore time of day). There is no separate age column. Your task is to:
-
-1. Extract the patient’s name and the date of birth from the name field.
-2. Calculate the current age of the patient based on the extracted date of birth relative to today’s date.
-3. Generate a comprehensive, personalized prompt that addresses ALL of the patient's specific conditions and issues together—taking into account that the data is provided in the Demo Data style.
-4. Ensure that your prompt:
-    - Acknowledges all the patient's issues in a cohesive manner,
-    - Provides actionable guidance for managing multiple conditions,
-    - Prioritizes the most critical issues while addressing all concerns,
-    - Includes age-appropriate recommendations (using the computed age),
-    - Suggests lifestyle adjustments that address multiple conditions simultaneously, and
-    - Recommends proper follow-up and monitoring for each condition.
-
-The output should be 2-3 paragraphs long in a warm, supportive, and professional tone.  
-IMPORTANT: Use {name} as a placeholder for the patient's name (without the DOB) and {age} as a placeholder for the calculated age.
-`;
-
-      // Format all issues as a bulleted list
-      const issuesList = patient.issues && patient.issues.length > 0
-        ? patient.issues.map((issue: string) => `• ${issue}`).join("\n")
-        : "• No specific issues found";
-
-      userContent = `Generate a personalized care prompt for a patient with the following issues:
-      
-${issuesList}
-
-Patient has multiple conditions requiring attention: ${patient.condition}
-
-Use {name} as placeholder for patient name and {age} for age. Create ONE comprehensive prompt that addresses ALL issues together, not separate advice for each issue, But it should be clear what specific issue each part of this prompt is addresing.`;
-    } else {
-      // For single condition patients (backward compatibility)
-      systemContent = `You are a healthcare assistant that creates personalized patient care prompts. 
-      These prompts will be used to guide patients with their specific medical conditions. 
-      Generate a detailed, personalized prompt that addresses the patient's specific condition, age, and any other relevant factors. 
-      The prompt should be informative, supportive, and provide actionable guidance.
-      Focus on:
-      1. Management of their specific condition
-      2. Age-appropriate recommendations
-      3. Lifestyle adjustments
-      4. Medication adherence if applicable
-      5. Follow-up and monitoring
-      Keep the tone warm and supportive, but professional. Make the prompt 2-3 paragraphs long.
-      IMPORTANT: Use {name} as a placeholder for the patient's name and {age} as a placeholder for the patient's age,
-      so we can customize the prompt for different patients with similar conditions.`;
-
-      userContent = `Generate a personalized care prompt for a patient with this condition: "${patient.condition}". Use {name} as placeholder for patient name and {age} for age.`;
-    }
-
-    // Calculate input tokens before API call
-    const fullInputText = systemContent + userContent;
-    
-    // Use a fast response setting to speed up generation
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Using the latest model
+    // Generate a new prompt using OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: systemContent,
+          content: `You are a healthcare assistant that generates personalized patient care prompts using structured input data similar to our Demo Data. Each patient's name field includes their full name and date of birth (e.g., "John Doe (MM/DD/YYYY)"). Use the Date and Time Stamp to calculate the patient's age (ignore time of day). There is no separate age column. Your task is to:
+
+1. Extract the patient's name and the date of birth from the name field.
+2. Calculate the current age of the patient based on the extracted date of birth relative to today's date.
+3. Generate a comprehensive, personalized prompt that addresses ALL of the patient's specific conditions and issues together—taking into account that the data is provided in the Demo Data style.
+4. Ensure that your prompt:
+   - Is written in a clear, professional tone
+   - Addresses all of the patient's conditions and issues
+   - Provides specific, actionable recommendations
+   - Considers the patient's age and any relevant health factors
+   - Is personalized to the patient's specific situation
+
+The prompt should be detailed but concise, focusing on the most important aspects of the patient's care.`
         },
         {
           role: "user",
-          content: userContent,
-        },
+          content: `Generate a personalized care prompt for the following patient:
+
+Patient ID: ${patient.patientId}
+Name: ${patient.name}
+Age: ${patient.age}
+Condition: ${patient.condition}
+Health Status: ${patient.healthStatus || 'unknown'}
+${patient.isAlert ? 'Alert: Yes' : 'Alert: No'}
+${patient.issues?.length ? `Issues: ${patient.issues.join(', ')}` : ''}
+${patient.alertReasons?.length ? `Alert Reasons: ${patient.alertReasons.join(', ')}` : ''}
+${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables, null, 2)}` : ''}`
+        }
       ],
-      max_tokens: 600, // Increased for aggregated issues
-      temperature: 0.5, // Lower temperature for more predictable responses
+      temperature: 0.7,
+      max_tokens: 500
     });
 
-    const prompt =
-      response.choices[0].message.content || generateFallbackPrompt(patient);
-      
-    // Track usage
-    totalApiCalls++;
+    const prompt = completion.choices[0]?.message?.content || 'No prompt generated';
     
-    // Estimate tokens and cost using our estimator
-    const usageData = estimateSinglePromptUsage(fullInputText, prompt);
-    totalInputTokens += usageData.inputTokens;
-    totalOutputTokens += usageData.outputTokens;
-    totalEstimatedCost += usageData.totalCost;
+    // Cache the prompt for future use
+    promptCache.set(cacheKey, prompt);
     
-    // Log the token usage and cost for this request
-    logPromptCostEstimate(fullInputText, prompt);
-    
-    // Log cumulative usage statistics after every 5 calls
-    if (totalApiCalls % 5 === 0) {
-      console.log('\n=== Cumulative OpenAI API Usage ===');
-      console.log(`Total API calls: ${totalApiCalls}`);
-      console.log(`Total input tokens: ${totalInputTokens}`);
-      console.log(`Total output tokens: ${totalOutputTokens}`);
-      console.log(`Total estimated cost: $${totalEstimatedCost.toFixed(4)}`);
-      console.log(`Average cost per call: $${(totalEstimatedCost / totalApiCalls).toFixed(4)}`);
-      console.log('===================================\n');
+    // Log token usage estimate
+    const estimatedTokens = estimateSinglePromptUsage(prompt, "gpt-4o");
+    logPromptCostEstimate(estimatedTokens, "gpt-4o");
+
+    // Store the prompt in the database if we have a batch ID
+    if (batchId) {
+      try {
+        const storage = new DatabaseStorage();
+        await storage.createPatientPrompt({
+          batchId,
+          patientId: patient.patientId,
+          name: patient.name,
+          age: patient.age,
+          condition: patient.condition,
+          prompt,
+          isAlert: patient.isAlert ? "true" : "false",
+          healthStatus: patient.healthStatus || "alert",
+          rawData: {
+            issues: patient.issues || [],
+            alertReasons: patient.alertReasons || [],
+            variables: patient.variables || {}
+          }
+        });
+      } catch (dbError) {
+        console.error('Error storing prompt in database:', dbError);
+        // Don't throw the error - we still want to return the generated prompt
+      }
+    } else {
+      console.warn('No batch ID provided - prompt will not be stored in database');
     }
 
-    // Store the templated prompt in the cache
-    promptCache.set(cacheKey, prompt);
-
-    // Return a personalized version
-    return prompt
-      .replace(/\{name\}/g, patient.name)
-      .replace(/\{age\}/g, patient.age.toString());
-  } catch (error: unknown) {
-    console.error("Error generating prompt with OpenAI:", error);
-    return generateFallbackPrompt(patient);
+    return prompt;
+  } catch (error) {
+    console.error('Error generating prompt:', error);
+    throw error;
   }
 }
 
@@ -315,10 +229,6 @@ export async function generatePromptWithSystemAndTemplate(
         }
       }
       
-      if (patient.issues && patient.issues.length > 0) {
-        userPrompt += `\nHealth issues:\n- ${patient.issues.join('\n- ')}\n`;
-      }
-      
       // Include a section for each placeholder we need to fill
       userPrompt += `\nI need content for these placeholders:\n`;
       
@@ -354,7 +264,7 @@ Include only the placeholders I requested, and keep each value concise and focus
       const placeholderValues = await generatePlaceholders(systemPrompt, userPrompt);
       
       // Replace placeholders with the generated values
-      for (const [key, value] of Object.entries(placeholderValues)) {
+      for (const [key, value] of Object.entries(placeholderValues || {})) {
         if (typeof value === 'string') {
           processedTemplate = processedTemplate.replace(
             new RegExp(`\\{${key}\\}`, 'g'),

@@ -5,19 +5,11 @@
  * visualizations, and insights based on patient data.
  */
 
+import { PatientData, PatientVitals, VitalMeasurement } from '@shared/types';
+
+// Remove local interfaces since we're importing them
+
 // Define types for vital signs measurements
-export interface VitalMeasurement {
-  date: Date;
-  value: number;
-  isAlert: boolean;
-}
-
-export interface PatientVitals {
-  heartRate: VitalMeasurement[];
-  oxygenSaturation: VitalMeasurement[];
-  glucose: VitalMeasurement[];
-}
-
 export interface VitalStats {
   average: number;
   minimum: number;

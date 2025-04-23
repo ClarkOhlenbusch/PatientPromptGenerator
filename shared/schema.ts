@@ -6,8 +6,9 @@ import {
   jsonb,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { PatientData } from './types';
 
 // User schema (kept from original)
 export const users = pgTable("users", {
@@ -58,9 +59,7 @@ export const patientPrompts = pgTable("patient_prompts", {
   updatedAt: text("updated_at"),
 });
 
-export const insertPatientPromptSchema = createInsertSchema(
-  patientPrompts,
-).omit({
+export const insertPatientPromptSchema = createInsertSchema(patientPrompts).omit({
   id: true,
 });
 

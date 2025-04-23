@@ -1,5 +1,5 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
+import { Express, Request, Response } from "express";
+import { createServer, Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import path from "path";
@@ -19,6 +19,12 @@ import { setupAuth } from "./auth";
 import fs from "fs";
 import { eq, and, desc, sql as SQL } from "drizzle-orm";
 import { phoneSchema } from "@shared/schema";
+import OpenAI from "openai";
+
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 // Set up multer for file uploads
 const upload = multer({
@@ -43,13 +49,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/upload", upload.single("file"), async (req, res) => {
     try {
+      console.log("Starting file upload process...");
+      
       if (!req.isAuthenticated()) {
+        console.log("Upload failed: Authentication required");
         return res
           .status(401)
           .json({ success: false, message: "Authentication required" });
       }
 
       if (!req.file) {
+        console.log("Upload failed: No file uploaded");
         return res
           .status(400)
           .json({ success: false, message: "No file uploaded" });
@@ -58,6 +68,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       const batchId = nanoid();
       const timestamp = new Date().toISOString();
+
+      console.log(`Creating new batch: ${batchId} for file: ${file.originalname}`);
 
       // Create a batch record
       await storage.createPatientBatch({
@@ -68,15 +80,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         // Process the Excel file and extract patient data
+        console.log("Processing Excel file...");
         const patientData = await processExcelFile(file.buffer);
-        console.log(`Processed ${patientData.length} rows from Excel file`);
+        console.log(`Successfully processed ${patientData.length} rows from Excel file`);
 
-        // Store all patients without limiting the number
         const successfullyStored = [];
 
         // Process each patient record
         for (const patient of patientData) {
           try {
+            console.log(`Processing patient: ${patient.name || 'Unknown'}`);
+            
             // Ensure patient has a unique ID
             const patientId = patient.patientId || `P${nanoid(6)}`;
 
@@ -89,9 +103,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               variables: patient.variables || {},
             };
 
+            console.log(`Generating prompt for patient ${patientId}...`);
             // Generate a prompt for the patient
-            const prompt = await generatePrompt(patientWithMetadata);
+            const prompt = await generatePrompt(patientWithMetadata, batchId);
 
+            console.log(`Storing prompt for patient ${patientId}...`);
             // Create the patient prompt record in the database
             await storage.createPatientPrompt({
               batchId,
@@ -106,6 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
 
             // Update processed patients count
+            console.log(`Updating processed patients count for batch ${batchId}...`);
             await db.execute(SQL`
               UPDATE patient_batches 
               SET processed_patients = processed_patients + 1 
@@ -113,12 +130,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `);
 
             successfullyStored.push(patientId);
+            console.log(`Successfully stored patient ${patientId}`);
           } catch (err) {
             console.error(`Error storing patient data:`, err);
             // Continue with other patients even if one fails
           }
         }
 
+        console.log(`Upload complete. Processed ${patientData.length} patients, stored ${successfullyStored.length} records`);
         res.status(200).json({
           success: true,
           batchId,
@@ -185,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           condition: patientPrompt.condition,
         };
 
-        const newPrompt = await generatePrompt(rawData as any); // Type assertion to avoid TypeScript error
+        const newPrompt = await generatePrompt(rawData as any, batchId);
 
         await storage.updatePatientPrompt(patientPrompt.id, {
           prompt: newPrompt,
@@ -226,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             condition: prompt.condition,
           };
 
-          const newPrompt = await generatePrompt(rawData as any); // Type assertion to avoid TypeScript error
+          const newPrompt = await generatePrompt(rawData as any, batchId);
           await storage.updatePatientPrompt(prompt.id, { prompt: newPrompt });
         }),
       );
@@ -341,6 +360,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false,
         message: `Error fetching batches: ${err instanceof Error ? err.message : String(err)}`,
       });
+    }
+  });
+
+  // Get latest batch
+  app.get("/api/batches/latest", async (req, res) => {
+    try {
+      console.log("Fetching latest batch...");
+      const batches = await storage.getAllPatientBatches();
+      console.log(`Retrieved ${batches.length} total batches`);
+      
+      const latestBatch = batches[batches.length - 1];
+      
+      if (!latestBatch) {
+        console.log("No batches found in the system");
+        return res.status(404).json({ error: "No batches found" });
+      }
+      
+      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processed_patients} processed patients`);
+      res.json(latestBatch);
+    } catch (error) {
+      console.error("Error fetching latest batch:", error);
+      res.status(500).json({ error: "Failed to fetch latest batch" });
     }
   });
 
@@ -1622,6 +1663,232 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false,
         message: `Error checking Twilio status: ${err instanceof Error ? err.message : String(err)}`,
       });
+    }
+  });
+
+  // Send SMS alert for a specific prompt
+  app.post("/api/alerts/sms", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+      
+      const { promptId } = req.body;
+      
+      if (!promptId) {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt ID is required",
+        });
+      }
+      
+      // Get the prompt details
+      const prompt = await storage.getPatientPromptById(promptId);
+      
+      if (!prompt) {
+        return res.status(404).json({
+          success: false,
+          message: "Prompt not found",
+        });
+      }
+      
+      // Check if alert phone is configured
+      const phone = await storage.getAlertPhone();
+      
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Alert phone number not configured. Please set it first.",
+        });
+      }
+      
+      // Check for Twilio credentials
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (!accountSid || !authToken || !twilioPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Twilio credentials not configured. Please check your environment variables.",
+        });
+      }
+      
+      // Initialize Twilio client
+      const twilioClient = twilio(accountSid, authToken);
+      
+      // Send the message
+      const message = await twilioClient.messages.create({
+        body: prompt.promptText,
+        from: twilioPhone,
+        to: phone
+      });
+      
+      // Update prompt status
+      await storage.updatePatientPrompt(promptId, {
+        status: "sent",
+        sentAt: new Date().toISOString()
+      });
+      
+      return res.status(200).json({
+        success: true,
+        sid: message.sid,
+        message: `SMS sent successfully to ${phone}`,
+        patientName: prompt.patientName
+      });
+    } catch (err) {
+      console.error("Error sending SMS:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error sending SMS: ${err instanceof Error ? err.message : String(err)}`,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  // Get all prompts
+  app.get("/api/prompts", async (req, res) => {
+    try {
+      console.log("Fetching prompts...");
+      const batchId = req.query.batchId as string;
+      console.log(`Using batchId: ${batchId}`);
+      
+      const prompts = await storage.getPatientPromptsByBatchId(batchId);
+      console.log(`Retrieved ${prompts.length} prompts from storage`);
+      
+      const transformedPrompts = prompts.map(prompt => {
+        console.log(`Transforming prompt for patient: ${prompt.name}`);
+        return {
+          id: prompt.id,
+          patientName: prompt.name,
+          age: prompt.age,
+          condition: prompt.condition,
+          promptText: prompt.prompt,
+          reasoning: prompt.reasoning || "No reasoning provided",
+          isAlert: prompt.isAlert === "true",
+          status: prompt.healthStatus || "alert"
+        };
+      });
+      
+      console.log(`Successfully transformed ${transformedPrompts.length} prompts`);
+      res.json(transformedPrompts);
+    } catch (error) {
+      console.error("Error fetching prompts:", error);
+      res.status(500).json({ error: "Failed to fetch prompts" });
+    }
+  });
+
+  // Regenerate a single prompt
+  app.post("/api/prompts/:id/regenerate", async (req, res) => {
+    try {
+      const promptId = parseInt(req.params.id);
+      const prompt = await storage.getPatientPromptById(promptId);
+      
+      if (!prompt) {
+        return res.status(404).json({ error: "Prompt not found" });
+      }
+
+      // Call OpenAI to generate new prompt
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: `You are a healthcare assistant generating personalized messages for patients. 
+                     Focus on their specific health conditions and measurements.
+                     If any measurements are outside normal ranges, address them specifically.
+                     Be encouraging but clear about any concerns.`
+          },
+          {
+            role: "user",
+            content: `Generate a personalized health message for a patient with the following details:
+                     Name: ${prompt.name}
+                     Age: ${prompt.age}
+                     Condition: ${prompt.condition}
+                     Health Status: ${prompt.healthStatus}
+                     Alert Status: ${prompt.isAlert}
+                     Raw Data: ${JSON.stringify(prompt.rawData)}
+                     
+                     Also provide reasoning for your message.
+                     Format the response as JSON with 'message' and 'reasoning' fields.`
+          }
+        ]
+      });
+
+      const response = JSON.parse(completion.choices[0].message.content);
+      
+      // Update the prompt in the database
+      const updatedPrompt = await storage.updatePatientPrompt(promptId, {
+        prompt: response.message,
+        reasoning: response.reasoning
+      });
+
+      res.json({
+        id: updatedPrompt.id,
+        patientName: updatedPrompt.name,
+        age: updatedPrompt.age,
+        condition: updatedPrompt.condition,
+        promptText: updatedPrompt.prompt,
+        reasoning: updatedPrompt.reasoning,
+        isAlert: updatedPrompt.isAlert === "true",
+        status: updatedPrompt.healthStatus || "alert"
+      });
+    } catch (error) {
+      console.error("Error regenerating prompt:", error);
+      res.status(500).json({ error: "Failed to regenerate prompt" });
+    }
+  });
+
+  // Regenerate all prompts
+  app.post("/api/prompts/regenerate-all", async (req, res) => {
+    try {
+      const prompts = await storage.getPatientPromptsByBatchId(req.query.batchId as string);
+      
+      for (const prompt of prompts) {
+        try {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [
+              {
+                role: "system",
+                content: `You are a healthcare assistant generating personalized messages for patients. 
+                         Focus on their specific health conditions and measurements.
+                         If any measurements are outside normal ranges, address them specifically.
+                         Be encouraging but clear about any concerns.`
+              },
+              {
+                role: "user",
+                content: `Generate a personalized health message for a patient with the following details:
+                         Name: ${prompt.name}
+                         Age: ${prompt.age}
+                         Condition: ${prompt.condition}
+                         Health Status: ${prompt.healthStatus}
+                         Alert Status: ${prompt.isAlert}
+                         Raw Data: ${JSON.stringify(prompt.rawData)}
+                         
+                         Also provide reasoning for your message.
+                         Format the response as JSON with 'message' and 'reasoning' fields.`
+              }
+            ]
+          });
+
+          const response = JSON.parse(completion.choices[0].message.content);
+          
+          await storage.updatePatientPrompt(prompt.id, {
+            prompt: response.message,
+            reasoning: response.reasoning
+          });
+        } catch (error) {
+          console.error(`Error regenerating prompt ${prompt.id}:`, error);
+        }
+      }
+
+      res.json({ success: true, count: prompts.length });
+    } catch (error) {
+      console.error("Error regenerating all prompts:", error);
+      res.status(500).json({ error: "Failed to regenerate prompts" });
     }
   });
 
