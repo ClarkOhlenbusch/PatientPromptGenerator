@@ -4,9 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, RotateCw, FileDown, Copy } from "lucide-react";
+import { Eye, RotateCw, FileDown, Copy, Maximize2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import ReactMarkdown from 'react-markdown';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface PatientPrompt {
   id: number;
@@ -22,6 +30,9 @@ interface PatientPrompt {
 export default function AIPoweredTriage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPrompt, setSelectedPrompt] = useState<PatientPrompt | null>(null);
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [reasoningDialogOpen, setReasoningDialogOpen] = useState(false);
 
   // Query to get the latest batch
   const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
@@ -92,11 +103,24 @@ export default function AIPoweredTriage() {
     }
   });
 
+  // Deduplicate prompts by patient name
+  const uniquePatientPrompts = prompts ? 
+    Object.values(
+      prompts.reduce((acc, prompt) => {
+        // Use patient name as the unique key
+        if (!acc[prompt.patientName] || prompt.id > acc[prompt.patientName].id) {
+          // Keep the latest prompt (highest ID) for each patient
+          acc[prompt.patientName] = prompt;
+        }
+        return acc;
+      }, {} as Record<string, PatientPrompt>)
+    ) : [];
+
   // Filter prompts based on search query
-  const filteredPrompts = prompts?.filter(prompt => 
+  const filteredPrompts = uniquePatientPrompts.filter(prompt => 
     prompt.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     prompt.condition.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  );
 
   // Handle copying prompt to clipboard
   const handleCopyPrompt = (prompt: string) => {
@@ -107,13 +131,25 @@ export default function AIPoweredTriage() {
     });
   };
 
+  // Handle opening the full prompt dialog
+  const handleViewFullPrompt = (prompt: PatientPrompt) => {
+    setSelectedPrompt(prompt);
+    setPromptDialogOpen(true);
+  };
+
+  // Handle opening the reasoning dialog
+  const handleViewReasoning = (prompt: PatientPrompt) => {
+    setSelectedPrompt(prompt);
+    setReasoningDialogOpen(true);
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Generated Patient Prompts</h1>
           <p className="text-gray-600 mt-2">
-            Total patients: {prompts?.length || 0}
+            Total patients: {uniquePatientPrompts.length || 0}
           </p>
         </div>
         <div className="flex gap-4">
@@ -195,19 +231,23 @@ export default function AIPoweredTriage() {
                       </span>
                     </TableCell>
                     <TableCell className="max-w-md">
-                      <div className="truncate">{prompt.promptText}</div>
+                      <div className="truncate relative">
+                        {prompt.promptText}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
-                            toast({
-                              title: "Reasoning",
-                              description: prompt.reasoning,
-                            });
-                          }}
+                          onClick={() => handleViewFullPrompt(prompt)}
+                        >
+                          <Maximize2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleViewReasoning(prompt)}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -237,6 +277,70 @@ export default function AIPoweredTriage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Full Prompt Dialog */}
+      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedPrompt?.patientName} - Full Generated Prompt
+            </DialogTitle>
+            <DialogDescription>
+              Age: {selectedPrompt?.age} - Condition: {selectedPrompt?.condition}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 bg-gray-50 p-4 rounded-md prose prose-sm max-w-none">
+            <ReactMarkdown>{selectedPrompt?.promptText || ""}</ReactMarkdown>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setPromptDialogOpen(false)}
+            >
+              Close
+            </Button>
+            <Button 
+              onClick={() => selectedPrompt && handleCopyPrompt(selectedPrompt.promptText)}
+            >
+              <Copy className="w-4 h-4 mr-2" /> Copy Text
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reasoning Dialog */}
+      <Dialog open={reasoningDialogOpen} onOpenChange={setReasoningDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedPrompt?.patientName} - AI Reasoning
+            </DialogTitle>
+            <DialogDescription>
+              The AI's reasoning process for generating this patient's prompt
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 bg-gray-50 p-4 rounded-md prose prose-sm max-w-none">
+            <ReactMarkdown>{selectedPrompt?.reasoning || "No reasoning available for this prompt."}</ReactMarkdown>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setReasoningDialogOpen(false)}
+            >
+              Close
+            </Button>
+            <Button 
+              onClick={() => selectedPrompt?.reasoning && handleCopyPrompt(selectedPrompt.reasoning)}
+            >
+              <Copy className="w-4 h-4 mr-2" /> Copy Text
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
