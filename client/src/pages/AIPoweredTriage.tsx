@@ -252,6 +252,50 @@ export default function AIPoweredTriage() {
     setReasoningDialogOpen(true);
   };
 
+  // Add CSV export function
+  const handleExportCSV = () => {
+    // Create CSV header
+    const headers = ['Patient Name', 'Age', 'Condition', 'Status', 'Generated Prompt', 'Reasoning'];
+    
+    // Convert prompts to CSV rows
+    const csvRows = [
+      headers.join(','), // Header row
+      ...uniquePatientPrompts.map(prompt => {
+        // Escape and clean data for CSV format
+        const escapeCsvField = (field: string) => {
+          const cleaned = field.replace(/"/g, '""'); // Escape quotes
+          return `"${cleaned}"`; // Wrap in quotes to handle commas and newlines
+        };
+        
+        return [
+          escapeCsvField(prompt.patientName),
+          prompt.age,
+          escapeCsvField(prompt.condition),
+          escapeCsvField(prompt.status),
+          escapeCsvField(prompt.promptText),
+          escapeCsvField(prompt.reasoning || 'No reasoning provided')
+        ].join(',');
+      })
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `patient_prompts_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Success",
+      description: "CSV file downloaded successfully",
+    });
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-6">
@@ -264,10 +308,7 @@ export default function AIPoweredTriage() {
         <div className="flex gap-4">
           <Button
             variant="outline"
-            onClick={() => {
-              // Handle CSV export
-              // Implementation needed
-            }}
+            onClick={handleExportCSV}
           >
             <FileDown className="w-4 h-4 mr-2" />
             Export CSV
