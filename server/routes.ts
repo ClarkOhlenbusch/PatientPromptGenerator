@@ -11,6 +11,7 @@ import {
   generatePromptWithTemplate,
   getDefaultSystemPrompt,
   setDefaultSystemPrompt,
+  extractReasoning,
 } from "./lib/openai";
 import twilio from "twilio";
 import { createObjectCsvStringifier } from "csv-writer";
@@ -1885,49 +1886,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!prompt) {
         return res.status(404).json({ error: "Prompt not found" });
       }
-
-      // Call OpenAI to generate new prompt
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are a healthcare assistant generating personalized messages for patients. 
-                     Focus on their specific health conditions and measurements.
-                     If any measurements are outside normal ranges, address them specifically.
-                     Be encouraging but clear about any concerns.`
-          },
-          {
-            role: "user",
-            content: `Generate a personalized health message for a patient with the following details:
-                     Name: ${prompt.name}
-                     Age: ${prompt.age}
-                     Condition: ${prompt.condition}
-                     Health Status: ${prompt.healthStatus}
-                     Alert Status: ${prompt.isAlert}
-                     Raw Data: ${JSON.stringify(prompt.rawData)}
-                     
-                     Also provide reasoning for your message.
-                     Format the response as JSON with 'message' and 'reasoning' fields.`
-          }
-        ]
-      });
-
-      const response = JSON.parse(completion.choices[0].message.content);
+      
+      // Get the batch ID to ensure we're using the correct system prompt
+      const batchId = prompt.batchId;
+      console.log(`Regenerating single prompt ${promptId} for batch ${batchId}`);
+      
+      // Try to get the system prompt from database first, fall back to default
+      const systemPrompt = await storage.getSystemPrompt(batchId);
+      const systemPromptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
+      
+      // Extract patient data from the stored prompt
+      let patientData: any = {
+        patientId: prompt.patientId,
+        name: prompt.name,
+        age: prompt.age,
+        condition: prompt.condition,
+        healthStatus: prompt.healthStatus,
+        isAlert: prompt.isAlert === "true"
+      };
+      
+      // Extract raw data if available
+      if (prompt.rawData) {
+        patientData = typeof prompt.rawData === "string" 
+          ? JSON.parse(prompt.rawData) 
+          : prompt.rawData;
+      }
+      
+      // Generate new prompt using our main generatePrompt function
+      const newPrompt = await generatePrompt(patientData, batchId, systemPromptText);
+      
+      // Extract reasoning from the generated prompt
+      const { displayPrompt, reasoning } = extractReasoning(newPrompt);
       
       // Update the prompt in the database
       const updatedPrompt = await storage.updatePatientPrompt(promptId, {
-        prompt: response.message,
-        reasoning: response.reasoning
+        prompt: newPrompt,
+        reasoning: reasoning
       });
-
+      
+      // Format the response for the frontend
       res.json({
         id: updatedPrompt.id,
         patientName: updatedPrompt.name,
         age: updatedPrompt.age,
         condition: updatedPrompt.condition,
-        promptText: updatedPrompt.prompt,
-        reasoning: updatedPrompt.reasoning,
+        promptText: displayPrompt,
+        reasoning: reasoning || updatedPrompt.reasoning || "No reasoning provided",
         isAlert: updatedPrompt.isAlert === "true",
         status: updatedPrompt.healthStatus || "alert"
       });
@@ -1959,10 +1963,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Always get the fresh default prompt directly from openai.ts
-      // This ensures we're using the most current prompt definition
-      const promptText = getDefaultSystemPrompt();
-      console.log(`Using core prompt from openai.ts: ${promptText.substring(0, 50)}...`);
+      // First try to get the saved system prompt from the database
+      // If not found, fall back to the default prompt from openai.ts
+      const systemPrompt = await storage.getSystemPrompt(batchId);
+      const promptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
+      console.log(`Using system prompt (${systemPrompt ? 'from database' : 'default'}): ${promptText.substring(0, 50)}...`);
       
       // Get all prompts for the specified batch
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
@@ -2002,8 +2007,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Regenerating prompt for patient ${prompt.patientId}`);
           const newPrompt = await generatePrompt(patientData, batchId, promptText);
           
-          // Update in the database
-          await storage.updatePatientPrompt(prompt.id, { prompt: newPrompt });
+          // Extract reasoning from the generated prompt
+          const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+          
+          // Update in the database with both the full prompt and the extracted reasoning
+          await storage.updatePatientPrompt(prompt.id, { 
+            prompt: newPrompt,
+            reasoning: reasoning 
+          });
           successCount++;
         } catch (err) {
           console.error(`Error regenerating prompt for patient ${prompt.patientId}:`, err);

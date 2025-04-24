@@ -30,7 +30,7 @@ export function getTokenUsageStats() {
 }
 
 // Utility function to extract reasoning from prompt text
-function extractReasoning(promptText: string): { displayPrompt: string, reasoning: string } {
+export function extractReasoning(promptText: string): { displayPrompt: string, reasoning: string } {
   // First check for markdown-formatted reasoning with bold formatting
   const markdownReasoningMatch = promptText.match(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/);
   
