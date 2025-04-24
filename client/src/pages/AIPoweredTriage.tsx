@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -27,12 +27,80 @@ interface PatientPrompt {
   status: 'healthy' | 'alert';
 }
 
+// Utility function to extract reasoning from prompt text
+const extractReasoning = (promptText: string): { displayPrompt: string, reasoning: string } => {
+  // First check for explicitly marked reasoning section with various formats
+  // Format 1: **Reasoning:** text
+  const markdownReasoningMatch = promptText.match(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/);
+  
+  if (markdownReasoningMatch) {
+    // Extract the reasoning text
+    const reasoning = markdownReasoningMatch[1].trim();
+    
+    // Remove the reasoning section from the prompt
+    const displayPrompt = promptText.replace(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/, '').trim();
+    
+    return { displayPrompt, reasoning };
+  }
+  
+  // Format 2: Reasoning: text
+  const plainReasoningMatch = promptText.match(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i);
+  
+  if (plainReasoningMatch) {
+    // Extract the reasoning text
+    const reasoning = plainReasoningMatch[1].trim();
+    
+    // Remove the reasoning section from the prompt
+    const displayPrompt = promptText.replace(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
+    
+    return { displayPrompt, reasoning };
+  }
+  
+  // Format 3: **Reasoning** text or **Reasoning**:text
+  const boldReasoningMatch = promptText.match(/\*\*Reasoning\*\*:?\s*([\s\S]*?)(\n\s*$|$)/i);
+  
+  if (boldReasoningMatch) {
+    // Extract the reasoning text
+    const reasoning = boldReasoningMatch[1].trim();
+    
+    // Remove the reasoning section from the prompt
+    const displayPrompt = promptText.replace(/\*\*Reasoning\*\*:?\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
+    
+    return { displayPrompt, reasoning };
+  }
+  
+  // If no specific format is found, check for a section labeled with anything like "Reasoning"
+  const lines = promptText.trim().split(/\n/);
+  
+  // Look for any heading that might be a reasoning section in the latter half of the document
+  const reasoningHeaderIndex = lines.findIndex((line, index) => 
+    index > lines.length / 2 && ( // Only look in the second half of the content
+      line.toLowerCase().includes("reasoning") || 
+      line.toLowerCase().includes("rationale") ||
+      line.toLowerCase().includes("justification") ||
+      (line.startsWith("**") && line.endsWith("**")) // Any bold section header
+    )
+  );
+  
+  if (reasoningHeaderIndex !== -1) {
+    // Extract everything after the reasoning header
+    const displayPrompt = lines.slice(0, reasoningHeaderIndex).join('\n').trim();
+    const reasoning = lines.slice(reasoningHeaderIndex).join('\n').trim();
+    
+    return { displayPrompt, reasoning };
+  }
+  
+  // Fallback: If no reasoning section is found at all, return original with no reasoning
+  return { displayPrompt: promptText, reasoning: "No explicit reasoning provided." };
+};
+
 export default function AIPoweredTriage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPrompt, setSelectedPrompt] = useState<PatientPrompt | null>(null);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [reasoningDialogOpen, setReasoningDialogOpen] = useState(false);
+  const [processedPrompts, setProcessedPrompts] = useState<PatientPrompt[]>([]);
 
   // Query to get the latest batch
   const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
@@ -65,6 +133,27 @@ export default function AIPoweredTriage() {
     },
     enabled: !!latestBatch?.batchId
   });
+
+  // Process prompts to extract reasoning when they change
+  useEffect(() => {
+    if (prompts) {
+      const processed = prompts.map(prompt => {
+        // If the prompt already has reasoning, use it
+        if (prompt.reasoning && prompt.reasoning.trim().length > 0) {
+          return prompt;
+        }
+        
+        // Otherwise extract reasoning from the prompt text
+        const { displayPrompt, reasoning } = extractReasoning(prompt.promptText);
+        return {
+          ...prompt,
+          promptText: displayPrompt,
+          reasoning: reasoning
+        };
+      });
+      setProcessedPrompts(processed);
+    }
+  }, [prompts]);
 
   // Mutation for regenerating prompts
   const regeneratePromptMutation = useMutation({
@@ -104,9 +193,9 @@ export default function AIPoweredTriage() {
   });
 
   // Deduplicate prompts by patient name
-  const uniquePatientPrompts = prompts ? 
+  const uniquePatientPrompts = processedPrompts ? 
     Object.values(
-      prompts.reduce((acc, prompt) => {
+      processedPrompts.reduce((acc, prompt) => {
         // Use patient name as the unique key
         if (!acc[prompt.patientName] || prompt.id > acc[prompt.patientName].id) {
           // Keep the latest prompt (highest ID) for each patient
@@ -323,7 +412,11 @@ export default function AIPoweredTriage() {
           </DialogHeader>
           
           <div className="mt-4 bg-gray-50 p-4 rounded-md prose prose-sm max-w-none">
-            <ReactMarkdown>{selectedPrompt?.reasoning || "No reasoning available for this prompt."}</ReactMarkdown>
+            {selectedPrompt?.reasoning && selectedPrompt.reasoning.trim().length > 0 ? (
+              <ReactMarkdown>{selectedPrompt.reasoning}</ReactMarkdown>
+            ) : (
+              <p>No reasoning provided for this prompt.</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
@@ -333,11 +426,13 @@ export default function AIPoweredTriage() {
             >
               Close
             </Button>
-            <Button 
-              onClick={() => selectedPrompt?.reasoning && handleCopyPrompt(selectedPrompt.reasoning)}
-            >
-              <Copy className="w-4 h-4 mr-2" /> Copy Text
-            </Button>
+            {selectedPrompt?.reasoning && selectedPrompt.reasoning.trim().length > 0 && (
+              <Button 
+                onClick={() => selectedPrompt?.reasoning && handleCopyPrompt(selectedPrompt.reasoning)}
+              >
+                <Copy className="w-4 h-4 mr-2" /> Copy Text
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
