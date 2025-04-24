@@ -87,10 +87,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const patientData = await processExcelFile(file.buffer);
         console.log(`Successfully processed ${patientData.length} rows from Excel file`);
 
+        // Deduplicate patients by name to ensure we only process each patient once
+        const patientMap = new Map<string, typeof patientData[0]>();
+        
+        // First pass: organize patients by name and keep only the most complete record
+        for (const patient of patientData) {
+          const patientName = patient.name || 'Unknown';
+          
+          // If this is a duplicate patient name, decide which record to keep
+          if (patientMap.has(patientName)) {
+            const existing = patientMap.get(patientName)!;
+            
+            // Determine if the new record has more complete data
+            const existingVarsCount = existing.variables ? Object.keys(existing.variables).length : 0;
+            const newVarsCount = patient.variables ? Object.keys(patient.variables).length : 0;
+            const existingIssuesCount = existing.issues ? existing.issues.length : 0;
+            const newIssuesCount = patient.issues ? patient.issues.length : 0;
+            
+            // Keep the record with more data points
+            if (newVarsCount > existingVarsCount || newIssuesCount > existingIssuesCount) {
+              console.log(`Found more detailed record for ${patientName}, replacing previous entry`);
+              patientMap.set(patientName, patient);
+            }
+          } else {
+            // First time seeing this patient
+            patientMap.set(patientName, patient);
+          }
+        }
+        
+        // Get unique patient records
+        const uniquePatients = Array.from(patientMap.values());
+        console.log(`Filtered ${patientData.length} rows to ${uniquePatients.length} unique patients`);
+        
+        // Update batch record with total unique patients
+        await db.execute(SQL`
+          UPDATE patient_batches 
+          SET total_patients = ${uniquePatients.length}
+          WHERE batch_id = ${batchId}
+        `);
+
         const successfullyStored = [];
 
-        // Process each patient record
-        for (const patient of patientData) {
+        // Process each unique patient record
+        for (const patient of uniquePatients) {
           try {
             console.log(`Processing patient: ${patient.name || 'Unknown'}`);
             
@@ -109,6 +148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Generating prompt for patient ${patientId}...`);
             // Generate a prompt for the patient
             const prompt = await generatePrompt(patientWithMetadata, batchId);
+            
+            // Extract reasoning from the generated prompt
+            const { displayPrompt, reasoning } = extractReasoning(prompt);
 
             console.log(`Storing prompt for patient ${patientId}...`);
             // Create the patient prompt record in the database
@@ -119,6 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               age: patient.age || 0,
               condition: patient.condition || "Unknown",
               prompt,
+              reasoning,
               isAlert: patient.isAlert ? "true" : "false",
               healthStatus: patient.healthStatus || "healthy",
               rawData: patientWithMetadata,
@@ -1828,10 +1871,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
       
-      const prompts = await storage.getPatientPromptsByBatchId(batchId);
-      console.log(`Retrieved ${prompts.length} prompts from storage`);
+      // Get all prompts for the specified batch
+      const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
+      console.log(`Retrieved ${allPrompts.length} total prompts from storage`);
       
-      const transformedPrompts = prompts.map(prompt => {
+      // First deduplicate patients by name
+      const patientMap = new Map<string, typeof allPrompts[0]>();
+      
+      // Keep only the most recent prompt for each patient
+      for (const prompt of allPrompts) {
+        const patientName = prompt.name;
+        if (!patientMap.has(patientName) || patientMap.get(patientName)!.id < prompt.id) {
+          patientMap.set(patientName, prompt);
+        }
+      }
+      
+      // Convert to array of unique patient prompts
+      const uniquePrompts = Array.from(patientMap.values());
+      console.log(`Filtered to ${uniquePrompts.length} unique patients`);
+      
+      // Transform the prompts for client consumption
+      const transformedPrompts = uniquePrompts.map(prompt => {
         console.log(`Transforming prompt for patient: ${prompt.name}`);
         
         // Extract reasoning if it exists in the database
@@ -1880,16 +1940,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Regenerate a single prompt
   app.post("/api/prompts/:id/regenerate", async (req, res) => {
     try {
+      // Get the prompt ID from the request parameters
       const promptId = parseInt(req.params.id);
+      console.log(`Request to regenerate prompt ID: ${promptId}`);
+      
+      // Find the specific prompt by ID
       const prompt = await storage.getPatientPromptById(promptId);
       
       if (!prompt) {
+        console.error(`Prompt with ID ${promptId} not found`);
         return res.status(404).json({ error: "Prompt not found" });
       }
       
       // Get the batch ID to ensure we're using the correct system prompt
       const batchId = prompt.batchId;
-      console.log(`Regenerating single prompt ${promptId} for batch ${batchId}`);
+      const patientName = prompt.name;
+      console.log(`Regenerating prompt ${promptId} for patient "${patientName}" in batch ${batchId}`);
+      
+      // Get all prompts for this batch and this patient
+      const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
+      const patientPrompts = allPrompts.filter(p => p.name === patientName);
+      
+      // Find the most recent prompt for this patient (should be the one with the highest ID)
+      let mostRecentPrompt = prompt;
+      for (const p of patientPrompts) {
+        if (p.id > mostRecentPrompt.id) {
+          mostRecentPrompt = p;
+        }
+      }
+      
+      console.log(`Using most recent prompt (ID: ${mostRecentPrompt.id}) for patient "${patientName}"`);
       
       // Try to get the system prompt from database first, fall back to default
       const systemPrompt = await storage.getSystemPrompt(batchId);
@@ -1897,28 +1977,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Extract patient data from the stored prompt
       let patientData: any = {
-        patientId: prompt.patientId,
-        name: prompt.name,
-        age: prompt.age,
-        condition: prompt.condition,
-        healthStatus: prompt.healthStatus,
-        isAlert: prompt.isAlert === "true"
+        patientId: mostRecentPrompt.patientId,
+        name: mostRecentPrompt.name,
+        age: mostRecentPrompt.age,
+        condition: mostRecentPrompt.condition,
+        healthStatus: mostRecentPrompt.healthStatus,
+        isAlert: mostRecentPrompt.isAlert === "true"
       };
       
       // Extract raw data if available
-      if (prompt.rawData) {
-        patientData = typeof prompt.rawData === "string" 
-          ? JSON.parse(prompt.rawData) 
-          : prompt.rawData;
+      if (mostRecentPrompt.rawData) {
+        patientData = typeof mostRecentPrompt.rawData === "string" 
+          ? JSON.parse(mostRecentPrompt.rawData) 
+          : mostRecentPrompt.rawData;
       }
       
       // Generate new prompt using our main generatePrompt function
+      console.log(`Generating new prompt for patient "${patientName}"`);
       const newPrompt = await generatePrompt(patientData, batchId, systemPromptText);
       
       // Extract reasoning from the generated prompt
       const { displayPrompt, reasoning } = extractReasoning(newPrompt);
       
       // Update the prompt in the database
+      console.log(`Updating prompt ${promptId} in database`);
       const updatedPrompt = await storage.updatePatientPrompt(promptId, {
         prompt: newPrompt,
         reasoning: reasoning
@@ -1970,10 +2052,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Using system prompt (${systemPrompt ? 'from database' : 'default'}): ${promptText.substring(0, 50)}...`);
       
       // Get all prompts for the specified batch
-      const prompts = await storage.getPatientPromptsByBatchId(batchId);
-      console.log(`Found ${prompts.length} prompts to regenerate for batch ${batchId}`);
+      const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
+      console.log(`Found ${allPrompts.length} total prompts for batch ${batchId}`);
       
-      if (prompts.length === 0) {
+      if (allPrompts.length === 0) {
         return res.status(404).json({
           success: false,
           message: `No prompts found for batch ${batchId}`,
@@ -1982,11 +2064,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Create a map to get unique patients by name
+      // This ensures we only have one prompt per patient, using the latest prompt version
+      const patientMap = new Map<string, typeof allPrompts[0]>();
+      
+      // Get the most recent prompt for each patient (by ID)
+      for (const prompt of allPrompts) {
+        const patientName = prompt.name;
+        
+        if (!patientMap.has(patientName) || patientMap.get(patientName)!.id < prompt.id) {
+          patientMap.set(patientName, prompt);
+        }
+      }
+      
+      // Convert the map values to an array of unique patient prompts
+      const uniquePrompts = Array.from(patientMap.values());
+      console.log(`Found ${uniquePrompts.length} unique patients to regenerate prompts for`);
+      
       let successCount = 0;
       
-      for (const prompt of prompts) {
+      for (const prompt of uniquePrompts) {
         try {
-          console.log(`Processing prompt ${prompt.id} for patient ${prompt.patientId}`);
+          console.log(`Processing prompt ${prompt.id} for patient ${prompt.name}`);
           
           // Get the raw patient data
           let patientData: any = {
@@ -2004,7 +2103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Generate new prompt using our main generatePrompt function with the current system prompt
-          console.log(`Regenerating prompt for patient ${prompt.patientId}`);
+          console.log(`Regenerating prompt for patient ${prompt.name}`);
           const newPrompt = await generatePrompt(patientData, batchId, promptText);
           
           // Extract reasoning from the generated prompt
@@ -2017,16 +2116,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           successCount++;
         } catch (err) {
-          console.error(`Error regenerating prompt for patient ${prompt.patientId}:`, err);
+          console.error(`Error regenerating prompt for patient ${prompt.name}:`, err);
         }
       }
 
-      console.log(`Successfully regenerated ${successCount} of ${prompts.length} prompts`);
+      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts`);
       res.status(200).json({ 
         success: true, 
-        message: `Successfully regenerated ${successCount} of ${prompts.length} prompts`,
+        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts`,
         regenerated: successCount,
-        total: prompts.length
+        total: uniquePrompts.length
       });
     } catch (err) {
       console.error("Error regenerating all prompts:", err);
