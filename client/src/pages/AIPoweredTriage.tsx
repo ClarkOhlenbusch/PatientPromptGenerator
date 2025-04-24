@@ -180,14 +180,34 @@ export default function AIPoweredTriage() {
   // Mutation for regenerating all prompts
   const regenerateAllMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/prompts/regenerate-all");
+      if (!latestBatch?.batchId) {
+        throw new Error("No batch found to regenerate");
+      }
+      
+      console.log(`Regenerating all prompts for batch: ${latestBatch.batchId}`);
+      const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Regeneration result:", data);
+      // Invalidate both general prompts query and the specific batch query
       queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
+      if (latestBatch?.batchId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
+      }
+      
       toast({
         title: "Success",
-        description: "All prompts regenerated successfully",
+        description: data.regenerated 
+          ? `Successfully regenerated ${data.regenerated}/${data.total} prompts`
+          : "All prompts regenerated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to regenerate prompts: ${error.message}`,
+        variant: "destructive"
       });
     }
   });
