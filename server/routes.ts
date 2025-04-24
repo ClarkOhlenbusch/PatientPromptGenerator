@@ -9,6 +9,8 @@ import {
   generatePrompt,
   getTokenUsageStats,
   generatePromptWithTemplate,
+  getDefaultSystemPrompt,
+  setDefaultSystemPrompt,
 } from "./lib/openai";
 import twilio from "twilio";
 import { createObjectCsvStringifier } from "csv-writer";
@@ -339,6 +341,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         message: `Error getting token usage stats: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+  
+  // Get simplified core prompt - simplified API
+  app.get("/api/system-prompt", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      // Get the current system prompt from the database if available
+      const systemPrompt = await storage.getSystemPrompt();
+      
+      // If no custom prompt exists in DB, return the default one from openai.ts
+      if (!systemPrompt) {
+        return res.status(200).json({
+          prompt: getDefaultSystemPrompt(),
+        });
+      }
+
+      return res.status(200).json({
+        prompt: systemPrompt.prompt,
+      });
+    } catch (err) {
+      console.error("Error getting system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error getting system prompt: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Update system prompt with simplified approach
+  app.post("/api/system-prompt", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { prompt } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt is required",
+        });
+      }
+
+      // Save to database
+      const updatedPrompt = await storage.updateSystemPrompt(prompt);
+      
+      // Also update the in-memory version that's used directly by the OpenAI module
+      setDefaultSystemPrompt(prompt);
+      
+      console.log("Core prompt updated successfully");
+
+      return res.status(200).json({
+        success: true,
+        message: "System prompt updated successfully",
+        systemPrompt: updatedPrompt,
+      });
+    } catch (err) {
+      console.error("Error updating system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating system prompt: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });
@@ -1844,51 +1917,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Regenerate all prompts
   app.post("/api/prompts/regenerate-all", async (req, res) => {
     try {
-      const prompts = await storage.getPatientPromptsByBatchId(req.query.batchId as string);
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+      
+      const batchId = req.query.batchId as string;
+      console.log(`Regenerating all prompts for batch ${batchId || 'latest'}`);
+      
+      // Get the current system prompt (either from DB or the default)
+      const systemPrompt = await storage.getSystemPrompt();
+      const promptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
+      
+      // Get all prompts for the batch
+      const prompts = await storage.getPatientPromptsByBatchId(batchId);
+      console.log(`Found ${prompts.length} prompts to regenerate`);
+      
+      let successCount = 0;
       
       for (const prompt of prompts) {
         try {
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [
-              {
-                role: "system",
-                content: `You are a healthcare assistant generating personalized messages for patients. 
-                         Focus on their specific health conditions and measurements.
-                         If any measurements are outside normal ranges, address them specifically.
-                         Be encouraging but clear about any concerns.`
-              },
-              {
-                role: "user",
-                content: `Generate a personalized health message for a patient with the following details:
-                         Name: ${prompt.name}
-                         Age: ${prompt.age}
-                         Condition: ${prompt.condition}
-                         Health Status: ${prompt.healthStatus}
-                         Alert Status: ${prompt.isAlert}
-                         Raw Data: ${JSON.stringify(prompt.rawData)}
-                         
-                         Also provide reasoning for your message.
-                         Format the response as JSON with 'message' and 'reasoning' fields.`
-              }
-            ]
-          });
-
-          const response = JSON.parse(completion.choices[0].message.content);
+          // Get the raw patient data
+          let patientData: any = {
+            patientId: prompt.patientId,
+            name: prompt.name,
+            age: prompt.age,
+            condition: prompt.condition,
+          };
           
-          await storage.updatePatientPrompt(prompt.id, {
-            prompt: response.message,
-            reasoning: response.reasoning
-          });
-        } catch (error) {
-          console.error(`Error regenerating prompt ${prompt.id}:`, error);
+          // Extract raw data if available
+          if (prompt.rawData) {
+            patientData = typeof prompt.rawData === "string"
+              ? JSON.parse(prompt.rawData)
+              : prompt.rawData;
+          }
+          
+          // Generate new prompt using our main generatePrompt function with the current system prompt
+          console.log(`Regenerating prompt for patient ${prompt.patientId}`);
+          const newPrompt = await generatePrompt(patientData, batchId, promptText);
+          
+          // Update in the database
+          await storage.updatePatientPrompt(prompt.id, { prompt: newPrompt });
+          successCount++;
+        } catch (err) {
+          console.error(`Error regenerating prompt for patient ${prompt.patientId}:`, err);
         }
       }
 
-      res.json({ success: true, count: prompts.length });
-    } catch (error) {
-      console.error("Error regenerating all prompts:", error);
-      res.status(500).json({ error: "Failed to regenerate prompts" });
+      console.log(`Successfully regenerated ${successCount} of ${prompts.length} prompts`);
+      res.status(200).json({ 
+        success: true, 
+        message: `Successfully regenerated ${successCount} of ${prompts.length} prompts`,
+        regenerated: successCount,
+        total: prompts.length
+      });
+    } catch (err) {
+      console.error("Error regenerating all prompts:", err);
+      res.status(500).json({ 
+        success: false, 
+        message: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}` 
+      });
     }
   });
 
