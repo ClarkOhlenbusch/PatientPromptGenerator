@@ -345,7 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get simplified core prompt - simplified API
+  // Get simplified core prompt - ALWAYS returns the exact prompt from openai.ts
   app.get("/api/system-prompt", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -354,18 +354,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ success: false, message: "Authentication required" });
       }
 
-      // Get the current system prompt from the database if available
-      const systemPrompt = await storage.getSystemPrompt();
+      // Always return the exact prompt directly from openai.ts file
+      const defaultPrompt = getDefaultSystemPrompt();
+      console.log("Returning default system prompt from openai.ts:", defaultPrompt.substring(0, 50) + "...");
       
-      // If no custom prompt exists in DB, return the default one from openai.ts
-      if (!systemPrompt) {
-        return res.status(200).json({
-          prompt: getDefaultSystemPrompt(),
-        });
-      }
-
       return res.status(200).json({
-        prompt: systemPrompt.prompt,
+        prompt: defaultPrompt,
       });
     } catch (err) {
       console.error("Error getting system prompt:", err);
