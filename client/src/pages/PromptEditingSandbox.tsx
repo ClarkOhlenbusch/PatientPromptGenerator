@@ -54,18 +54,38 @@ export default function PromptEditingSandbox() {
     }
   });
 
+  // Get the latest batch ID for regeneration
+  const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
+    queryKey: ["/api/batches/latest"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/batches/latest");
+      return await res.json();
+    }
+  });
+
   // Regenerate all prompts with updated system prompt
   const regeneratePromptsMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/prompts/regenerate-all");
+      // Make sure to include the latest batch ID
+      if (!latestBatch?.batchId) {
+        throw new Error("No batch found to regenerate");
+      }
+      
+      console.log(`Regenerating prompts for batch: ${latestBatch.batchId}`);
+      const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Regeneration result:", data);
       toast({
         title: "Success",
-        description: "All patient reports have been regenerated with your new prompt",
+        description: `Patient reports regenerated: ${data.regenerated}/${data.total}`,
       });
+      // Invalidate both the prompts query AND the specific batch query
       queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
+      if (latestBatch?.batchId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
+      }
     },
     onError: (error: Error) => {
       toast({

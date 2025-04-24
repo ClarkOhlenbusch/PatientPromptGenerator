@@ -1822,18 +1822,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const batchId = req.query.batchId as string;
       console.log(`Using batchId: ${batchId}`);
       
+      if (!batchId) {
+        console.log("No batchId provided, returning empty array");
+        return res.json([]);
+      }
+      
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
       console.log(`Retrieved ${prompts.length} prompts from storage`);
       
       const transformedPrompts = prompts.map(prompt => {
         console.log(`Transforming prompt for patient: ${prompt.name}`);
+        
+        // Extract reasoning if it exists in the database
+        let reasoning = prompt.reasoning;
+        let displayPrompt = prompt.prompt;
+        
+        // If no explicit reasoning exists, try to extract it from the prompt text
+        if (!reasoning || reasoning.trim().length === 0) {
+          // Look for Markdown reasoning format: **Reasoning:** text
+          const markdownMatch = prompt.prompt.match(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/i);
+          if (markdownMatch) {
+            reasoning = markdownMatch[1].trim();
+            displayPrompt = prompt.prompt.replace(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
+          } else {
+            // Look for plain reasoning format: Reasoning: text
+            const plainMatch = prompt.prompt.match(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i);
+            if (plainMatch) {
+              reasoning = plainMatch[1].trim();
+              displayPrompt = prompt.prompt.replace(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
+            } else {
+              reasoning = "No reasoning provided";
+            }
+          }
+        }
+        
         return {
           id: prompt.id,
           patientName: prompt.name,
           age: prompt.age,
           condition: prompt.condition,
-          promptText: prompt.prompt,
-          reasoning: prompt.reasoning || "No reasoning provided",
+          promptText: displayPrompt,
+          reasoning: reasoning,
           isAlert: prompt.isAlert === "true",
           status: prompt.healthStatus || "alert"
         };
@@ -1917,21 +1946,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ success: false, message: "Authentication required" });
       }
       
+      // Extract batchId from query parameters
       const batchId = req.query.batchId as string;
       console.log(`Regenerating all prompts for batch ${batchId || 'latest'}`);
       
-      // Get the current system prompt (either from DB or the default)
-      const systemPrompt = await storage.getSystemPrompt();
-      const promptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
+      // Validate that we have a batch ID
+      if (!batchId) {
+        console.error("No batch ID provided for regeneration");
+        return res.status(400).json({ 
+          success: false,
+          message: "No batch ID provided. Please specify which batch to regenerate."
+        });
+      }
       
-      // Get all prompts for the batch
+      // Always get the fresh default prompt directly from openai.ts
+      // This ensures we're using the most current prompt definition
+      const promptText = getDefaultSystemPrompt();
+      console.log(`Using core prompt from openai.ts: ${promptText.substring(0, 50)}...`);
+      
+      // Get all prompts for the specified batch
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
-      console.log(`Found ${prompts.length} prompts to regenerate`);
+      console.log(`Found ${prompts.length} prompts to regenerate for batch ${batchId}`);
+      
+      if (prompts.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: `No prompts found for batch ${batchId}`,
+          regenerated: 0,
+          total: 0
+        });
+      }
       
       let successCount = 0;
       
       for (const prompt of prompts) {
         try {
+          console.log(`Processing prompt ${prompt.id} for patient ${prompt.patientId}`);
+          
           // Get the raw patient data
           let patientData: any = {
             patientId: prompt.patientId,
