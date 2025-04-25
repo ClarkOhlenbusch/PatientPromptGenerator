@@ -100,15 +100,29 @@ export async function initializeDatabase() {
       );
     `);
 
-    // Check if sessions table exists, if not create it
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS "session" (
-        "sid" varchar NOT NULL COLLATE "default",
-        "sess" json NOT NULL,
-        "expire" timestamp(6) NOT NULL,
-        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
-      );
+    // Check if session table exists
+    const sessionCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'session'
+      ) as exists
     `);
+    
+    // Only create session table if it doesn't exist
+    if (!sessionCheck.rows[0].exists) {
+      console.log('Creating session table for connect-pg-simple');
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "session" (
+          "sid" varchar NOT NULL COLLATE "default",
+          "sess" json NOT NULL,
+          "expire" timestamp(6) NOT NULL,
+          CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+        );
+      `);
+    } else {
+      console.log('Session table already exists, skipping creation');
+    }
     
     // Check if any users exist, if not create test user
     const userCheck = await db.execute(sql`SELECT COUNT(*) FROM users`);

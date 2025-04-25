@@ -67,12 +67,13 @@ export class DatabaseStorage implements IStorage {
     try {
       const pgSession = connectPg(session);
       this.sessionStore = new pgSession({
-        tableName: 'user_sessions',
+        tableName: 'session', // Using the standard session table name that already exists
         pool: pool,
         schemaName: 'public',
-        createTableIfMissing: true
+        // Don't try to create the table since it already exists
+        createTableIfMissing: false
       });
-      console.log('PostgreSQL session store initialized');
+      console.log('PostgreSQL session store initialized with existing session table');
     } catch (error) {
       console.error('Failed to initialize PostgreSQL session store:', error);
       console.warn('Falling back to memory store for sessions');
