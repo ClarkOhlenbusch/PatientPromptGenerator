@@ -60,7 +60,7 @@ export default function AuthPage() {
               </div>
             </div>
             <h2 className="mt-6 text-2xl font-bold tracking-tight text-gray-900">
-              Welcome to Caretaker Prompt Generator
+              Welcome to Patient Prompt Generator
             </h2>
             <p className="mt-2 text-sm text-gray-600">
               Sign in with your admin credentials to access the system.

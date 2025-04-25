@@ -18,34 +18,6 @@ export interface VitalStats {
   alertCount: number;
 }
 
-// Add these interfaces at the top with the other interfaces
-interface ChartPoint {
-  x: number;
-  y: number;
-  value: number;
-  isAlert: boolean;
-  date: Date;
-}
-
-interface YAxisLabel {
-  value: number;
-  y: number;
-}
-
-interface XAxisLabel {
-  x: number;
-  date: Date;
-  label: string;
-}
-
-interface ChartData {
-  points: ChartPoint[];
-  yLabels: YAxisLabel[];
-  xLabels: XAxisLabel[];
-  minValue: number;
-  maxValue: number;
-}
-
 /**
  * Generate sample vitals data for a patient report
  * This function simulates what you'd get from a real database of patient readings
@@ -60,23 +32,10 @@ export function generateSampleVitals(patientData: any, days = 30): PatientVitals
   // Base values and thresholds vary by patient condition
   const isHealthy = patientData.healthStatus === 'healthy';
   
-  // Use patient ID as seed for deterministic random values
-  // This ensures the same patient always gets the same "random" data
-  const patientSeed = patientData.patientId ? 
-    patientData.patientId.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) : 
-    (patientData.name ? patientData.name.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) : 12345);
-  
-  // Simple deterministic random function using the seed
-  const seededRandom = (index: number) => {
-    const x = Math.sin(patientSeed + index) * 10000;
-    return x - Math.floor(x);
-  };
-  
-  // Base values - slightly adjust based on patient ID for consistency
-  const seedOffset = (seededRandom(0) - 0.5) * 10;
-  const hrBase = (isHealthy ? 72 : 85) + Math.round(seedOffset);
-  const o2Base = (isHealthy ? 96 : 91) + Math.round(seedOffset / 5);
-  const glucoseBase = (isHealthy ? 110 : 140) + Math.round(seedOffset * 2);
+  // Base values
+  const hrBase = isHealthy ? 72 : 85;
+  const o2Base = isHealthy ? 96 : 91;
+  const glucoseBase = isHealthy ? 110 : 140;
   
   // Thresholds
   const hrHighThreshold = 100; 
@@ -93,19 +52,19 @@ export function generateSampleVitals(patientData: any, days = 30): PatientVitals
     const currentDate = new Date(startDate);
     currentDate.setDate(startDate.getDate() + i);
     
-    // Heart rate: more variation for unhealthy patients but deterministic
+    // Heart rate: more variation for unhealthy patients
     const hrVariation = isHealthy ? 10 : 25;
-    const heartRate = Math.round(hrBase + (seededRandom(i*3) * 2 - 1) * hrVariation);
+    const heartRate = Math.round(hrBase + (Math.random() * 2 - 1) * hrVariation);
     const isHeartRateAlert = heartRate > hrHighThreshold || heartRate < hrLowThreshold;
     
     // Oxygen: less variation but lower for unhealthy patients
     const o2Variation = isHealthy ? 2 : 3;
-    const oxygen = Math.round((o2Base + (seededRandom(i*3+1) * 2 - 1) * o2Variation) * 10) / 10;
+    const oxygen = Math.round((o2Base + (Math.random() * 2 - 1) * o2Variation) * 10) / 10;
     const isOxygenAlert = oxygen < o2LowThreshold;
     
     // Glucose: more variation for unhealthy patients
     const glucoseVariation = isHealthy ? 20 : 40;
-    const glucose = Math.round(glucoseBase + (seededRandom(i*3+2) * 2 - 1) * glucoseVariation);
+    const glucose = Math.round(glucoseBase + (Math.random() * 2 - 1) * glucoseVariation);
     const isGlucoseAlert = glucose > glucoseHighThreshold;
     
     vitals.heartRate.push({
@@ -168,11 +127,10 @@ export function generateChartPoints(
   height: number, 
   padding: number = 40
 ) {
-  // Calculate value ranges
   const values = readings.map(r => r.value);
-  const minValue = Math.floor(Math.min(...values) - 5); // Add some padding
-  const maxValue = Math.ceil(Math.max(...values) + 5);
-  const valueRange = maxValue - minValue;
+  const min = Math.min(...values) - (Math.min(...values) * 0.05); // 5% padding
+  const max = Math.max(...values) + (Math.max(...values) * 0.05); // 5% padding
+  const range = max - min;
   
   // Available space for plotting
   const plotWidth = width - (padding * 2);
@@ -180,58 +138,32 @@ export function generateChartPoints(
   
   // Scale factors
   const xScale = plotWidth / (readings.length - 1);
-  const yScale = plotHeight / valueRange;
+  const yScale = plotHeight / range;
   
-  // Generate Y-axis labels (5 evenly spaced values)
-  const yLabels = [];
-  for (let i = 0; i <= 4; i++) {
-    const value = Math.round(minValue + (valueRange * (i / 4)));
-    const y = height - (padding + ((value - minValue) * yScale));
-    yLabels.push({ value, y });
-  }
-  
-  // Generate X-axis labels (dates)
-  const xLabels = [];
-  const dateStep = Math.max(1, Math.floor(readings.length / 5));
-  for (let i = 0; i < readings.length; i += dateStep) {
-    const x = padding + (i * xScale);
-    xLabels.push({
+  // Generate coordinates
+  return readings.map((reading, index) => {
+    const x = padding + (index * xScale);
+    const y = height - (padding + ((reading.value - min) * yScale)); // Flip Y axis
+    
+    return {
       x,
-      date: readings[i].date,
-      label: readings[i].date.toLocaleDateString()
-    });
-  }
-  
-  // Generate coordinates with labels
-  return {
-    points: readings.map((reading, index) => {
-      const x = padding + (index * xScale);
-      const y = height - (padding + ((reading.value - minValue) * yScale));
-      
-      return {
-        x,
-        y,
-        value: reading.value,
-        isAlert: reading.isAlert,
-        date: reading.date
-      };
-    }),
-    yLabels,
-    xLabels,
-    minValue,
-    maxValue
-  };
+      y,
+      value: reading.value,
+      isAlert: reading.isAlert,
+      date: reading.date
+    };
+  });
 }
 
 /**
  * Create canvas commands to draw a line chart
  */
 export function createLineChart(
-  chartData: ChartData,
-  width: number,
-  height: number,
-  unit: string,
-  highThreshold: number | null = null,
+  points: any[], 
+  width: number, 
+  height: number, 
+  unit: string, 
+  highThreshold: number | null = null, 
   lowThreshold: number | null = null
 ) {
   const canvasCommands = [];
@@ -243,118 +175,22 @@ export function createLineChart(
   canvasCommands.push({ type: 'line', x1: 40, y1: height - 40, x2: width - 40, y2: height - 40, lineWidth: 1, color: '#666' }); // x-axis
   canvasCommands.push({ type: 'line', x1: 40, y1: 40, x2: 40, y2: height - 40, lineWidth: 1, color: '#666' }); // y-axis
   
-  // Add X-axis label (centered below the axis)
-  canvasCommands.push({
-    type: 'text',
-    x: width / 2,
-    y: height - 10,
-    text: 'Measurement Date (DD/MM)',
-    align: 'center',
-    fontSize: 10,
-    color: '#666',
-    bold: true
-  });
-
-  // Add Y-axis label (rotated text)
-  const yAxisText = `${unit} - Measurement Value`;
-  canvasCommands.push({
-    type: 'text',
-    x: 12,
-    y: height / 2,
-    text: yAxisText,
-    align: 'center',
-    fontSize: 10,
-    color: '#666',
-    bold: true,
-    rotate: -90 // Rotate text 90 degrees counter-clockwise
-  });
-  
-  // Add a chart title with the measurement unit
-  let chartTitle = '';
-  if (unit === 'bpm') {
-    chartTitle = 'Heart Rate (Beats Per Minute)';
-  } else if (unit === '%') {
-    chartTitle = 'Oxygen Saturation (Percentage)';
-  } else if (unit === 'mg/dL') {
-    chartTitle = 'Blood Glucose (mg/dL)';
-  }
-  
-  canvasCommands.push({
-    type: 'text',
-    x: width / 2,
-    y: 20,
-    text: chartTitle,
-    align: 'center',
-    fontSize: 12,
-    color: '#333',
-    bold: true
-  });
-  
-  // Draw Y-axis labels and grid lines
-  chartData.yLabels.forEach((label: YAxisLabel) => {
-    // Grid line
+  // Draw line connecting points
+  for (let i = 1; i < points.length; i++) {
     canvasCommands.push({
       type: 'line',
-      x1: 40,
-      y1: label.y,
-      x2: width - 40,
-      y2: label.y,
-      lineWidth: 0.5,
-      color: '#ddd'
-    });
-    
-    // Value label
-    canvasCommands.push({
-      type: 'text',
-      x: 35,
-      y: label.y + 4,
-      text: label.value.toString(),
-      align: 'right',
-      fontSize: 8,
-      color: '#666'
-    });
-  });
-  
-  // Draw X-axis labels and grid lines
-  chartData.xLabels.forEach((label: XAxisLabel) => {
-    // Grid line
-    canvasCommands.push({
-      type: 'line',
-      x1: label.x,
-      y1: height - 40,
-      x2: label.x,
-      y2: 40,
-      lineWidth: 0.5,
-      color: '#ddd'
-    });
-    
-    // Date label
-    canvasCommands.push({
-      type: 'text',
-      x: label.x,
-      y: height - 25,
-      text: new Date(label.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
-      align: 'center',
-      fontSize: 8,
-      color: '#666'
-    });
-  });
-  
-  // Draw data points and lines
-  for (let i = 1; i < chartData.points.length; i++) {
-    canvasCommands.push({
-      type: 'line',
-      x1: chartData.points[i-1].x,
-      y1: chartData.points[i-1].y,
-      x2: chartData.points[i].x,
-      y2: chartData.points[i].y,
+      x1: points[i-1].x,
+      y1: points[i-1].y,
+      x2: points[i].x,
+      y2: points[i].y,
       lineWidth: 2,
-      color: '#3498db'
+      color: '#3498db' // Blue line
     });
   }
   
   // Draw points and alerts
-  chartData.points.forEach((point: ChartPoint) => {
+  points.forEach(point => {
+    // Draw small circle for every point
     canvasCommands.push({
       type: 'ellipse',
       x: point.x,
@@ -364,8 +200,9 @@ export function createLineChart(
       color: '#3498db'
     });
     
+    // Draw X for alerts
     if (point.isAlert) {
-      const r = 5;
+      const r = 5; // X size
       canvasCommands.push({
         type: 'line',
         x1: point.x - r,
@@ -373,7 +210,7 @@ export function createLineChart(
         x2: point.x + r,
         y2: point.y + r,
         lineWidth: 2,
-        color: '#e74c3c'
+        color: '#e74c3c' // Red X
       });
       canvasCommands.push({
         type: 'line',
@@ -382,9 +219,65 @@ export function createLineChart(
         x2: point.x + r,
         y2: point.y - r,
         lineWidth: 2,
-        color: '#e74c3c'
+        color: '#e74c3c' // Red X
       });
     }
+  });
+  
+  // Draw y-axis labels
+  const values = points.map(p => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+  const step = Math.ceil(range / 4); // 5 labels total
+  
+  for (let i = 0; i <= 4; i++) {
+    const value = Math.round((min + (step * i)) * 10) / 10; // Round to 1 decimal
+    const y = height - 40 - (((value - min) / range) * (height - 80));
+    
+    canvasCommands.push({
+      type: 'line',
+      x1: 37,
+      y1: y,
+      x2: 43,
+      y2: y,
+      lineWidth: 1,
+      color: '#666'
+    });
+    
+    canvasCommands.push({
+      type: 'text',
+      x: 35,
+      y: y + 4,
+      text: `${value}`,
+      align: 'right',
+      fontSize: 8
+    });
+  }
+  
+  // Add unit label to y-axis
+  canvasCommands.push({
+    type: 'text',
+    x: 15,
+    y: height / 2,
+    text: unit,
+    align: 'center',
+    fontSize: 10
+  });
+  
+  // Draw x-axis labels (dates) - just show a few
+  const dateIndices = [0, Math.floor(points.length / 2), points.length - 1];
+  dateIndices.forEach(i => {
+    const point = points[i];
+    const dateStr = point.date.toLocaleDateString();
+    canvasCommands.push({
+      type: 'text',
+      x: point.x,
+      y: height - 25,
+      text: dateStr,
+      align: 'center',
+      fontSize: 8
+    });
   });
   
   return canvasCommands;
