@@ -250,7 +250,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           condition: patientPrompt.condition,
         };
 
-        const newPrompt = await generatePrompt(rawData as any, batchId);
+        // Fetch the custom system prompt for this batch if available
+        const systemPrompt = await storage.getSystemPrompt(batchId);
+        const customSystemPrompt = systemPrompt?.prompt;
+        
+        console.log(`Regenerating prompt for patient ${patientId} with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
+        
+        const newPrompt = await generatePrompt(rawData as any, batchId, customSystemPrompt);
 
         await storage.updatePatientPrompt(patientPrompt.id, {
           prompt: newPrompt,
@@ -281,6 +287,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ message: "Batch not found or contains no prompts" });
       }
 
+      // Fetch the custom system prompt for this batch if available
+      const systemPrompt = await storage.getSystemPrompt(batchId);
+      const customSystemPrompt = systemPrompt?.prompt;
+      
+      console.log(`Regenerating ${prompts.length} prompts with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
+      
       // Process each prompt in parallel
       await Promise.all(
         prompts.map(async (prompt) => {
@@ -291,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             condition: prompt.condition,
           };
 
-          const newPrompt = await generatePrompt(rawData as any, batchId);
+          const newPrompt = await generatePrompt(rawData as any, batchId, customSystemPrompt);
           await storage.updatePatientPrompt(prompt.id, { prompt: newPrompt });
         }),
       );
@@ -639,10 +651,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Use the openai module to generate a new prompt with the template
-      const { generatePromptWithTemplate } = await import("./lib/openai");
-      const newPrompt = await generatePromptWithTemplate(
+      // Fetch system prompt if available
+      const systemPrompt = await storage.getSystemPrompt(batchId);
+      const customSystemPrompt = systemPrompt?.prompt;
+      
+      console.log(`Regenerating template-based prompt for patient ${patientId} with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
+      
+      // Use the openai module to generate a new prompt using both system prompt and template
+      const { generatePromptWithSystemAndTemplate, getDefaultSystemPrompt } = await import("./lib/openai");
+      const newPrompt = await generatePromptWithSystemAndTemplate(
         patientData,
+        customSystemPrompt || getDefaultSystemPrompt(),
         templateData.template,
       );
 
