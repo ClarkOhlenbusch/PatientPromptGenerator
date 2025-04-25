@@ -8,7 +8,6 @@ import ExcelJS from "exceljs";
 import { 
   generatePrompt,
   getTokenUsageStats,
-  generatePromptWithTemplate,
   getDefaultSystemPrompt,
   setDefaultSystemPrompt,
   extractReasoning
