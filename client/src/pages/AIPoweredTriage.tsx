@@ -181,7 +181,7 @@ export default function AIPoweredTriage() {
         
         return {
           ...prompt,
-          patientName: ((prompt as any).patientName || (prompt as any).name || '').replace(/\(\s*\)/g, '').trim(), // Remove empty parentheses
+          patientName: (prompt as any).patientName || (prompt as any).name, // Handle name field differences 
           promptText: displayPrompt, // Only the prompt part without reasoning
           reasoning: reasoning || (prompt as any).reasoning, // Store the reasoning separately
           status: status, // Map the status field

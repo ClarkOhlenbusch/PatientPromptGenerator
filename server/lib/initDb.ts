@@ -28,9 +28,7 @@ export async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        password TEXT NOT NULL
       );
     `);
 
@@ -39,10 +37,11 @@ export async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS patient_batches (
         id SERIAL PRIMARY KEY,
         batch_id TEXT NOT NULL UNIQUE,
+        file_name TEXT NOT NULL DEFAULT 'unknown',
+        created_at TEXT NOT NULL,
         total_patients INTEGER DEFAULT 0,
         processed_patients INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        user_id INTEGER DEFAULT -1
       );
     `);
 
@@ -53,91 +52,30 @@ export async function initializeDatabase() {
         batch_id TEXT NOT NULL,
         patient_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        age TEXT,
-        condition TEXT,
+        age INTEGER NOT NULL,
+        condition TEXT NOT NULL,
         is_alert TEXT DEFAULT 'false',
         health_status TEXT DEFAULT 'alert',
-        prompt TEXT,
-        reasoning TEXT,
-        raw_data TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // Create system_prompts table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS system_prompts (
-        id SERIAL PRIMARY KEY,
-        batch_id TEXT,
         prompt TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // Create template_variables table
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS template_variables (
-        id SERIAL PRIMARY KEY,
-        batch_id TEXT,
-        placeholder TEXT NOT NULL,
-        description TEXT NOT NULL,
-        example TEXT,
+        raw_data JSONB,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT
       );
     `);
 
-    // Create system_settings table
+    // Check if sessions table exists, if not create it
     await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS system_settings (
-        id SERIAL PRIMARY KEY,
-        key TEXT NOT NULL UNIQUE,
-        value TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
       );
     `);
-
-    // Check if session table exists
-    const sessionCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'session'
-      ) as exists
-    `);
     
-    // Only create session table if it doesn't exist
-    if (!sessionCheck.rows[0].exists) {
-      console.log('Creating session table for connect-pg-simple');
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS "session" (
-          "sid" varchar NOT NULL COLLATE "default",
-          "sess" json NOT NULL,
-          "expire" timestamp(6) NOT NULL,
-          CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
-        );
-      `);
-    } else {
-      console.log('Session table already exists, skipping creation');
-    }
-    
-    // Check if any users exist, if not create test user
-    const userCheck = await db.execute(sql`SELECT COUNT(*) FROM users`);
-    const userCount = parseInt(userCheck.rows[0].count);
-    console.log(`${userCount} users exist in the database`);
-    
-    if (userCount === 0) {
-      // Create a default admin user: CalicoCare/CalicoCare
-      const hashedPassword = await hashPassword('CalicoCare');
-      await db.execute(sql`
-        INSERT INTO users (username, password) 
-        VALUES ('CalicoCare', ${hashedPassword})
-      `);
-      console.log('Created default admin user: CalicoCare');
-    }
+    // Check if any users exist, but don't automatically create test users
+    const existingUsers = await db.select().from(users);
+    console.log(`${existingUsers.length} users already exist in the database`);
     
     // Check that tables were created properly
     const tableCheck = await db.execute(sql`
