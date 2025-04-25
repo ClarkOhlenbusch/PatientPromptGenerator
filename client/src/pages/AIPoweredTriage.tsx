@@ -195,19 +195,33 @@ export default function AIPoweredTriage() {
   // Mutation for regenerating prompts
   const regeneratePromptMutation = useMutation({
     mutationFn: async (patientId: number) => {
-      const res = await apiRequest("POST", `/api/patient-prompts/${patientId}/regenerate`);
+      // Use the correct endpoint for single prompt regeneration
+      // The API expects /api/prompts/:id/regenerate 
+      const res = await apiRequest("POST", `/api/prompts/${patientId}/regenerate`);
       return await res.json();
     },
     onSuccess: () => {
-      // Invalidate both query paths to ensure data is refreshed
+      console.log("Successfully regenerated single prompt");
+      
+      // Force refetch the patient prompts to ensure we get the latest data
+      queryClient.clear(); // Clear entire cache to ensure fresh data
+      
+      // Refetch the data by invalidating relevant query keys
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
       if (latestBatch?.batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
       }
-      toast({
-        title: "Success",
-        description: "Prompt regenerated successfully",
-      });
+      
+      // Delay the toast to give time for the data to refresh
+      setTimeout(() => {
+        toast({
+          title: "Success",
+          description: "Prompt regenerated successfully",
+        });
+        
+        // Force refetch the data
+        queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", latestBatch?.batchId] });
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({
@@ -232,18 +246,28 @@ export default function AIPoweredTriage() {
     },
     onSuccess: (data) => {
       console.log("Regeneration result:", data);
-      // Invalidate the patient-prompts queries to refresh the data
+      
+      // Force refetch the patient prompts to ensure we get the latest data
+      queryClient.clear(); // Clear entire cache to ensure fresh data
+      
+      // Refetch the data by invalidating relevant query keys
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
       if (latestBatch?.batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
       }
       
-      toast({
-        title: "Success",
-        description: data.regenerated 
-          ? `Successfully regenerated ${data.regenerated}/${data.total} prompts`
-          : "All prompts regenerated successfully",
-      });
+      // Delay the toast to give time for the data to refresh
+      setTimeout(() => {
+        toast({
+          title: "Success",
+          description: data.regenerated 
+            ? `Successfully regenerated ${data.regenerated}/${data.total} prompts`
+            : "All prompts regenerated successfully",
+        });
+        
+        // Force refetch the data
+        queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", latestBatch?.batchId] });
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({
