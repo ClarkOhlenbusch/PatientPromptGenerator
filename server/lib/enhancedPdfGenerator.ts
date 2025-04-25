@@ -18,6 +18,34 @@ export interface VitalStats {
   alertCount: number;
 }
 
+// Add these interfaces at the top with the other interfaces
+interface ChartPoint {
+  x: number;
+  y: number;
+  value: number;
+  isAlert: boolean;
+  date: Date;
+}
+
+interface YAxisLabel {
+  value: number;
+  y: number;
+}
+
+interface XAxisLabel {
+  x: number;
+  date: Date;
+  label: string;
+}
+
+interface ChartData {
+  points: ChartPoint[];
+  yLabels: YAxisLabel[];
+  xLabels: XAxisLabel[];
+  minValue: number;
+  maxValue: number;
+}
+
 /**
  * Generate sample vitals data for a patient report
  * This function simulates what you'd get from a real database of patient readings
@@ -127,10 +155,11 @@ export function generateChartPoints(
   height: number, 
   padding: number = 40
 ) {
+  // Calculate value ranges
   const values = readings.map(r => r.value);
-  const min = Math.min(...values) - (Math.min(...values) * 0.05); // 5% padding
-  const max = Math.max(...values) + (Math.max(...values) * 0.05); // 5% padding
-  const range = max - min;
+  const minValue = Math.floor(Math.min(...values) - 5); // Add some padding
+  const maxValue = Math.ceil(Math.max(...values) + 5);
+  const valueRange = maxValue - minValue;
   
   // Available space for plotting
   const plotWidth = width - (padding * 2);
@@ -138,32 +167,58 @@ export function generateChartPoints(
   
   // Scale factors
   const xScale = plotWidth / (readings.length - 1);
-  const yScale = plotHeight / range;
+  const yScale = plotHeight / valueRange;
   
-  // Generate coordinates
-  return readings.map((reading, index) => {
-    const x = padding + (index * xScale);
-    const y = height - (padding + ((reading.value - min) * yScale)); // Flip Y axis
-    
-    return {
+  // Generate Y-axis labels (5 evenly spaced values)
+  const yLabels = [];
+  for (let i = 0; i <= 4; i++) {
+    const value = Math.round(minValue + (valueRange * (i / 4)));
+    const y = height - (padding + ((value - minValue) * yScale));
+    yLabels.push({ value, y });
+  }
+  
+  // Generate X-axis labels (dates)
+  const xLabels = [];
+  const dateStep = Math.max(1, Math.floor(readings.length / 5));
+  for (let i = 0; i < readings.length; i += dateStep) {
+    const x = padding + (i * xScale);
+    xLabels.push({
       x,
-      y,
-      value: reading.value,
-      isAlert: reading.isAlert,
-      date: reading.date
-    };
-  });
+      date: readings[i].date,
+      label: readings[i].date.toLocaleDateString()
+    });
+  }
+  
+  // Generate coordinates with labels
+  return {
+    points: readings.map((reading, index) => {
+      const x = padding + (index * xScale);
+      const y = height - (padding + ((reading.value - minValue) * yScale));
+      
+      return {
+        x,
+        y,
+        value: reading.value,
+        isAlert: reading.isAlert,
+        date: reading.date
+      };
+    }),
+    yLabels,
+    xLabels,
+    minValue,
+    maxValue
+  };
 }
 
 /**
  * Create canvas commands to draw a line chart
  */
 export function createLineChart(
-  points: any[], 
-  width: number, 
-  height: number, 
-  unit: string, 
-  highThreshold: number | null = null, 
+  chartData: ChartData,
+  width: number,
+  height: number,
+  unit: string,
+  highThreshold: number | null = null,
   lowThreshold: number | null = null
 ) {
   const canvasCommands = [];
@@ -175,22 +230,95 @@ export function createLineChart(
   canvasCommands.push({ type: 'line', x1: 40, y1: height - 40, x2: width - 40, y2: height - 40, lineWidth: 1, color: '#666' }); // x-axis
   canvasCommands.push({ type: 'line', x1: 40, y1: 40, x2: 40, y2: height - 40, lineWidth: 1, color: '#666' }); // y-axis
   
-  // Draw line connecting points
-  for (let i = 1; i < points.length; i++) {
+  // Add X-axis label (centered below the axis)
+  canvasCommands.push({
+    type: 'text',
+    x: width / 2,
+    y: height - 10,
+    text: 'Measurement Date',
+    align: 'center',
+    fontSize: 10,
+    color: '#666'
+  });
+
+  // Add Y-axis label (rotated text)
+  const yAxisText = `${unit} (${getUnitDescription(unit)})`;
+  canvasCommands.push({
+    type: 'text',
+    x: 12,
+    y: height / 2,
+    text: yAxisText,
+    align: 'center',
+    fontSize: 10,
+    color: '#666',
+    rotate: 270
+  });
+  
+  // Draw Y-axis labels and grid lines
+  chartData.yLabels.forEach((label: YAxisLabel) => {
+    // Grid line
     canvasCommands.push({
       type: 'line',
-      x1: points[i-1].x,
-      y1: points[i-1].y,
-      x2: points[i].x,
-      y2: points[i].y,
+      x1: 40,
+      y1: label.y,
+      x2: width - 40,
+      y2: label.y,
+      lineWidth: 0.5,
+      color: '#ddd'
+    });
+    
+    // Value label
+    canvasCommands.push({
+      type: 'text',
+      x: 35,
+      y: label.y + 4,
+      text: label.value.toString(),
+      align: 'right',
+      fontSize: 8,
+      color: '#666'
+    });
+  });
+  
+  // Draw X-axis labels and grid lines
+  chartData.xLabels.forEach((label: XAxisLabel) => {
+    // Grid line
+    canvasCommands.push({
+      type: 'line',
+      x1: label.x,
+      y1: height - 40,
+      x2: label.x,
+      y2: 40,
+      lineWidth: 0.5,
+      color: '#ddd'
+    });
+    
+    // Date label
+    canvasCommands.push({
+      type: 'text',
+      x: label.x,
+      y: height - 25,
+      text: new Date(label.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
+      align: 'center',
+      fontSize: 8,
+      color: '#666'
+    });
+  });
+  
+  // Draw data points and lines
+  for (let i = 1; i < chartData.points.length; i++) {
+    canvasCommands.push({
+      type: 'line',
+      x1: chartData.points[i-1].x,
+      y1: chartData.points[i-1].y,
+      x2: chartData.points[i].x,
+      y2: chartData.points[i].y,
       lineWidth: 2,
-      color: '#3498db' // Blue line
+      color: '#3498db'
     });
   }
   
   // Draw points and alerts
-  points.forEach(point => {
-    // Draw small circle for every point
+  chartData.points.forEach((point: ChartPoint) => {
     canvasCommands.push({
       type: 'ellipse',
       x: point.x,
@@ -200,9 +328,8 @@ export function createLineChart(
       color: '#3498db'
     });
     
-    // Draw X for alerts
     if (point.isAlert) {
-      const r = 5; // X size
+      const r = 5;
       canvasCommands.push({
         type: 'line',
         x1: point.x - r,
@@ -210,7 +337,7 @@ export function createLineChart(
         x2: point.x + r,
         y2: point.y + r,
         lineWidth: 2,
-        color: '#e74c3c' // Red X
+        color: '#e74c3c'
       });
       canvasCommands.push({
         type: 'line',
@@ -219,65 +346,9 @@ export function createLineChart(
         x2: point.x + r,
         y2: point.y - r,
         lineWidth: 2,
-        color: '#e74c3c' // Red X
+        color: '#e74c3c'
       });
     }
-  });
-  
-  // Draw y-axis labels
-  const values = points.map(p => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min;
-  const step = Math.ceil(range / 4); // 5 labels total
-  
-  for (let i = 0; i <= 4; i++) {
-    const value = Math.round((min + (step * i)) * 10) / 10; // Round to 1 decimal
-    const y = height - 40 - (((value - min) / range) * (height - 80));
-    
-    canvasCommands.push({
-      type: 'line',
-      x1: 37,
-      y1: y,
-      x2: 43,
-      y2: y,
-      lineWidth: 1,
-      color: '#666'
-    });
-    
-    canvasCommands.push({
-      type: 'text',
-      x: 35,
-      y: y + 4,
-      text: `${value}`,
-      align: 'right',
-      fontSize: 8
-    });
-  }
-  
-  // Add unit label to y-axis
-  canvasCommands.push({
-    type: 'text',
-    x: 15,
-    y: height / 2,
-    text: unit,
-    align: 'center',
-    fontSize: 10
-  });
-  
-  // Draw x-axis labels (dates) - just show a few
-  const dateIndices = [0, Math.floor(points.length / 2), points.length - 1];
-  dateIndices.forEach(i => {
-    const point = points[i];
-    const dateStr = point.date.toLocaleDateString();
-    canvasCommands.push({
-      type: 'text',
-      x: point.x,
-      y: height - 25,
-      text: dateStr,
-      align: 'center',
-      fontSize: 8
-    });
   });
   
   return canvasCommands;
@@ -474,4 +545,18 @@ export function generatePatientReportDefinition(patientData: any, patientVitals:
       }
     }
   };
+}
+
+// Add helper function at the end of the file
+function getUnitDescription(unit: string): string {
+  switch (unit.toLowerCase()) {
+    case 'bpm':
+      return 'Beats Per Minute';
+    case '%':
+      return 'Oxygen Saturation';
+    case 'mg/dl':
+      return 'Blood Glucose';
+    default:
+      return unit;
+  }
 }
