@@ -1,28 +1,206 @@
 import { Express, Request, Response } from "express";
-import { createServer, Server } from "http";
+import { Server } from "http";
 import { storage } from "./storage";
-import multer from "multer";
-import path from "path";
-import { nanoid } from "nanoid";
-import { processExcelFile } from "./lib/excelProcessor";
-import {
-  generatePrompt,
-  getTokenUsageStats,
-  generatePromptWithTemplate,
-  getDefaultSystemPrompt,
-  setDefaultSystemPrompt,
-  extractReasoning,
-} from "./lib/openai";
-import twilio from "twilio";
-import { createObjectCsvStringifier } from "csv-writer";
-import ExcelJS from "exceljs";
 import { db } from "./db";
-import { patientPrompts, patientBatches } from "@shared/schema";
-import { setupAuth } from "./auth";
-import fs from "fs";
-import { eq, and, desc, sql as SQL } from "drizzle-orm";
-import { phoneSchema } from "@shared/schema";
-import OpenAI from "openai";
+import { patientPrompts } from "@shared/schema";
+import { desc, eq } from "drizzle-orm";
+import ExcelJS from "exceljs";
+import { generatePrompt } from "./lib/openai";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication
+  app.post("/api/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Username and password are required"
+        });
+      }
+      
+      // Get user from database
+      const user = await storage.getUserByUsername(username);
+      
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid username or password"
+        });
+      }
+      
+      // Check password
+      if (user.password !== password) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid username or password"
+        });
+      }
+      
+      // Set user in session
+      if (req.session) {
+        req.session.userId = user.id;
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        user: {
+          id: user.id,
+          username: user.username
+        }
+      });
+    } catch (err) {
+      console.error("Error logging in:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error logging in: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+  
+  app.post("/api/logout", (req, res) => {
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Error destroying session:", err);
+          return res.status(500).json({
+            success: false,
+            message: "Error logging out"
+          });
+        }
+        
+        res.clearCookie("connect.sid");
+        return res.status(200).json({
+          success: true,
+          message: "Logged out successfully"
+        });
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        message: "Already logged out"
+      });
+    }
+  });
+  
+  app.get("/api/me", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({
+          success: false,
+          message: "Not authenticated"
+        });
+      }
+      
+      const userId = req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "User ID not found in session"
+        });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
+        });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username
+        }
+      });
+    } catch (err) {
+      console.error("Error getting current user:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error getting current user: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  });
+
+  // Get latest batch
+  app.get("/api/batches/latest", async (req, res) => {
+    try {
+      console.log("Fetching latest batch...");
+      const batches = await storage.getAllPatientBatches();
+      console.log(`Retrieved ${batches.length} total batches`);
+      
+      const latestBatch = batches[batches.length - 1];
+      
+      if (!latestBatch) {
+        console.log("No batches found in the system");
+        return res.status(404).json({ error: "No batches found" });
+      }
+      
+      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processed_patients} processed patients`);
+      res.json(latestBatch);
+    } catch (error) {
+      console.error("Error fetching latest batch:", error);
+      res.status(500).json({ error: "Failed to fetch latest batch" });
+    }
+  });
+
+  // Get system prompt
+  app.get("/api/system-prompt", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const batchId = req.query.batchId as string;
+      const prompt = await storage.getSystemPrompt(batchId);
+
+      return res.status(200).json({
+        success: true,
+        prompt,
+      });
+    } catch (err) {
+      console.error("Error getting system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error getting system prompt: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Update system prompt
+  app.post("/api/system-prompt", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { prompt, batchId } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt text is required",
+        });
+      }
+
+      const updatedPrompt = await storage.updateSystemPrompt(prompt, batchId);
+
+      return res.status(200).json({
+        success: true,
+        prompt: updatedPrompt
+      });
+    }
+  });
+
+  // === FILE UPLOAD ENDPOINT ===
 
 // Initialize OpenAI
 const openai = new OpenAI({

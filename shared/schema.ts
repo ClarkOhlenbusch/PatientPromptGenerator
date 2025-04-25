@@ -12,57 +12,48 @@ import { PatientData } from './types';
 
 // User schema (kept from original)
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
+  id: integer("id").primaryKey(),
+  username: text("username").notNull(),
   password: text("password").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export const insertUserSchema = createInsertSchema(users);
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // Patient Batch schema
 export const patientBatches = pgTable("patient_batches", {
-  id: serial("id").primaryKey(),
-  batchId: text("batch_id").notNull().unique(),
-  fileName: text("file_name").notNull().default("unknown"),
-  createdAt: text("created_at").notNull(),
-  totalPatients: integer("total_patients").default(0),
-  processedPatients: integer("processed_patients").default(0),
-  userId: integer("user_id").default(-1),
+  id: integer("id").primaryKey(),
+  batchId: text("batch_id").notNull(),
+  processed_patients: integer("processed_patients").default(0),
+  total_patients: integer("total_patients").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertPatientBatchSchema = createInsertSchema(patientBatches).omit(
-  {
-    id: true,
-  },
-);
+export const insertPatientBatchSchema = createInsertSchema(patientBatches);
 
 // Patient Prompt schema
 export const patientPrompts = pgTable("patient_prompts", {
-  id: serial("id").primaryKey(),
+  id: integer("id").primaryKey(),
   batchId: text("batch_id").notNull(),
   patientId: text("patient_id").notNull(),
   name: text("name").notNull(),
-  age: integer("age").notNull(),
-  condition: text("condition").notNull(),
+  age: text("age"),
+  condition: text("condition"),
+  prompt: text("prompt"),
+  reasoning: text("reasoning"),
   isAlert: text("is_alert").default("false"),
   healthStatus: text("health_status").default("alert"),
-  prompt: text("prompt").notNull(),
-  reasoning: text("reasoning"),
-  template: text("template"), // Store custom template for this patient
-  rawData: jsonb("raw_data"), // Store issues and alert reasons in rawData
-  createdAt: text("created_at").default(new Date().toISOString()),
-  updatedAt: text("updated_at"),
+  rawData: text("raw_data"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertPatientPromptSchema = createInsertSchema(patientPrompts).omit({
-  id: true,
-});
+export const insertPatientPromptSchema = createInsertSchema(patientPrompts);
 
 export const patientPromptSchema = z.object({
   patientId: z.string(),
@@ -81,16 +72,14 @@ export type InsertPatientPrompt = z.infer<typeof insertPatientPromptSchema>;
 
 // New tables for prompt sandbox customization
 export const systemPrompts = pgTable("system_prompts", {
-  id: serial("id").primaryKey(),
+  id: integer("id").primaryKey(),
   batchId: text("batch_id"),
   prompt: text("prompt").notNull(),
-  createdAt: text("created_at").default(new Date().toISOString()),
-  updatedAt: text("updated_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
-  id: true,
-});
+export const insertSystemPromptSchema = createInsertSchema(systemPrompts);
 
 export const templateVariables = pgTable("template_variables", {
   id: serial("id").primaryKey(),
@@ -138,11 +127,11 @@ export type FileUploadResponse = {
  * Keep the number of keys minimal and well-documented.
  */
 export const systemSettings = pgTable("system_settings", {
-  key: text("key").primaryKey(),
+  id: integer("id").primaryKey(),
+  key: text("key").notNull(),
   value: text("value").notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertSystemSettingsSchema = createInsertSchema(
