@@ -190,31 +190,6 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
         if (forcedReasoning.length > 20) { // At least 20 chars of content to be valid
           console.log("Found reasoning with aggressive method:", forcedReasoning);
           
-          // Store the prompt in the database with our forced extraction
-          if (batchId) {
-            try {
-              const storage = new DatabaseStorage();
-              await storage.createPatientPrompt({
-                batchId,
-                patientId: patient.patientId,
-                name: patient.name,
-                age: patient.age,
-                condition: patient.condition,
-                prompt: forcedDisplayPrompt,
-                reasoning: forcedReasoning, // Store reasoning separately
-                isAlert: patient.isAlert ? "true" : "false",
-                healthStatus: patient.healthStatus || "alert",
-                rawData: {
-                  issues: patient.issues || [],
-                  alertReasons: patient.alertReasons || [],
-                  variables: patient.variables || {}
-                }
-              });
-            } catch (dbError) {
-              console.error('Error storing prompt in database with forced reasoning:', dbError);
-            }
-          }
-          
           // Return the full prompt (the client will extract reasoning again)
           return fullPrompt;
         }
@@ -238,34 +213,6 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
     console.log(`Output tokens: ${usageData.outputTokens} (est. $${usageData.outputCost.toFixed(6)})`);
     console.log(`Total estimated cost: $${usageData.totalCost.toFixed(6)}`);
     console.log(`=============================`);
-
-    // Store the prompt in the database if we have a batch ID
-    if (batchId) {
-      try {
-        const storage = new DatabaseStorage();
-        await storage.createPatientPrompt({
-          batchId,
-          patientId: patient.patientId,
-          name: patient.name,
-          age: patient.age,
-          condition: patient.condition,
-          prompt: displayPrompt,
-          reasoning: reasoning, // Store reasoning separately
-          isAlert: patient.isAlert ? "true" : "false",
-          healthStatus: patient.healthStatus || "alert",
-          rawData: {
-            issues: patient.issues || [],
-            alertReasons: patient.alertReasons || [],
-            variables: patient.variables || {}
-          }
-        });
-      } catch (dbError) {
-        console.error('Error storing prompt in database:', dbError);
-        // Don't throw the error - we still want to return the generated prompt
-      }
-    } else {
-      console.warn('No batch ID provided - prompt will not be stored in database');
-    }
 
     return fullPrompt;
   } catch (error) {
@@ -319,7 +266,7 @@ async function generatePlaceholders(systemPrompt: string, userPrompt: string): P
         temperature: 0.5,
       });
       
-      const content = response.choices[0].message.content.trim();
+      const content = response.choices[0]?.message?.content?.trim() || '';
       
       // Estimate tokens and log
       const { estimateSinglePromptUsage } = await import("./tokenUsageEstimator");

@@ -96,8 +96,8 @@ export default function Home() {
                   onChange={handleFileChange}
                 />
               </label>
-            </div>
-            
+      </div>
+
             {file && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center">
@@ -123,13 +123,13 @@ export default function Home() {
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Uploading...
-                  </>
-                ) : (
+        </>
+      ) : (
                   <>
                     <FileUp className="mr-2 h-4 w-4" />
                     Upload File
                   </>
-                )}
+      )}
               </Button>
             </div>
           </div>

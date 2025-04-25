@@ -89,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Deduplicate patients by name to ensure we only process each patient once
         const patientMap = new Map<string, typeof patientData[0]>();
-        
+
         // First pass: organize patients by name and keep only the most complete record
         for (const patient of patientData) {
           const patientName = patient.name || 'Unknown';
@@ -148,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Generating prompt for patient ${patientId}...`);
             // Generate a prompt for the patient
             const prompt = await generatePrompt(patientWithMetadata, batchId);
-            
+
             // Extract reasoning from the generated prompt
             const { displayPrompt, reasoning } = extractReasoning(prompt);
 
@@ -1888,49 +1888,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Convert to array of unique patient prompts
       const uniquePrompts = Array.from(patientMap.values());
-      console.log(`Filtered to ${uniquePrompts.length} unique patients`);
+      console.log(`Found ${uniquePrompts.length} unique patients to regenerate prompts for`);
       
-      // Transform the prompts for client consumption
-      const transformedPrompts = uniquePrompts.map(prompt => {
-        console.log(`Transforming prompt for patient: ${prompt.name}`);
-        
-        // Extract reasoning if it exists in the database
-        let reasoning = prompt.reasoning;
-        let displayPrompt = prompt.prompt;
-        
-        // If no explicit reasoning exists, try to extract it from the prompt text
-        if (!reasoning || reasoning.trim().length === 0) {
-          // Look for Markdown reasoning format: **Reasoning:** text
-          const markdownMatch = prompt.prompt.match(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/i);
-          if (markdownMatch) {
-            reasoning = markdownMatch[1].trim();
-            displayPrompt = prompt.prompt.replace(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
-          } else {
-            // Look for plain reasoning format: Reasoning: text
-            const plainMatch = prompt.prompt.match(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i);
-            if (plainMatch) {
-              reasoning = plainMatch[1].trim();
-              displayPrompt = prompt.prompt.replace(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
-            } else {
-              reasoning = "No reasoning provided";
-            }
+      let successCount = 0;
+      const failedPrompts = [];
+      
+      for (const prompt of uniquePrompts) {
+        try {
+          console.log(`Processing prompt ${prompt.id} for patient ${prompt.name} (${prompt.patientId})`);
+          
+          // Verify that we have a patient ID
+          if (!prompt.patientId) {
+            console.error(`Missing patient ID for prompt ${prompt.id}, skipping`);
+            failedPrompts.push({
+              id: prompt.id,
+              name: prompt.name,
+              error: "Missing patient ID"
+            });
+            continue;
           }
+          
+          // Get the raw patient data
+          let patientData: any = {
+            patientId: prompt.patientId, // Most important field - ensures we're using the existing ID
+            name: prompt.name,
+            age: prompt.age,
+            condition: prompt.condition,
+            healthStatus: prompt.healthStatus || "alert",
+            isAlert: prompt.isAlert === "true"
+          };
+          
+          // Extract raw data if available
+          if (prompt.rawData) {
+            const parsedData = typeof prompt.rawData === "string"
+              ? JSON.parse(prompt.rawData)
+              : prompt.rawData;
+              
+            // Make sure we preserve the required fields from the original prompt
+            patientData = {
+              ...parsedData,
+              patientId: prompt.patientId, // Ensure we're using the stored patient ID
+              name: prompt.name || parsedData.name || 'Unknown Patient',
+              age: prompt.age || parsedData.age || 0,
+              condition: prompt.condition || parsedData.condition || 'Unknown Condition',
+              healthStatus: prompt.healthStatus || parsedData.healthStatus || "alert",
+              isAlert: prompt.isAlert === "true" || patientData.isAlert || false
+            };
+          }
+          
+          // Try to get the system prompt from database first, fall back to default
+          const systemPrompt = await storage.getSystemPrompt(batchId);
+          const systemPromptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
+          
+          // Generate new prompt using our main generatePrompt function with the current system prompt
+          console.log(`Regenerating prompt for patient ${prompt.name} (${prompt.patientId})`);
+          const newPrompt = await generatePrompt(patientData, batchId, systemPromptText);
+          
+          // Extract reasoning from the generated prompt
+          const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+          
+          // Update in the database with both the full prompt and the extracted reasoning
+          await storage.updatePatientPrompt(prompt.id, { 
+            prompt: newPrompt,
+            reasoning: reasoning 
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Error regenerating prompt for patient ${prompt.name}:`, err);
+          failedPrompts.push({
+            id: prompt.id,
+            name: prompt.name,
+            error: err instanceof Error ? err.message : String(err)
+          });
         }
-        
-        return {
-          id: prompt.id,
-          patientName: prompt.name,
-          age: prompt.age,
-          condition: prompt.condition,
-          promptText: displayPrompt,
-          reasoning: reasoning,
-          isAlert: prompt.isAlert === "true",
-          status: prompt.healthStatus || "alert"
-        };
+      }
+
+      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`);
+      res.status(200).json({ 
+        success: true, 
+        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`,
+        regenerated: successCount,
+        total: uniquePrompts.length,
+        failedPrompts: failedPrompts.length > 0 ? failedPrompts : undefined
       });
-      
-      console.log(`Successfully transformed ${transformedPrompts.length} prompts`);
-      res.json(transformedPrompts);
     } catch (error) {
       console.error("Error fetching prompts:", error);
       res.status(500).json({ error: "Failed to fetch prompts" });
@@ -2082,28 +2122,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Found ${uniquePrompts.length} unique patients to regenerate prompts for`);
       
       let successCount = 0;
+      const failedPrompts = [];
       
       for (const prompt of uniquePrompts) {
         try {
-          console.log(`Processing prompt ${prompt.id} for patient ${prompt.name}`);
+          console.log(`Processing prompt ${prompt.id} for patient ${prompt.name} (${prompt.patientId})`);
+          
+          // Verify that we have a patient ID
+          if (!prompt.patientId) {
+            console.error(`Missing patient ID for prompt ${prompt.id}, skipping`);
+            failedPrompts.push({
+              id: prompt.id,
+              name: prompt.name,
+              error: "Missing patient ID"
+            });
+            continue;
+          }
           
           // Get the raw patient data
           let patientData: any = {
-            patientId: prompt.patientId,
+            patientId: prompt.patientId, // Most important field - ensures we're using the existing ID
             name: prompt.name,
             age: prompt.age,
             condition: prompt.condition,
+            healthStatus: prompt.healthStatus || "alert",
+            isAlert: prompt.isAlert === "true"
           };
           
           // Extract raw data if available
           if (prompt.rawData) {
-            patientData = typeof prompt.rawData === "string"
+            const parsedData = typeof prompt.rawData === "string"
               ? JSON.parse(prompt.rawData)
               : prompt.rawData;
+              
+            // Make sure we preserve the required fields from the original prompt
+            patientData = {
+              ...parsedData,
+              patientId: prompt.patientId, // Ensure we're using the stored patient ID
+              name: prompt.name || parsedData.name || 'Unknown Patient',
+              age: prompt.age || parsedData.age || 0,
+              condition: prompt.condition || parsedData.condition || 'Unknown Condition',
+              healthStatus: prompt.healthStatus || parsedData.healthStatus || "alert",
+              isAlert: prompt.isAlert === "true" || patientData.isAlert || false
+            };
           }
           
           // Generate new prompt using our main generatePrompt function with the current system prompt
-          console.log(`Regenerating prompt for patient ${prompt.name}`);
+          console.log(`Regenerating prompt for patient ${prompt.name} (${prompt.patientId})`);
           const newPrompt = await generatePrompt(patientData, batchId, promptText);
           
           // Extract reasoning from the generated prompt
@@ -2117,15 +2182,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           successCount++;
         } catch (err) {
           console.error(`Error regenerating prompt for patient ${prompt.name}:`, err);
+          failedPrompts.push({
+            id: prompt.id,
+            name: prompt.name,
+            error: err instanceof Error ? err.message : String(err)
+          });
         }
       }
 
-      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts`);
+      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`);
       res.status(200).json({ 
         success: true, 
-        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts`,
+        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`,
         regenerated: successCount,
-        total: uniquePrompts.length
+        total: uniquePrompts.length,
+        failedPrompts: failedPrompts.length > 0 ? failedPrompts : undefined
       });
     } catch (err) {
       console.error("Error regenerating all prompts:", err);

@@ -17,6 +17,9 @@ import { PatientData } from '@shared/types';
 interface Patient extends PatientData {
   id: number;
   batchId: string;
+  name: string;
+  patientId: string;
+  createdAt: string;
 }
 
 export default function MonthlyReports() {
@@ -55,7 +58,22 @@ export default function MonthlyReports() {
       
       try {
         const res = await apiRequest("GET", `/api/patient-prompts/${latestBatch.batchId}`);
-        return await res.json();
+        const allPatients = await res.json();
+        
+        // Create a map to store the latest entry for each patient name
+        const latestPatientMap = new Map();
+        
+        allPatients.forEach((patient: Patient) => {
+          const existingPatient = latestPatientMap.get(patient.name);
+          if (!existingPatient || new Date(patient.createdAt) > new Date(existingPatient.createdAt)) {
+            latestPatientMap.set(patient.name, patient);
+          }
+        });
+        
+        // Convert map back to array and sort by name
+        return Array.from(latestPatientMap.values()).sort((a, b) => 
+          a.name.localeCompare(b.name)
+        );
       } catch (error) {
         console.error("Failed to fetch patients:", error);
         return [];
@@ -143,9 +161,9 @@ export default function MonthlyReports() {
                   {isPatientsLoading ? (
                     <SelectItem value="loading" disabled>Loading patients...</SelectItem>
                   ) : (patients && patients.length > 0) ? (
-                    patients.map((patient: any) => (
+                    patients.map((patient: Patient) => (
                       <SelectItem key={patient.patientId} value={patient.patientId}>
-                        {patient.name || `Patient #${patient.patientId}`}
+                        {patient.name}
                       </SelectItem>
                     ))
                   ) : (

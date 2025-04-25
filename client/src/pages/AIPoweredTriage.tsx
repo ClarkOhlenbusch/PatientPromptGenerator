@@ -110,7 +110,7 @@ export default function AIPoweredTriage() {
       return await res.json();
     }
   });
-
+  
   // Query to get all patient prompts
   const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
     queryKey: ["/api/prompts", latestBatch?.batchId],
@@ -133,22 +133,18 @@ export default function AIPoweredTriage() {
     },
     enabled: !!latestBatch?.batchId
   });
-
+  
   // Process prompts to extract reasoning when they change
   useEffect(() => {
     if (prompts) {
       const processed = prompts.map(prompt => {
-        // If the prompt already has reasoning, use it
-        if (prompt.reasoning && prompt.reasoning.trim().length > 0) {
-          return prompt;
-        }
-        
-        // Otherwise extract reasoning from the prompt text
+        // Extract reasoning from the prompt text regardless of whether reasoning exists
+        // This ensures we always separate the reasoning from the prompt text
         const { displayPrompt, reasoning } = extractReasoning(prompt.promptText);
         return {
           ...prompt,
-          promptText: displayPrompt,
-          reasoning: reasoning
+          promptText: displayPrompt, // Only the prompt part without reasoning
+          reasoning: reasoning // Store the reasoning separately
         };
       });
       setProcessedPrompts(processed);
@@ -176,7 +172,7 @@ export default function AIPoweredTriage() {
       });
     }
   });
-
+  
   // Mutation for regenerating all prompts
   const regenerateAllMutation = useMutation({
     mutationFn: async () => {
@@ -211,7 +207,7 @@ export default function AIPoweredTriage() {
       });
     }
   });
-
+  
   // Deduplicate prompts by patient name
   const uniquePatientPrompts = processedPrompts ? 
     Object.values(
@@ -232,11 +228,11 @@ export default function AIPoweredTriage() {
   );
 
   // Handle copying prompt to clipboard
-  const handleCopyPrompt = (prompt: string) => {
+  const handleCopyPrompt = (prompt: string, includeReasoning: boolean = false) => {
     navigator.clipboard.writeText(prompt);
-    toast({
+      toast({
       title: "Copied",
-      description: "Prompt copied to clipboard",
+      description: `${includeReasoning ? "Full prompt" : "Prompt"} copied to clipboard`,
     });
   };
 
@@ -251,7 +247,7 @@ export default function AIPoweredTriage() {
     setSelectedPrompt(prompt);
     setReasoningDialogOpen(true);
   };
-
+  
   // Add CSV export function
   const handleExportCSV = () => {
     // Create CSV header
@@ -295,7 +291,7 @@ export default function AIPoweredTriage() {
       description: "CSV file downloaded successfully",
     });
   };
-
+  
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-6">
@@ -304,26 +300,26 @@ export default function AIPoweredTriage() {
           <p className="text-gray-600 mt-2">
             Total patients: {uniquePatientPrompts.length || 0}
           </p>
-        </div>
+              </div>
         <div className="flex gap-4">
           <Button
             variant="outline"
             onClick={handleExportCSV}
-          >
+                  >
             <FileDown className="w-4 h-4 mr-2" />
             Export CSV
           </Button>
-          <Button
+                <Button 
             variant="default"
             onClick={() => regenerateAllMutation.mutate()}
             disabled={regenerateAllMutation.isPending}
           >
             <RotateCw className={`w-4 h-4 mr-2 ${regenerateAllMutation.isPending ? 'animate-spin' : ''}`} />
             Regenerate All
-          </Button>
-        </div>
-      </div>
-
+                </Button>
+              </div>
+            </div>
+            
       <div className="mb-6">
         <Input
           placeholder="Search patients..."
@@ -332,7 +328,7 @@ export default function AIPoweredTriage() {
           className="max-w-md"
         />
       </div>
-
+      
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -352,7 +348,7 @@ export default function AIPoweredTriage() {
                   <TableCell colSpan={6} className="text-center py-8">
                     <div className="flex justify-center items-center">
                       <RotateCw className="w-6 h-6 animate-spin text-gray-400" />
-                    </div>
+            </div>
                   </TableCell>
                 </TableRow>
               ) : !latestBatch?.batchId ? (
@@ -442,8 +438,8 @@ export default function AIPoweredTriage() {
           
           <div className="mt-4 bg-gray-50 p-4 rounded-md prose prose-sm max-w-none">
             <ReactMarkdown>{selectedPrompt?.promptText || ""}</ReactMarkdown>
-          </div>
-
+                          </div>
+                          
           <div className="flex justify-end gap-2 mt-4">
             <Button 
               variant="outline" 
@@ -451,12 +447,12 @@ export default function AIPoweredTriage() {
             >
               Close
             </Button>
-            <Button 
+                              <Button 
               onClick={() => selectedPrompt && handleCopyPrompt(selectedPrompt.promptText)}
-            >
+                              >
               <Copy className="w-4 h-4 mr-2" /> Copy Text
-            </Button>
-          </div>
+                              </Button>
+                            </div>
         </DialogContent>
       </Dialog>
 
@@ -477,7 +473,7 @@ export default function AIPoweredTriage() {
               <ReactMarkdown>{selectedPrompt.reasoning}</ReactMarkdown>
             ) : (
               <p>No reasoning provided for this prompt.</p>
-            )}
+                          )}
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
@@ -489,12 +485,12 @@ export default function AIPoweredTriage() {
             </Button>
             {selectedPrompt?.reasoning && selectedPrompt.reasoning.trim().length > 0 && (
               <Button 
-                onClick={() => selectedPrompt?.reasoning && handleCopyPrompt(selectedPrompt.reasoning)}
+                onClick={() => selectedPrompt?.reasoning && handleCopyPrompt(selectedPrompt.reasoning, true)}
               >
                 <Copy className="w-4 h-4 mr-2" /> Copy Text
               </Button>
             )}
-          </div>
+            </div>
         </DialogContent>
       </Dialog>
     </div>

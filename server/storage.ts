@@ -22,6 +22,7 @@ import connectPg from "connect-pg-simple";
 import { db } from "./db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import twilio from "twilio";
+import type { SystemPrompt as SystemPromptType } from '@shared/types';
 
 // Modify the interface with any CRUD methods you might need
 export interface IStorage {
@@ -293,24 +294,39 @@ Your Healthcare Provider`;
   // System Prompt methods
   async getSystemPrompt(batchId?: string): Promise<SystemPrompt | null> {
     try {
-      let query = db.select().from(systemPrompts);
+      let query = db.select()
+        .from(systemPrompts)
+        .orderBy(desc(systemPrompts.createdAt))
+        .limit(1);
       
-      // If batch ID is provided, try to get a batch-specific system prompt
       if (batchId) {
-        const [batchPrompt] = await query.where(eq(systemPrompts.batchId, batchId));
+        // If a batchId is provided, first try to get a batch-specific prompt
+        const [batchPrompt] = await db.select()
+          .from(systemPrompts)
+          .where(eq(systemPrompts.batchId, batchId))
+          .orderBy(desc(systemPrompts.createdAt))
+          .limit(1);
+
         if (batchPrompt) {
+          console.log(`Found batch-specific prompt (ID: ${batchPrompt.id}) for batch ${batchId}`);
           return batchPrompt;
         }
       }
       
-      // Otherwise, get the global default prompt (null batchId)
-      const [defaultPrompt] = await db.select()
+      // If no batch-specific prompt found (or no batchId provided), get the most recent global prompt
+      const [globalPrompt] = await db.select()
         .from(systemPrompts)
         .where(sql`${systemPrompts.batchId} IS NULL`)
         .orderBy(desc(systemPrompts.createdAt))
         .limit(1);
       
-      return defaultPrompt || null;
+      if (globalPrompt) {
+        console.log(`Using global prompt (ID: ${globalPrompt.id})`);
+        return globalPrompt;
+      }
+
+      console.log('No system prompt found in database');
+      return null;
     } catch (error) {
       console.error("Error fetching system prompt:", error);
       return null;
@@ -322,44 +338,19 @@ Your Healthcare Provider`;
       // Sanitize the prompt
       const sanitizedPrompt = this.sanitizeSystemPrompt(promptText);
       
-      // Check if we have an existing system prompt for this batch
-      let existingPrompt: SystemPrompt | null = null;
-      if (batchId) {
-        [existingPrompt] = await db.select()
-          .from(systemPrompts)
-          .where(eq(systemPrompts.batchId, batchId));
-      } else {
-        [existingPrompt] = await db.select()
-          .from(systemPrompts)
-          .where(sql`${systemPrompts.batchId} IS NULL`)
-          .orderBy(desc(systemPrompts.createdAt))
-          .limit(1);
-      }
-      
-      // Update or insert
-      if (existingPrompt) {
-        // Update existing prompt
-        const [updatedPrompt] = await db.update(systemPrompts)
-          .set({
-            prompt: sanitizedPrompt,
-            updatedAt: new Date().toISOString()
-          })
-          .where(eq(systemPrompts.id, existingPrompt.id))
-          .returning();
-          
-        return updatedPrompt;
-      } else {
-        // Insert new prompt
+      // Always create a new prompt entry instead of updating existing ones
+      // This maintains a history and ensures we can track changes
         const [newPrompt] = await db.insert(systemPrompts)
           .values({
             batchId: batchId || null,
             prompt: sanitizedPrompt,
-            createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
           })
           .returning();
           
+      console.log(`Created new system prompt (ID: ${newPrompt.id}, batchId: ${batchId || 'global'})`);
         return newPrompt;
-      }
     } catch (error) {
       console.error("Error updating system prompt:", error);
       throw error;
@@ -1075,22 +1066,15 @@ Your Healthcare Provider`;
       // In a real implementation, this would be a background job
       setTimeout(async () => {
         console.log(`Report for ${monthYear} generation completed with ${totalPatientCount} patients.`);
-        
-        // In a real implementation, we would update a database record
-        // For now, we'll just print a message indicating the status change
-        console.log(`Report status updated from "pending" to "complete"`);
-        
-        // Calculate file size based on real data
-        const fileSizeKB = Math.max(10, Math.round(totalPatientCount * 2.5));
-        console.log(`Report estimated size: ${fileSizeKB} KB`);
-      }, 3000);
+      }, 2000);
       
       return report;
     } catch (error) {
-      console.error(`Error generating monthly report for ${monthYear}:`, error);
+      console.error(`Error generating report for ${monthYear}:`, error);
       throw error;
     }
   }
 }
 
+// Export an instance of DatabaseStorage
 export const storage = new DatabaseStorage();
