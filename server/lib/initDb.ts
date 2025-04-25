@@ -28,7 +28,9 @@ export async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL
+        password TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -63,6 +65,41 @@ export async function initializeDatabase() {
       );
     `);
 
+    // Create system_prompts table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS system_prompts (
+        id SERIAL PRIMARY KEY,
+        batch_id TEXT,
+        prompt TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create template_variables table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS template_variables (
+        id SERIAL PRIMARY KEY,
+        batch_id TEXT,
+        placeholder TEXT NOT NULL,
+        description TEXT NOT NULL,
+        example TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT
+      );
+    `);
+
+    // Create system_settings table
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        id SERIAL PRIMARY KEY,
+        key TEXT NOT NULL UNIQUE,
+        value TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Check if sessions table exists, if not create it
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
@@ -73,9 +110,20 @@ export async function initializeDatabase() {
       );
     `);
     
-    // Check if any users exist, but don't automatically create test users
-    const existingUsers = await db.select().from(users);
-    console.log(`${existingUsers.length} users already exist in the database`);
+    // Check if any users exist, if not create test user
+    const userCheck = await db.execute(sql`SELECT COUNT(*) FROM users`);
+    const userCount = parseInt(userCheck.rows[0].count);
+    console.log(`${userCount} users exist in the database`);
+    
+    if (userCount === 0) {
+      // Create a default admin user: CalicoCare/CalicoCare
+      const hashedPassword = await hashPassword('CalicoCare');
+      await db.execute(sql`
+        INSERT INTO users (username, password) 
+        VALUES ('CalicoCare', ${hashedPassword})
+      `);
+      console.log('Created default admin user: CalicoCare');
+    }
     
     // Check that tables were created properly
     const tableCheck = await db.execute(sql`
