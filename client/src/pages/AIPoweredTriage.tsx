@@ -113,14 +113,28 @@ export default function AIPoweredTriage() {
   
   // Query to get all patient prompts
   const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
-    queryKey: ["/api/prompts", latestBatch?.batchId],
+    queryKey: ["/api/patient-prompts", latestBatch?.batchId],
     queryFn: async () => {
       try {
         if (!latestBatch?.batchId) {
           return [];
         }
-        const res = await apiRequest("GET", `/api/prompts?batchId=${latestBatch.batchId}`);
-        return await res.json();
+        // Use the correct API endpoint that returns an array of prompts
+        const res = await apiRequest("GET", `/api/patient-prompts/${latestBatch.batchId}`);
+        const data = await res.json();
+        
+        // Ensure we're getting an array back from the API
+        if (Array.isArray(data)) {
+          return data;
+        } else {
+          console.error("API did not return an array of prompts:", data);
+          toast({
+            title: "Data Error",
+            description: "Received unexpected data format from server",
+            variant: "destructive"
+          });
+          return [];
+        }
       } catch (error) {
         console.error("Failed to fetch prompts:", error);
         toast({
@@ -138,13 +152,40 @@ export default function AIPoweredTriage() {
   useEffect(() => {
     if (prompts) {
       const processed = prompts.map(prompt => {
+        // The API returns 'prompt' but our component expects 'promptText'
+        // Handle both possible field names
+        const promptContent = (prompt as any).promptText || (prompt as any).prompt;
+        
+        if (!promptContent) {
+          console.error("Prompt content is missing:", prompt);
+          return {
+            ...prompt,
+            promptText: "Error: Missing prompt content", 
+            reasoning: "No reasoning available due to missing prompt content"
+          };
+        }
+        
         // Extract reasoning from the prompt text regardless of whether reasoning exists
         // This ensures we always separate the reasoning from the prompt text
-        const { displayPrompt, reasoning } = extractReasoning(prompt.promptText);
+        const { displayPrompt, reasoning } = extractReasoning(promptContent);
+        
+        // Map the status field - database has healthStatus but frontend expects status
+        let status: 'healthy' | 'alert' = 'alert'; // Default to alert
+        if ((prompt as any).status) {
+          status = (prompt as any).status;
+        } else if ((prompt as any).healthStatus === 'healthy') {
+          status = 'healthy';
+        } else if ((prompt as any).isAlert === 'false') {
+          status = 'healthy';
+        }
+        
         return {
           ...prompt,
+          patientName: (prompt as any).patientName || (prompt as any).name, // Handle name field differences 
           promptText: displayPrompt, // Only the prompt part without reasoning
-          reasoning: reasoning // Store the reasoning separately
+          reasoning: reasoning || (prompt as any).reasoning, // Store the reasoning separately
+          status: status, // Map the status field
+          isAlert: status === 'alert' // Set isAlert based on status
         };
       });
       setProcessedPrompts(processed);
@@ -154,11 +195,15 @@ export default function AIPoweredTriage() {
   // Mutation for regenerating prompts
   const regeneratePromptMutation = useMutation({
     mutationFn: async (patientId: number) => {
-      const res = await apiRequest("POST", `/api/prompts/${patientId}/regenerate`);
+      const res = await apiRequest("POST", `/api/patient-prompts/${patientId}/regenerate`);
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
+      // Invalidate both query paths to ensure data is refreshed
+      queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
+      if (latestBatch?.batchId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
+      }
       toast({
         title: "Success",
         description: "Prompt regenerated successfully",
@@ -181,15 +226,16 @@ export default function AIPoweredTriage() {
       }
       
       console.log(`Regenerating all prompts for batch: ${latestBatch.batchId}`);
+      // We'll keep using the /api/prompts/regenerate-all endpoint since it's specifically for regeneration
       const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`);
       return await res.json();
     },
     onSuccess: (data) => {
       console.log("Regeneration result:", data);
-      // Invalidate both general prompts query and the specific batch query
-      queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
+      // Invalidate the patient-prompts queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
       if (latestBatch?.batchId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
       }
       
       toast({
