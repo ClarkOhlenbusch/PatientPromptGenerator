@@ -174,7 +174,55 @@ export function createLineChart(
   // Draw axes
   canvasCommands.push({ type: 'line', x1: 40, y1: height - 40, x2: width - 40, y2: height - 40, lineWidth: 1, color: '#666' }); // x-axis
   canvasCommands.push({ type: 'line', x1: 40, y1: 40, x2: 40, y2: height - 40, lineWidth: 1, color: '#666' }); // y-axis
+
+  // Get data ranges for all calculations
+  const values = points.map(p => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+
+  // Calculate and draw trend line using linear regression
+  const n = points.length;
+  const sumX = points.reduce((acc: number, p: any, i: number) => acc + i, 0);
+  const sumY = points.reduce((acc: number, p: any) => acc + p.value, 0);
+  const sumXY = points.reduce((acc: number, p: any, i: number) => acc + (i * p.value), 0);
+  const sumXX = points.reduce((acc: number, p: any, i: number) => acc + (i * i), 0);
   
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+  
+  // Calculate trend line points
+  const startY = intercept;
+  const endY = slope * (n - 1) + intercept;
+  
+  const trendStartY = height - 40 - ((startY - min) / range * (height - 80));
+  const trendEndY = height - 40 - ((endY - min) / range * (height - 80));
+  
+  // Draw dotted trend line
+  const dashLength = 5;
+  const totalLength = Math.sqrt(Math.pow(width - 80, 2) + Math.pow(trendEndY - trendStartY, 2));
+  const numDashes = Math.floor(totalLength / (dashLength * 2));
+  
+  for (let i = 0; i < numDashes; i++) {
+    const startPercent = (i * 2 * dashLength) / totalLength;
+    const endPercent = ((i * 2 + 1) * dashLength) / totalLength;
+    
+    const dashStartX = 40 + startPercent * (width - 80);
+    const dashEndX = 40 + endPercent * (width - 80);
+    const dashStartY = trendStartY + startPercent * (trendEndY - trendStartY);
+    const dashEndY = trendStartY + endPercent * (trendEndY - trendStartY);
+    
+    canvasCommands.push({
+      type: 'line',
+      x1: dashStartX,
+      y1: dashStartY,
+      x2: dashEndX,
+      y2: dashEndY,
+      lineWidth: 1,
+      color: '#666'
+    });
+  }
+
   // Draw line connecting points
   for (let i = 1; i < points.length; i++) {
     canvasCommands.push({
@@ -225,10 +273,6 @@ export function createLineChart(
   });
   
   // Draw y-axis labels
-  const values = points.map(p => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min;
   const step = Math.ceil(range / 4); // 5 labels total
   
   for (let i = 0; i <= 4; i++) {
@@ -255,17 +299,26 @@ export function createLineChart(
     });
   }
   
-  // Add unit label to y-axis
+  // Add unit label to y-axis with description
+  const getUnitDescription = (unit: string) => {
+    switch(unit) {
+      case 'bpm': return 'Heart Rate (BPM)';
+      case '%': return 'Oxygen Saturation (%)';
+      case 'mg/dL': return 'Blood Glucose (mg/dL)';
+      default: return unit;
+    }
+  };
+
   canvasCommands.push({
     type: 'text',
     x: 15,
     y: height / 2,
-    text: unit,
+    text: getUnitDescription(unit),
     align: 'center',
     fontSize: 10
   });
   
-  // Draw x-axis labels (dates) - just show a few
+  // Draw x-axis labels (dates) with "Measurement Date" label
   const dateIndices = [0, Math.floor(points.length / 2), points.length - 1];
   dateIndices.forEach(i => {
     const point = points[i];
@@ -278,6 +331,16 @@ export function createLineChart(
       align: 'center',
       fontSize: 8
     });
+  });
+
+  // Add "Measurement Date" label to x-axis
+  canvasCommands.push({
+    type: 'text',
+    x: width / 2,
+    y: height - 10,
+    text: 'Measurement Date',
+    align: 'center',
+    fontSize: 10
   });
   
   return canvasCommands;

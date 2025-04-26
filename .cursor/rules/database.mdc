@@ -1,0 +1,92 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Database Schema Breakdown
+The Patient Prompt Generator application uses PostgreSQL with Drizzle ORM for database management. Here's a detailed breakdown of how the database schema works:
+
+Core Database Tables
+Your database schema is defined in shared/schema.ts and includes these main tables:
+
+users - Stores authentication information
+patient_batches - Tracks uploaded Excel file batches
+patient_prompts - Stores generated patient prompts
+system_prompts - Contains AI system-level instructions
+template_variables - Defines customizable variables for prompts
+system_settings - Stores configuration like alert phone numbers
+session - Manages user sessions
+How to Interact with the Database
+1. Through the Storage Interface
+The main way to interact with the database is through the storage object exported from server/storage.ts. This provides a clean interface to perform database operations:
+
+// Example of how the application interacts with the database
+import { storage } from "./storage";
+// Get all prompts for a batch
+const prompts = await storage.getPatientPromptsByBatchId(batchId);
+// Create a new patient prompt
+const newPrompt = await storage.createPatientPrompt({
+  batchId: "batch123",
+  patientId: "patient456",
+  name: "John Doe",
+  age: 65,
+  condition: "Diabetes",
+  prompt: "Generated prompt text..."
+});
+The storage interface handles all the SQL operations internally, so you don't need to write raw SQL.
+
+2. Data Types and Schemas
+For each database table, there are corresponding TypeScript types defined in shared/schema.ts:
+
+User, InsertUser - User table types
+PatientBatch, InsertPatientBatch - Batch upload types
+PatientPrompt, InsertPatientPrompt - Generated prompt types
+SystemPrompt, InsertSystemPrompt - System prompt types
+TemplateVariable, InsertTemplateVariable - Custom variable types
+SystemSettings, InsertSystemSettings - Settings types
+The Insert* types are used when creating new records, while the regular types represent what's returned when querying.
+
+Making Edits to the Schema
+If you need to modify the database schema:
+
+Edit the table definitions in shared/schema.ts
+Run the database migration command: npm run db:push
+For example, to add a new field to the patient_prompts table, you would:
+
+// In shared/schema.ts
+export const patientPrompts = pgTable("patient_prompts", {
+  // Existing fields...
+  id: serial("id").primaryKey(),
+  batchId: text("batch_id").notNull(),
+  patientId: text("patient_id").notNull(),
+  
+  // Add your new field
+  newField: text("new_field"),
+});
+Then run:
+
+npm run db:push
+This will add the new column to your database table without losing data.
+
+Important Relations Between Tables
+patient_prompts reference patient_batches through the batchId field
+system_prompts can be global or specific to a batch via the batchId field
+template_variables can be global or specific to a batch via the batchId field
+Data Flow
+User uploads an Excel file → creates a record in patient_batches
+File processing extracts patient data → creates records in patient_prompts
+AI generates prompts using system prompts and template variables → updates patient_prompts
+API endpoints read from these tables to display data in the UI
+Best Practices for Working with the Database
+Always use the storage interface: Don't use the db object directly in routes; use storage methods instead.
+Validate data: The schema includes Zod validators; use them before inserting/updating data.
+Schema changes: When adding new fields, remember to update the corresponding TypeScript types.
+Migration: Use npm run db:push for schema changes instead of writing SQL migrations manually.
+Example Key Methods in the Storage Interface
+User management: getUser(), createUser(), getUserByUsername()
+Batch management: createPatientBatch(), getPatientBatch(), getAllPatientBatches()
+Prompt management: createPatientPrompt(), updatePatientPrompt(), getPatientPromptsByBatchId()
+System prompt management: getSystemPrompt(), updateSystemPrompt()
+Variable management: getTemplateVariables(), createTemplateVariable(), updateTemplateVariable()
+Settings management: getSetting(), updateSetting(), getAlertPhone()
+This structure provides a clean architecture where the database schema is defined in one place, the storage interface provides the API for interacting with it, and the routes use the storage interface to handle HTTP requests.

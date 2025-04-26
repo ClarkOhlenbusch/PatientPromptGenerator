@@ -163,7 +163,7 @@ export default function MonthlyReports() {
                   ) : (patients && patients.length > 0) ? (
                     patients.map((patient: Patient) => (
                       <SelectItem key={patient.patientId} value={patient.patientId}>
-                        {patient.name}
+                        {patient.name.replace(/\s*\([^)]*\)\s*/g, '')}
                       </SelectItem>
                     ))
                   ) : (
