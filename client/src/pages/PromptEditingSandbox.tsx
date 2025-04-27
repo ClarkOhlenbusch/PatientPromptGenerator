@@ -4,35 +4,55 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RefreshCw, Save } from "lucide-react";
+import { RefreshCw, Save, Undo2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+
+// Hardcoded initial default prompt (copied from server/lib/openai.ts)
+const INITIAL_DEFAULT_SYSTEM_PROMPT = `You are a healthcare assistant that generates personalized patient care prompts using structured input data similar to our Demo Data. Each patient's name field includes their full name and date of birth (e.g., "John Doe (MM/DD/YYYY)"). Use the Date and Time Stamp to calculate the patient's age (ignore time of day). There is no separate age column. Your task is to:
+These messages that you are creating should be 150 words or less not including the "Reasoning" section. They are targeted to the patient's primary care physician NOT the patient.
+
+1. Extract the patient's name and the date of birth from the Senior Name field.
+2. Calculate the current age of the patient based on the extracted date of birth relative to today's date.
+3. Generate a comprehensive, personalized prompt that addresses ALL of the patient's specific conditions and issues together—taking into account that the data is provided in the Demo Data style.
+4. Ensure that your prompt:
+   - Is written in a clear, professional tone
+   - Addresses all of the patient's conditions and issues
+   - Provides specific, actionable recommendations
+   - Considers the patient's age and any relevant health factors
+   - Is personalized to the patient's specific situation
+   - Should be predictive of the patient's future health and well-being
+5. IMPORTANT: End your response with a "Reasoning" section that explains your thought process behind the care recommendations. Format it as "**Reasoning:** [your explanation]". This should be 2-3 sentences detailing why the specific recommendations were made based on the patient's condition and data.
+
+The prompt should be detailed but concise, focusing on the most important aspects of the patient's care.`;
 
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
   const { toast } = useToast();
   
-  // Query to get the current default system prompt
+  // Query to get the current default system prompt initially
   const { data: defaultSystemPrompt, isLoading: isPromptLoading } = useQuery({
     queryKey: ["/api/system-prompt"],
     queryFn: async () => {
       try {
         const res = await apiRequest("GET", "/api/system-prompt");
         const data = await res.json();
-        return data.prompt || "";
+        // On initial load, use the fetched prompt OR the hardcoded default if fetch fails
+        return data.prompt || INITIAL_DEFAULT_SYSTEM_PROMPT;
       } catch (error) {
         console.error("Failed to fetch system prompt:", error);
         toast({
           title: "Error",
-          description: "Failed to load system prompt",
+          description: "Failed to load system prompt, using default.",
           variant: "destructive"
         });
-        return "";
+        // Fallback to hardcoded default if fetch fails
+        return INITIAL_DEFAULT_SYSTEM_PROMPT;
       }
     }
   });
 
-  // Update system prompt
+  // Update system prompt mutation (still needed for saving)
   const updateSystemPromptMutation = useMutation({
     mutationFn: async (prompt: string) => {
       const res = await apiRequest("POST", "/api/system-prompt", { prompt });
@@ -54,7 +74,7 @@ export default function PromptEditingSandbox() {
     }
   });
 
-  // Get the latest batch ID for regeneration
+  // Get the latest batch ID for regeneration (still needed)
   const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
     queryKey: ["/api/batches/latest"],
     queryFn: async () => {
@@ -63,10 +83,9 @@ export default function PromptEditingSandbox() {
     }
   });
 
-  // Regenerate all prompts with updated system prompt
+  // Regenerate all prompts mutation (still needed)
   const regeneratePromptsMutation = useMutation({
     mutationFn: async () => {
-      // Make sure to include the latest batch ID
       if (!latestBatch?.batchId) {
         throw new Error("No batch found to regenerate");
       }
@@ -81,7 +100,6 @@ export default function PromptEditingSandbox() {
         title: "Success",
         description: `Patient reports regenerated: ${data.regenerated}/${data.total}`,
       });
-      // Invalidate both the prompts query AND the specific batch query
       queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
       if (latestBatch?.batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
@@ -97,6 +115,7 @@ export default function PromptEditingSandbox() {
   });
 
   useEffect(() => {
+    // Initialize the editor with the fetched or default prompt
     if (defaultSystemPrompt) {
       setCorePrompt(defaultSystemPrompt);
     }
@@ -104,6 +123,16 @@ export default function PromptEditingSandbox() {
 
   const handleSaveSystemPrompt = () => {
     updateSystemPromptMutation.mutate(corePrompt);
+  };
+
+  const handleResetToDefault = () => {
+    // Simply set the local state to the hardcoded default prompt
+    setCorePrompt(INITIAL_DEFAULT_SYSTEM_PROMPT);
+    toast({
+        title: "Reset",
+        description: "Editor reset to default prompt. Save to apply.", // Clarify that save is needed
+    });
+    // No API call needed here anymore
   };
 
   const handleRegeneratePrompts = () => {
@@ -138,6 +167,15 @@ export default function PromptEditingSandbox() {
             >
               <Save className="w-4 h-4 mr-2" />
               Save Prompt
+            </Button>
+            <Button
+              onClick={handleResetToDefault}
+              // Disable button only while initial prompt is loading
+              disabled={isPromptLoading} 
+              variant="outline"
+            >
+              <Undo2 className="w-4 h-4 mr-2" />
+              Reset to Default
             </Button>
             <Button
               onClick={handleRegeneratePrompts}

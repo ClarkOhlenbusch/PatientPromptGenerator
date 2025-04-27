@@ -11,7 +11,7 @@ import {
   generatePromptWithTemplate,
   getDefaultSystemPrompt,
   setDefaultSystemPrompt,
-  extractReasoning,
+  extractReasoning
 } from "./lib/openai";
 import twilio from "twilio";
 import { createObjectCsvStringifier } from "csv-writer";
@@ -2223,6 +2223,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false, 
         message: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}` 
       });
+    }
+  });
+
+  // Reset system prompt to default
+  app.post("/api/system-prompt/reset", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401)
+          .set('Content-Type', 'application/json')
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      // Get the default system prompt from openai.ts
+      const defaultPrompt = getDefaultSystemPrompt();
+      
+      // Update the system prompt in the database
+      const updatedPrompt = await storage.updateSystemPrompt(defaultPrompt);
+      
+      // Also update the in-memory version
+      setDefaultSystemPrompt(defaultPrompt);
+      
+      // Return the updated prompt as JSON with explicit Content-Type
+      return res.status(200)
+        .set('Content-Type', 'application/json')
+        .json({
+          success: true,
+          prompt: defaultPrompt
+        });
+    } catch (err) {
+      console.error("Error resetting system prompt:", err);
+      return res.status(500)
+        .set('Content-Type', 'application/json')
+        .json({
+          success: false,
+          message: `Error resetting system prompt: ${err instanceof Error ? err.message : String(err)}`,
+        });
     }
   });
 
