@@ -130,9 +130,16 @@ export default function AIPoweredTriage() {
   const [batchWithPrompts, setBatchWithPrompts] = useState<string | null>(null);
   
   useEffect(() => {
+    console.log("Finding batch with prompts - current state:", { 
+      allBatches: allBatches?.length || 0, 
+      batchWithPrompts,
+      latestBatchId: latestBatch?.batchId
+    });
+    
     // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
     async function findBatchWithPrompts() {
       if (allBatches && allBatches.length > 0) {
+        console.log("Searching through batches:", allBatches.map(b => b.batchId).join(', '));
         // Try each batch in reverse order (newest to oldest) until we find one with prompts
         for (const batch of [...allBatches].reverse()) {
           try {
@@ -166,8 +173,19 @@ export default function AIPoweredTriage() {
     }
   }, [allBatches, batchWithPrompts]);
   
+  // Calculate the effective batch ID with additional logging
+  const rawEffectiveBatchId = batchWithPrompts || latestBatch?.batchId;
+  // Log whenever the effective batch ID changes to help with debugging
+  useEffect(() => {
+    console.log("effectiveBatchId updated:", { 
+      rawEffectiveBatchId,
+      batchWithPrompts, 
+      latestBatchId: latestBatch?.batchId
+    });
+  }, [rawEffectiveBatchId, batchWithPrompts, latestBatch?.batchId]);
+    
   // Use either the batch with prompts or the latest batch
-  const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
+  const effectiveBatchId = rawEffectiveBatchId;
   
   // Query to get all patient prompts
   const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
@@ -297,6 +315,13 @@ export default function AIPoweredTriage() {
   // Mutation for regenerating all prompts
   const regenerateAllMutation = useMutation({
     mutationFn: async () => {
+      console.log("Current state:", { 
+        batchWithPrompts, 
+        latestBatchId: latestBatch?.batchId, 
+        effectiveBatchId,
+        allBatchesCount: allBatches?.length
+      });
+      
       if (!effectiveBatchId) {
         throw new Error("No batch found to regenerate");
       }
