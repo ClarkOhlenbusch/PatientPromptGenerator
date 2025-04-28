@@ -153,6 +153,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { displayPrompt, reasoning } = extractReasoning(prompt);
 
             console.log(`Storing prompt for patient ${patientId}...`);
+            // ---> ADDED: Log just before creating the prompt record
+            console.log(`Attempting to create prompt record for patient ${patientId} in batch ${batchId}`);
             // Create the patient prompt record in the database
             await storage.createPatientPrompt({
               batchId,
@@ -167,6 +169,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               rawData: patientWithMetadata,
             });
 
+            // ---> ADDED: Log successful prompt creation
+            console.log(`Successfully created prompt record for patient ${patientId} in batch ${batchId}`);
+
             // Update processed patients count
             console.log(`Updating processed patients count for batch ${batchId}...`);
             await db.execute(SQL`
@@ -179,6 +184,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Successfully stored patient ${patientId}`);
           } catch (err) {
             console.error(`Error storing patient data:`, err);
+            // ---> ADDED: Log which patient failed specifically
+            console.error(`Failed to process and store data for patient ${patient.name || 'Unknown'} (ID attempt: ${patient.patientId || 'None'}) in batch ${batchId}`);
             // Continue with other patients even if one fails
           }
         }
@@ -500,7 +507,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "No batches found" });
       }
       
-      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processed_patients} processed patients`);
+      // ---> REVERTED: Use correct property name 'processed_patients' likely matching DB column
+      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processed_patients ?? 0} processed patients`); 
       res.json(latestBatch);
     } catch (error) {
       console.error("Error fetching latest batch:", error);
