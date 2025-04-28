@@ -132,7 +132,7 @@ export default function AIPoweredTriage() {
   useEffect(() => {
     // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
     async function findBatchWithPrompts() {
-      if (allBatches && allBatches.length > 0 && latestBatch?.batchId) {
+      if (allBatches && allBatches.length > 0) {
         // Try each batch in reverse order (newest to oldest) until we find one with prompts
         for (const batch of [...allBatches].reverse()) {
           try {
@@ -164,7 +164,7 @@ export default function AIPoweredTriage() {
     if (!batchWithPrompts) {
       findBatchWithPrompts();
     }
-  }, [allBatches, latestBatch?.batchId, batchWithPrompts]);
+  }, [allBatches, batchWithPrompts]);
   
   // Use either the batch with prompts or the latest batch
   const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
