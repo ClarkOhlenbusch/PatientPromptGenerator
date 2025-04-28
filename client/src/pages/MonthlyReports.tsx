@@ -50,14 +50,63 @@ export default function MonthlyReports() {
     }
   });
   
+  // Get all batches to find one with prompts
+  const { data: allBatches, isLoading: isBatchesLoading } = useQuery<any[]>({
+    queryKey: ["/api/batches"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/batches");
+      return await res.json();
+    },
+    retry: 1
+  });
+  
+  // Find the most recent batch that has prompts
+  const [batchWithPrompts, setBatchWithPrompts] = useState<string | null>(null);
+  
+  useEffect(() => {
+    // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
+    async function findBatchWithPrompts() {
+      if (allBatches && allBatches.length > 0 && !batchWithPrompts) {
+        // Try each batch in reverse order (newest to oldest) until we find one with prompts
+        for (const batch of [...allBatches].reverse()) {
+          try {
+            const response = await fetch(`/api/patient-prompts/${batch.batchId}`, {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.length > 0) {
+                console.log(`Found prompts in batch: ${batch.batchId}`);
+                setBatchWithPrompts(batch.batchId);
+                break;
+              }
+            }
+          } catch (error) {
+            console.error(`Error checking batch ${batch.batchId}:`, error);
+          }
+        }
+      }
+    }
+    
+    findBatchWithPrompts();
+  }, [allBatches, batchWithPrompts]);
+  
+  // Use either the batch with prompts or the latest batch
+  const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
+  
   // Query to get patients from the latest batch
   const { data: patients, isLoading: isPatientsLoading } = useQuery({
-    queryKey: ["/api/patients", latestBatch?.batchId],
+    queryKey: ["/api/patients", effectiveBatchId],
     queryFn: async () => {
-      if (!latestBatch?.batchId) return [];
+      if (!effectiveBatchId) return [];
       
       try {
-        const res = await apiRequest("GET", `/api/patient-prompts/${latestBatch.batchId}`);
+        const res = await apiRequest("GET", `/api/patient-prompts/${effectiveBatchId}`);
         const allPatients = await res.json();
         
         // Create a map to store the latest entry for each patient name
@@ -65,7 +114,7 @@ export default function MonthlyReports() {
         
         allPatients.forEach((patient: Patient) => {
           const existingPatient = latestPatientMap.get(patient.name);
-          if (!existingPatient || new Date(patient.createdAt) > new Date(existingPatient.createdAt)) {
+          if (!existingPatient || new Date(patient.createdAt || "2000-01-01") > new Date(existingPatient.createdAt || "2000-01-01")) {
             latestPatientMap.set(patient.name, patient);
           }
         });
@@ -79,7 +128,8 @@ export default function MonthlyReports() {
         return [];
       }
     },
-    enabled: !!latestBatch?.batchId // Only run if we have a batch ID
+    enabled: !!effectiveBatchId, // Only run if we have a batch ID
+    retry: 1
   });
   
   // Mutation for generating a PDF report from the latest upload data

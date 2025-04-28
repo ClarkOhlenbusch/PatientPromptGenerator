@@ -284,9 +284,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
 
       if (!prompts.length) {
-        return res
-          .status(404)
-          .json({ message: "Batch not found or contains no prompts" });
+        console.log(`No prompts found for batch ${batchId}, returning empty success`);
+        return res.status(200).json({ 
+          message: "No prompts to regenerate", 
+          regenerated: 0, 
+          total: 0 
+        });
       }
 
       // Fetch the custom system prompt for this batch if available
@@ -329,9 +332,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
 
       if (!prompts.length) {
-        return res
-          .status(404)
-          .json({ message: "Batch not found or contains no prompts" });
+        // Return empty array instead of 404 for CSV export
+        return res.status(200).json({
+          message: "No prompts to export",
+          data: []
+        });
       }
 
       // Create CSV
@@ -502,8 +507,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "No batches found" });
       }
       
-      // ---> REVERTED: Use correct property name 'processed_patients' likely matching DB column
-      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processed_patients ?? 0} processed patients`); 
+      // Use correct DB column name 'processedPatients'
+      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processedPatients ?? 0} processed patients`); 
       res.json(latestBatch);
     } catch (error) {
       console.error("Error fetching latest batch:", error);
