@@ -107,7 +107,9 @@ export default function AIPoweredTriage() {
     queryKey: ["/api/batches/latest"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/batches/latest");
-      return await res.json();
+      const data = await res.json();
+      // Handle standardized API response format
+      return data.success && data.data ? data.data : null;
     },
     retry: 1 // Limit retries to prevent excessive calls
   });
@@ -117,7 +119,9 @@ export default function AIPoweredTriage() {
     queryKey: ["/api/batches"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/batches");
-      return await res.json();
+      const data = await res.json();
+      // Handle standardized API response format
+      return data.success && data.data ? data.data : [];
     },
     retry: 1
   });
@@ -141,9 +145,14 @@ export default function AIPoweredTriage() {
             });
             
             if (response.ok) {
-              console.log(`Found prompts in batch: ${batch.batchId}`);
-              setBatchWithPrompts(batch.batchId);
-              break;
+              const data = await response.json();
+              // Handle standardized API response format
+              const prompts = data.success && data.data ? data.data : [];
+              if (Array.isArray(prompts) && prompts.length > 0) {
+                console.log(`Found prompts in batch: ${batch.batchId}`);
+                setBatchWithPrompts(batch.batchId);
+                break;
+              }
             }
           } catch (error) {
             console.error(`Error checking batch ${batch.batchId}:`, error);
@@ -172,18 +181,21 @@ export default function AIPoweredTriage() {
         const res = await apiRequest("GET", `/api/patient-prompts/${effectiveBatchId}`);
         const data = await res.json();
         
-        // Ensure we're getting an array back from the API
-        if (Array.isArray(data)) {
-          return data;
-        } else {
-          console.error("API did not return an array of prompts:", data);
-          toast({
-            title: "Data Error",
-            description: "Received unexpected data format from server",
-            variant: "destructive"
-          });
-          return [];
+        // Handle standardized API response format
+        if (data.success && data.data) {
+          if (Array.isArray(data.data)) {
+            return data.data;
+          }
         }
+          
+        // If the data doesn't match the expected format, log error and show toast
+        console.error("API did not return expected data format:", data);
+        toast({
+          title: "Data Error",
+          description: "Received unexpected data format from server",
+          variant: "destructive"
+        });
+        return [];
       } catch (error) {
         console.error("Failed to fetch prompts:", error);
         toast({
