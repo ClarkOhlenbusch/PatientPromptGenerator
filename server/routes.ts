@@ -2061,9 +2061,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all prompts for a specific batch (Refactored from regeneration logic)
+  // ROUTE 4: Get all prompts for a specific batch with standardized response format
+  // This route uses "prompts" in the path for consistency with the other "/api/prompts/..." endpoints
   app.get("/api/prompts", async (req: Request<{}, {}, {}, { batchId: string }>, res) => {
     try {
+      // Authentication check - all prompt endpoints should require authentication
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+          success: false, 
+          data: null, 
+          error: "Authentication required" 
+        });
+      }
+      
       console.log("Fetching prompts...");
       const batchId = req.query.batchId;
       console.log(`Using batchId: ${batchId}`);
@@ -2075,6 +2085,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           success: false, 
           data: null,
           error: "batchId query parameter is required"
+        });
+      }
+      
+      // Check if batch exists
+      const batch = await storage.getPatientBatch(batchId);
+      if (!batch) {
+        console.error(`Batch ID ${batchId} does not exist`);
+        return res.status(404).json({ 
+          success: false,
+          data: null,
+          error: `Batch ID '${batchId}' not found. Please check that you are using a valid batch ID.`
         });
       }
 
@@ -2170,9 +2191,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Extract raw data if available
       if (mostRecentPrompt.rawData) {
-        patientData = typeof mostRecentPrompt.rawData === "string" 
-          ? JSON.parse(mostRecentPrompt.rawData) 
-          : mostRecentPrompt.rawData;
+        try {
+          patientData = typeof mostRecentPrompt.rawData === "string" 
+            ? JSON.parse(mostRecentPrompt.rawData) 
+            : mostRecentPrompt.rawData;
+        } catch (error) {
+          console.error(`Error parsing rawData for prompt ${mostRecentPrompt.id}:`, error);
+          // If JSON parsing fails, log the error but continue with the basic patientData
+          console.log(`Using basic patient data for ${mostRecentPrompt.patientId} after JSON parse error`);
+        }
       }
       
       // Generate new prompt using our main generatePrompt function
@@ -2328,20 +2355,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Extract raw data if available
           if (prompt.rawData) {
-            const parsedData = typeof prompt.rawData === "string"
-              ? JSON.parse(prompt.rawData)
-              : prompt.rawData;
-              
-            // Make sure we preserve the required fields from the original prompt
-            patientData = {
-              ...parsedData,
-              patientId: prompt.patientId, // Ensure we're using the stored patient ID
-              name: prompt.name || parsedData.name || 'Unknown Patient',
-              age: prompt.age || parsedData.age || 0,
-              condition: prompt.condition || parsedData.condition || 'Unknown Condition',
-              healthStatus: prompt.healthStatus || parsedData.healthStatus || "alert",
-              isAlert: prompt.isAlert === "true" || patientData.isAlert || false
-            };
+            try {
+              const parsedData = typeof prompt.rawData === "string"
+                ? JSON.parse(prompt.rawData)
+                : prompt.rawData;
+                
+              // Make sure we preserve the required fields from the original prompt
+              patientData = {
+                ...parsedData,
+                patientId: prompt.patientId, // Ensure we're using the stored patient ID
+                name: prompt.name || parsedData.name || 'Unknown Patient',
+                age: prompt.age || parsedData.age || 0,
+                condition: prompt.condition || parsedData.condition || 'Unknown Condition',
+                healthStatus: prompt.healthStatus || parsedData.healthStatus || "alert",
+                isAlert: prompt.isAlert === "true" || patientData.isAlert || false
+              };
+            } catch (error) {
+              console.error(`Error parsing rawData for prompt ${prompt.id}:`, error);
+              // If JSON parsing fails, log the error but continue with the basic patientData
+              console.log(`Using basic patient data for ${prompt.patientId} after JSON parse error`);
+            }
           }
           
           // Generate new prompt using our main generatePrompt function with the current system prompt
