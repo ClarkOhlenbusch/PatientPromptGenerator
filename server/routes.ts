@@ -217,13 +217,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { batchId } = req.params;
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
 
-      if (!prompts.length) {
-        return res
-          .status(404)
-          .json({ message: "Batch not found or contains no prompts" });
-      }
-
-      res.status(200).json(prompts);
+      // Always return an array, even if empty (don't return 404 for empty results)
+      res.status(200).json(prompts || []);
     } catch (err) {
       console.error("Error fetching prompts:", err);
       res
