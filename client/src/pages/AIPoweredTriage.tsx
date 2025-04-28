@@ -130,16 +130,9 @@ export default function AIPoweredTriage() {
   const [batchWithPrompts, setBatchWithPrompts] = useState<string | null>(null);
   
   useEffect(() => {
-    console.log("Finding batch with prompts - current state:", { 
-      allBatches: allBatches?.length || 0, 
-      batchWithPrompts,
-      latestBatchId: latestBatch?.batchId
-    });
-    
     // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
     async function findBatchWithPrompts() {
       if (allBatches && allBatches.length > 0) {
-        console.log("Searching through batches:", allBatches.map(b => b.batchId).join(', '));
         // Try each batch in reverse order (newest to oldest) until we find one with prompts
         for (const batch of [...allBatches].reverse()) {
           try {
@@ -156,7 +149,6 @@ export default function AIPoweredTriage() {
               // Handle standardized API response format
               const prompts = data.success && data.data ? data.data : [];
               if (Array.isArray(prompts) && prompts.length > 0) {
-                console.log(`Found prompts in batch: ${batch.batchId}`);
                 setBatchWithPrompts(batch.batchId);
                 break;
               }
@@ -173,19 +165,8 @@ export default function AIPoweredTriage() {
     }
   }, [allBatches, batchWithPrompts]);
   
-  // Calculate the effective batch ID with additional logging
-  const rawEffectiveBatchId = batchWithPrompts || latestBatch?.batchId;
-  // Log whenever the effective batch ID changes to help with debugging
-  useEffect(() => {
-    console.log("effectiveBatchId updated:", { 
-      rawEffectiveBatchId,
-      batchWithPrompts, 
-      latestBatchId: latestBatch?.batchId
-    });
-  }, [rawEffectiveBatchId, batchWithPrompts, latestBatch?.batchId]);
-    
   // Use either the batch with prompts or the latest batch
-  const effectiveBatchId = rawEffectiveBatchId;
+  const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
   
   // Query to get all patient prompts
   const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
@@ -314,34 +295,22 @@ export default function AIPoweredTriage() {
   
   // Mutation for regenerating all prompts
   const regenerateAllMutation = useMutation({
-    mutationFn: async () => {
-      console.log("Current state:", { 
-        batchWithPrompts, 
-        latestBatchId: latestBatch?.batchId, 
-        effectiveBatchId,
-        allBatchesCount: allBatches?.length
-      });
-      
-      if (!effectiveBatchId) {
+    mutationFn: async (batchId: string) => {
+      if (!batchId) {
         throw new Error("No batch found to regenerate");
       }
       
-      console.log(`Regenerating all prompts for batch: ${effectiveBatchId}`);
       // We'll keep using the /api/prompts/regenerate-all endpoint since it's specifically for regeneration
-      const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${effectiveBatchId}`);
+      const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${batchId}`);
       return await res.json();
     },
-    onSuccess: (data) => {
-      console.log("Regeneration result:", data);
-      
+    onSuccess: (data, batchId) => {
       // Force refetch the patient prompts to ensure we get the latest data
       queryClient.clear(); // Clear entire cache to ensure fresh data
       
       // Refetch the data by invalidating relevant query keys
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
-      if (effectiveBatchId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", batchId] });
       
       // Delay the toast to give time for the data to refresh
       setTimeout(() => {
@@ -353,7 +322,7 @@ export default function AIPoweredTriage() {
         });
         
         // Force refetch the data
-        queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
+        queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", batchId] });
       }, 1000);
     },
     onError: (error: Error) => {
@@ -468,8 +437,8 @@ export default function AIPoweredTriage() {
           </Button>
                 <Button 
             variant="default"
-            onClick={() => regenerateAllMutation.mutate()}
-            disabled={regenerateAllMutation.isPending}
+            onClick={() => effectiveBatchId && regenerateAllMutation.mutate(effectiveBatchId)}
+            disabled={regenerateAllMutation.isPending || !effectiveBatchId}
           >
             <RotateCw className={`w-4 h-4 mr-2 ${regenerateAllMutation.isPending ? 'animate-spin' : ''}`} />
             Regenerate All
