@@ -378,7 +378,7 @@ export function generatePatientReportDefinition(patientData: any, patientVitals:
       lineHeight: 1.2
     },
     pageSize: 'LETTER',
-    pageMargins: [40, 60, 40, 60],
+    pageMargins: [40, 60, 40, 60] as [number, number, number, number],
     footer: function(currentPage: number, pageCount: number) {
       return {
         columns: [

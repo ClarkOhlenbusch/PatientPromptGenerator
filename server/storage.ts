@@ -139,7 +139,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPatientPromptsByBatchId(batchId: string): Promise<PatientPrompt[]> {
-    return await db.select().from(patientPrompts).where(eq(patientPrompts.batchId, batchId));
+    try {
+      // Trim the batch ID to handle any whitespace issues
+      const trimmedBatchId = batchId.trim();
+      console.log(`Getting prompts for batch ID: '${trimmedBatchId}'`);
+      
+      // First check if batch exists in patient_batches table
+      const batchExists = await db.select().from(patientBatches).where(eq(patientBatches.batchId, trimmedBatchId));
+      
+      if (!batchExists || batchExists.length === 0) {
+        console.warn(`Batch ID '${trimmedBatchId}' not found in patient_batches table`);
+        // Return empty array for non-existent batch
+        return [];
+      }
+      
+      // Run query to check the count first for debugging
+      const countResult = await db.select({ count: sql`count(*)` })
+        .from(patientPrompts)
+        .where(eq(patientPrompts.batchId, trimmedBatchId));
+      
+      const count = parseInt(countResult[0]?.count?.toString() || '0');
+      console.log(`Found ${count} prompts for batch ID '${trimmedBatchId}'`);
+      
+      // Get the actual prompts
+      const result = await db.select().from(patientPrompts).where(eq(patientPrompts.batchId, trimmedBatchId));
+      return result;
+    } catch (error) {
+      console.error(`Error getting prompts for batch ID '${batchId}':`, error);
+      // Return empty array on error
+      return [];
+    }
   }
 
   async getPatientPromptByIds(batchId: string, patientId: string): Promise<PatientPrompt | undefined> {

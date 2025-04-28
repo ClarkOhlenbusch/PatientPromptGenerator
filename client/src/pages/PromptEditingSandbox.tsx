@@ -92,23 +92,53 @@ export default function PromptEditingSandbox() {
       
       console.log(`Regenerating prompts for batch: ${latestBatch.batchId}`);
       const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`);
+      
+      // Handle non-2xx status codes
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Failed with status: ${res.status}`);
+      }
+      
       return await res.json();
     },
     onSuccess: (data) => {
       console.log("Regeneration result:", data);
-      toast({
-        title: "Success",
-        description: `Patient reports regenerated: ${data.regenerated}/${data.total}`,
-      });
+      
+      // Handle cases where regeneration succeeded but no prompts were found/regenerated
+      if (data.data.total === 0) {
+        toast({
+          title: "No Prompts Found",
+          description: data.message || "No prompts were found to regenerate. Try uploading patient data first.",
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "Success", 
+          description: `Patient reports regenerated: ${data.data.regenerated}/${data.data.total}`,
+        });
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
       if (latestBatch?.batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
       }
     },
     onError: (error: Error) => {
+      console.error("Regeneration error:", error);
+      
+      // Friendly error message with suggestions for common issues
+      let errorMessage = error.message;
+      
+      // Check for common error patterns
+      if (errorMessage.includes("not found")) {
+        errorMessage = "Batch not found. The data may have been deleted. Try uploading new patient data.";
+      } else if (errorMessage.includes("No prompts found")) {
+        errorMessage = "No prompts found for this batch. Try uploading new patient data.";
+      }
+      
       toast({
         title: "Error",
-        description: `Failed to regenerate prompts: ${error.message}`,
+        description: errorMessage,
         variant: "destructive"
       });
     }

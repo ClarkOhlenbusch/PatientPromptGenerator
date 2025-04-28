@@ -459,12 +459,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ success: false, message: "Authentication required" });
       }
 
-      // Always return the exact prompt directly from openai.ts file
-      const defaultPrompt = getDefaultSystemPrompt();
-      console.log("Returning default system prompt from openai.ts:", defaultPrompt.substring(0, 50) + "...");
+      // Get the in-memory prompt directly from openai.ts
+      const inMemoryPrompt = getDefaultSystemPrompt();
+      
+      // Also get the database-stored prompt if it exists
+      const systemPrompt = await storage.getSystemPrompt();
+      const dbPrompt = systemPrompt ? systemPrompt.prompt : null;
+      
+      console.log("Returning system prompt:");
+      console.log(`- In-memory prompt: ${inMemoryPrompt.substring(0, 50)}...`);
+      console.log(`- Database prompt: ${dbPrompt ? dbPrompt.substring(0, 50) + '...' : 'not found'}`);
+      
+      // If the database prompt exists and differs from the in-memory one,
+      // return the database version as it's likely more up-to-date
+      const promptToUse = dbPrompt || inMemoryPrompt;
       
       return res.status(200).json({
-        prompt: defaultPrompt,
+        prompt: promptToUse,
+        inMemoryPrompt: inMemoryPrompt,
+        dbPrompt: dbPrompt,
+        source: dbPrompt ? 'database' : 'in-memory'
       });
     } catch (err) {
       console.error("Error getting system prompt:", err);
@@ -1311,6 +1325,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         patientVitals,
       );
 
+      // Add type assertion to handle the TypeScript error with pageMargins
+      // This ensures pageMargins is treated as a fixed-length tuple [number, number, number, number]
+      if (docDefinition.pageMargins && Array.isArray(docDefinition.pageMargins)) {
+        docDefinition.pageMargins = docDefinition.pageMargins as [number, number, number, number];
+      }
+
       // Generate the PDF
       const printer = new pdfmake.default(fonts);
       const pdfDoc = printer.createPdfKitDocument(docDefinition);
@@ -2120,13 +2140,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Check if batch exists (optional but good practice? storage doesn't have getBatchById)
-      // We implicitly check by trying to get prompts
+      // First check if batch exists in the database
+      const batch = await storage.getPatientBatch(batchId);
+      if (!batch) {
+        console.error(`Batch ID ${batchId} does not exist in the database`);
+        return res.status(404).json({ 
+          success: false,
+          data: null,
+          error: `Batch ID '${batchId}' not found. Please check that you are using a valid batch ID.`
+        });
+      }
+      
+      console.log(`Confirmed batch exists: ${batch.batchId}, file: ${batch.fileName}, created: ${batch.createdAt}`);
 
-      // First try to get the saved system prompt from the database
+      // Get the saved system prompt from the database
       const systemPrompt = await storage.getSystemPrompt(batchId);
-      const promptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
-      console.log(`Using system prompt (${systemPrompt ? 'from database' : 'default'}): ${promptText.substring(0, 50)}...`);
+      
+      // Try to use the database system prompt first, if not available use the in-memory version
+      // This ensures we use the latest prompt that the user might have just saved
+      let promptText = "";
+      if (systemPrompt) {
+        promptText = systemPrompt.prompt;
+        console.log(`Using database system prompt: ${promptText.substring(0, 50)}...`);
+      } else {
+        // If no database prompt, use the current in-memory version (which is the most recently saved)
+        promptText = getDefaultSystemPrompt();
+        console.log(`Using in-memory system prompt: ${promptText.substring(0, 50)}...`);
+      }
 
       // Get all prompts for the specified batch
       const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
@@ -2137,12 +2177,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({
           success: true,
           data: { regenerated: 0, total: 0, failedPrompts: [] },
-          message: `No prompts found for batch ${batchId}`,
+          message: `No prompts found for batch ${batchId}. This batch exists but has no associated prompts.`,
         });
       }
 
+      // Rest of the code remains the same...
       // Create a map to get unique patients by name
-      // This ensures we only have one prompt per patient, using the latest prompt version
       const patientMap = new Map<string, typeof allPrompts[0]>();
       
       // Get the most recent prompt for each patient (by ID)
