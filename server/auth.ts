@@ -177,11 +177,15 @@ export function setupAuth(app: Express) {
     res.status(200).json({ success: true, user: userWithoutPassword });
   });
   
-  // Middleware to check if user is authenticated
-  app.use(["/api/upload", "/api/patient-prompts", "/api/triage", "/api/monthly-reports"], (req, res, next) => {
+  // Middleware to check if user is authenticated for all API routes except login/logout/health
+  app.use(/^\/api\/(?!login|logout|health).*$/, (req, res, next) => {
     if (!req.isAuthenticated()) {
       console.log(`Unauthorized access attempt to ${req.originalUrl}`);
-      return res.status(401).json({ success: false, message: "Authentication required" });
+      return res.status(401).json({ 
+        success: false, 
+        data: null,
+        error: "Authentication required" 
+      });
     }
     next();
   });
