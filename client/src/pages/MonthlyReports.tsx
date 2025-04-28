@@ -33,7 +33,10 @@ export default function MonthlyReports() {
       try {
         // Get all batches and sort by most recent
         const res = await apiRequest("GET", "/api/batches");
-        const batches = await res.json();
+        const responseData = await res.json();
+        
+        // Handle standardized API response format
+        const batches = responseData.success && responseData.data ? responseData.data : [];
         
         if (batches && batches.length > 0) {
           // Sort batches by createdAt, descending
@@ -55,7 +58,9 @@ export default function MonthlyReports() {
     queryKey: ["/api/batches"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/batches");
-      return await res.json();
+      const responseData = await res.json();
+      // Handle standardized API response format
+      return responseData.success && responseData.data ? responseData.data : [];
     },
     retry: 1
   });
@@ -79,8 +84,10 @@ export default function MonthlyReports() {
             });
             
             if (response.ok) {
-              const data = await response.json();
-              if (data && data.length > 0) {
+              const responseData = await response.json();
+              // Handle standardized API response format
+              const prompts = responseData.success && responseData.data ? responseData.data : [];
+              if (prompts && prompts.length > 0) {
                 console.log(`Found prompts in batch: ${batch.batchId}`);
                 setBatchWithPrompts(batch.batchId);
                 break;
@@ -107,7 +114,9 @@ export default function MonthlyReports() {
       
       try {
         const res = await apiRequest("GET", `/api/patient-prompts/${effectiveBatchId}`);
-        const allPatients = await res.json();
+        const responseData = await res.json();
+        // Handle standardized API response format
+        const allPatients = responseData.success && responseData.data ? responseData.data : [];
         
         // Create a map to store the latest entry for each patient name
         const latestPatientMap = new Map();
