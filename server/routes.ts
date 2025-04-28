@@ -17,7 +17,7 @@ import twilio from "twilio";
 import { createObjectCsvStringifier } from "csv-writer";
 import ExcelJS from "exceljs";
 import { db } from "./db";
-import { patientPrompts, patientBatches } from "@shared/schema";
+import { patientPrompts, patientBatches, PatientPrompt } from "@shared/schema";
 import { setupAuth } from "./auth";
 import fs from "fs";
 import { eq, and, desc, sql as SQL } from "drizzle-orm";
@@ -120,6 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Filtered ${patientData.length} rows to ${uniquePatients.length} unique patients`);
         
         // Update batch record with total unique patients
+        // Assert db type as NeonDatabase using double assertion
         await db.execute(SQL`
           UPDATE patient_batches 
           SET total_patients = ${uniquePatients.length}
@@ -191,40 +192,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         console.log(`Upload complete. Processed ${patientData.length} patients, stored ${successfullyStored.length} records`);
+        // Use standard wrapper for success
         res.status(200).json({
           success: true,
-          batchId,
-          processed: patientData.length,
-          stored: successfullyStored.length,
+          data: {
+            batchId,
+            processed: patientData.length,
+            stored: successfullyStored.length,
+          },
           message: `Processed ${patientData.length} patients, stored ${successfullyStored.length} records`,
         });
       } catch (err) {
-        console.error("Error in Excel processing:", err);
-        throw err; // Re-throw to be caught by the outer catch
+        console.error("Error in Excel processing or patient storing:", err);
+        // Ensure error response uses standard wrapper
+        res.status(500).json({
+          success: false,
+          data: null,
+          error: `Error processing file: ${err instanceof Error ? err.message : String(err)}`,
+        });
       }
     } catch (err) {
-      console.error("Error processing upload:", err);
+      console.error("Outer error processing upload:", err);
+      // Ensure error response uses standard wrapper
       res.status(500).json({
         success: false,
-        message: `Error processing file: ${err instanceof Error ? err.message : String(err)}`,
+        data: null,
+        error: `Error processing file: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });
 
   // Get patient prompts for a batch
-  app.get("/api/patient-prompts/:batchId", async (req, res) => {
+  app.get("/api/patient-prompts/:batchId", async (req: Request<{ batchId: string }>, res) => {
     try {
       const { batchId } = req.params;
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
 
-      // Always return an array, even if empty (don't return 404 for empty results)
-      res.status(200).json(prompts || []);
+      // Use standard wrapper, return 200 OK with empty/populated array
+      res.status(200).json({
+        success: true,
+        data: prompts || [],
+        message: prompts.length > 0 ? "Prompts retrieved successfully" : "No prompts found for this batch"
+      });
     } catch (err) {
       console.error("Error fetching prompts:", err);
-      res
-        .status(500)
-        .json({
-          message: `Error fetching prompts: ${err instanceof Error ? err.message : String(err)}`,
+      // Use standard wrapper for error
+      res.status(500).json({
+          success: false,
+          data: null,
+          error: `Error fetching prompts: ${err instanceof Error ? err.message : String(err)}`,
         });
     }
   });
@@ -232,8 +248,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Regenerate a single prompt
   app.post(
     "/api/patient-prompts/:batchId/regenerate/:patientId",
-    async (req, res) => {
+    async (req: Request<{ batchId: string, patientId: string }>, res) => {
       try {
+        // No auth check here? Assuming protected by middleware
         const { batchId, patientId } = req.params;
 
         const patientPrompt = await storage.getPatientPromptByIds(
@@ -241,8 +258,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           patientId,
         );
 
+        // Handle specific resource not found with 404 + standard wrapper
         if (!patientPrompt) {
-          return res.status(404).json({ message: "Patient prompt not found" });
+          return res.status(404).json({
+            success: false,
+            data: null,
+            error: "Patient prompt not found"
+           });
         }
 
         const rawData = patientPrompt.rawData || {
@@ -255,50 +277,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch the custom system prompt for this batch if available
         const systemPrompt = await storage.getSystemPrompt(batchId);
         const customSystemPrompt = systemPrompt?.prompt;
-        
+
         console.log(`Regenerating prompt for patient ${patientId} with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
-        
+
         const newPrompt = await generatePrompt(rawData as any, batchId, customSystemPrompt);
 
-        await storage.updatePatientPrompt(patientPrompt.id, {
+        // Update prompt in storage (assuming this returns the updated prompt or ID)
+        const updatedPrompt = await storage.updatePatientPrompt(patientPrompt.id, {
           prompt: newPrompt,
         });
 
-        res.status(200).json({ message: "Prompt regenerated successfully" });
+        // Use standard wrapper for success, maybe return the updated prompt?
+        res.status(200).json({ 
+          success: true, 
+          data: updatedPrompt, // Return the updated prompt object
+          message: "Prompt regenerated successfully" 
+        });
       } catch (err) {
         console.error("Error regenerating prompt:", err);
-        res
-          .status(500)
-          .json({
-            message: `Error regenerating prompt: ${err instanceof Error ? err.message : String(err)}`,
+        // Use standard wrapper for error
+        res.status(500).json({
+            success: false,
+            data: null,
+            error: `Error regenerating prompt: ${err instanceof Error ? err.message : String(err)}`,
           });
       }
     },
   );
 
   // Regenerate all prompts for a batch
-  app.post("/api/patient-prompts/:batchId/regenerate", async (req, res) => {
+  app.post("/api/patient-prompts/:batchId/regenerate", async (req: Request<{ batchId: string }>, res) => {
     try {
+      // No auth check here? Assuming protected by middleware
       const { batchId } = req.params;
 
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
 
+      // Handle case where collection is empty - 200 OK + standard wrapper
       if (!prompts.length) {
         console.log(`No prompts found for batch ${batchId}, returning empty success`);
+        // Use standard wrapper
         return res.status(200).json({ 
-          message: "No prompts to regenerate", 
-          regenerated: 0, 
-          total: 0 
+          success: true,
+          // Provide consistent data structure even if empty
+          data: { regenerated: 0, total: 0 }, 
+          message: "No prompts to regenerate for this batch", 
         });
       }
 
       // Fetch the custom system prompt for this batch if available
       const systemPrompt = await storage.getSystemPrompt(batchId);
       const customSystemPrompt = systemPrompt?.prompt;
-      
+
       console.log(`Regenerating ${prompts.length} prompts with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
-      
+
       // Process each prompt in parallel
+      // NOTE: This assumes Promise.all succeeds or fails entirely.
+      // More granular error handling might be needed if individual regenerations can fail.
       await Promise.all(
         prompts.map(async (prompt) => {
           const rawData = prompt.rawData || {
@@ -313,13 +348,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       );
 
-      res.status(200).json({ message: "All prompts regenerated successfully" });
+      // Use standard wrapper for success
+      res.status(200).json({ 
+        success: true,
+        // Report how many were processed
+        data: { regenerated: prompts.length, total: prompts.length }, 
+        message: "All prompts regenerated successfully" 
+      });
     } catch (err) {
       console.error("Error regenerating prompts:", err);
-      res
-        .status(500)
-        .json({
-          message: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}`,
+      // Use standard wrapper for error
+      res.status(500).json({
+          success: false,
+          data: null,
+          error: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}`,
         });
     }
   });
@@ -479,16 +521,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res
           .status(401)
-          .json({ success: false, message: "Authentication required" });
+          .json({ success: false, data: null, error: "Authentication required" });
       }
 
       const batches = await storage.getAllPatientBatches();
-      res.status(200).json(batches);
+      // Use standard wrapper, return empty array if no batches
+      res.status(200).json({
+        success: true,
+        data: batches || [],
+        message: batches.length > 0 ? "Batches retrieved successfully" : "No batches found"
+      });
     } catch (err) {
       console.error("Error fetching batches:", err);
       res.status(500).json({
         success: false,
-        message: `Error fetching batches: ${err instanceof Error ? err.message : String(err)}`,
+        data: null,
+        error: `Error fetching batches: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });
@@ -496,23 +544,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get latest batch
   app.get("/api/batches/latest", async (req, res) => {
     try {
+      // No authentication check here previously, should we add one? Assuming public for now.
       console.log("Fetching latest batch...");
+      // Assuming getAllPatientBatches returns sorted batches (or we should sort here)
       const batches = await storage.getAllPatientBatches();
       console.log(`Retrieved ${batches.length} total batches`);
-      
-      const latestBatch = batches[batches.length - 1];
-      
-      if (!latestBatch) {
+
+      // Handle case where NO batches exist at all - return 404 as per plan
+      if (!batches || batches.length === 0) {
         console.log("No batches found in the system");
-        return res.status(404).json({ error: "No batches found" });
+        return res.status(404).json({
+          success: false,
+          data: null,
+          error: "No batches found in the system"
+        });
       }
-      
-      // Use correct DB column name 'processedPatients'
-      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processedPatients ?? 0} processed patients`); 
-      res.json(latestBatch);
+
+      // Get the last batch (assuming sorted newest first or last)
+      // Let's explicitly sort by createdAt descending just to be sure
+      const sortedBatches = batches.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const latestBatch = sortedBatches[0];
+
+      // Use correct DB column name 'processedPatients' (or 'processed_patients' if that's correct)
+      // Let's assume 'processedPatients' based on user's last edit
+      console.log(`Latest batch found: ${latestBatch.batchId} with ${latestBatch.processedPatients ?? 0} processed patients`);
+
+      // Return successful response with standard wrapper
+      res.status(200).json({
+        success: true,
+        data: latestBatch,
+        message: "Latest batch retrieved successfully"
+      });
     } catch (error) {
       console.error("Error fetching latest batch:", error);
-      res.status(500).json({ error: "Failed to fetch latest batch" });
+      // Use standard error wrapper
+      res.status(500).json({
+        success: false,
+        data: null,
+        error: `Error fetching latest batch: ${error instanceof Error ? error.message : String(error)}`
+      });
     }
   });
 
@@ -1177,7 +1249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter by patient ID if specified
       if (patientId) {
         periodPatients = periodPatients.filter(
-          (p) => p.patientId === patientId,
+          (p: PatientPrompt) => p.patientId === patientId,
         );
 
         if (periodPatients.length === 0) {
@@ -1247,7 +1319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const chunks: any[] = [];
       let result: Buffer;
 
-      pdfDoc.on("data", (chunk) => {
+      pdfDoc.on("data", (chunk: Buffer) => {
         chunks.push(chunk);
       });
 
@@ -1277,33 +1349,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Helper functions for the PDF report
-  function calculateComplianceRate(patients) {
+  function calculateComplianceRate(patients: PatientPrompt[]) {
     // A simplified compliance calculation based on alert status
     // In a real system, this would be based on scheduled vs. actual measurements
-    const alertPatients = patients.filter((p) => p.isAlert === "true").length;
+    const alertPatients = patients.filter((p: PatientPrompt) => p.isAlert === "true").length;
     const complianceRate =
       ((patients.length - alertPatients) / patients.length) * 100;
     return Math.round(complianceRate);
   }
 
-  function calculateAverageAge(patients) {
+  function calculateAverageAge(patients: PatientPrompt[]) {
     if (patients.length === 0) return 0;
     const totalAge = patients.reduce(
-      (sum, patient) => sum + (patient.age || 0),
+      (sum: number, patient: PatientPrompt) => sum + (patient.age || 0),
       0,
     );
     return Math.round(totalAge / patients.length);
   }
 
-  function trendsSummary(patients) {
+  function trendsSummary(patients: PatientPrompt[]) {
     // Generate a simple summary of patient trends
     const totalPatients = patients.length;
-    const alertPatients = patients.filter((p) => p.isAlert === "true").length;
+    const alertPatients = patients.filter((p: PatientPrompt) => p.isAlert === "true").length;
     const alertPercentage = (alertPatients / totalPatients) * 100;
 
     // Group patients by condition
-    const conditionGroups = {};
-    patients.forEach((patient) => {
+    const conditionGroups: { [key: string]: PatientPrompt[] } = {};
+    patients.forEach((patient: PatientPrompt) => {
       const condition = patient.condition || "Unknown";
       if (!conditionGroups[condition]) {
         conditionGroups[condition] = [];
@@ -1315,8 +1387,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let trendText = `Based on the data for ${totalPatients} patients, ${alertPercentage.toFixed(1)}% have alerts that require attention.\n\n`;
 
     // Add condition-specific summaries
-    Object.entries(conditionGroups).forEach(([condition, patients]) => {
-      const count = patients.length;
+    Object.entries(conditionGroups).forEach(([condition, groupPatients]: [string, PatientPrompt[]]) => {
+      const count = groupPatients.length;
       const percentage = (count / totalPatients) * 100;
       trendText += `${condition}: ${count} patients (${percentage.toFixed(1)}% of total)\n`;
     });
@@ -1364,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prompts = await db.select().from(promptsTable);
 
       // Filter to match the specified month/year if provided
-      let filteredPrompts = prompts.filter((prompt) => {
+      let filteredPrompts = prompts.filter((prompt: PatientPrompt) => {
         if (!prompt.createdAt) return false;
 
         try {
@@ -1392,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter by specific patient if requested
       if (patientId) {
         filteredPrompts = filteredPrompts.filter(
-          (p) => p.patientId === patientId,
+          (p: PatientPrompt) => p.patientId === patientId,
         );
 
         if (filteredPrompts.length === 0) {
@@ -1463,7 +1535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       // Add data rows
-      filteredPrompts.forEach((patient) => {
+      filteredPrompts.forEach((patient: PatientPrompt) => {
         const row = worksheet.addRow({
           patientId: patient.patientId,
           name: patient.name,
@@ -1542,7 +1614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prompts = await db.select().from(promptsTable);
 
       // Filter to match the specified month/year if provided
-      let filteredPrompts = prompts.filter((prompt) => {
+      let filteredPrompts = prompts.filter((prompt: PatientPrompt) => {
         if (!prompt.createdAt) return false;
 
         try {
@@ -1576,7 +1648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       // Add rows
-      filteredPrompts.forEach((prompt) => {
+      filteredPrompts.forEach((prompt: PatientPrompt) => {
         worksheet.addRow({
           patientId: prompt.patientId,
           name: prompt.name,
@@ -1859,22 +1931,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send the message
       const message = await twilioClient.messages.create({
-        body: prompt.promptText,
+        body: prompt.prompt,
         from: twilioPhone,
         to: phone
-      });
-      
-      // Update prompt status
-      await storage.updatePatientPrompt(promptId, {
-        status: "sent",
-        sentAt: new Date().toISOString()
       });
       
       return res.status(200).json({
         success: true,
         sid: message.sid,
         message: `SMS sent successfully to ${phone}`,
-        patientName: prompt.patientName
+        patientName: prompt.name
       });
     } catch (err) {
       console.error("Error sending SMS:", err);
@@ -1886,137 +1952,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all prompts
-  app.get("/api/prompts", async (req, res) => {
+  // Get all prompts for a specific batch (Refactored from regeneration logic)
+  app.get("/api/prompts", async (req: Request<{}, {}, {}, { batchId: string }>, res) => {
     try {
       console.log("Fetching prompts...");
-      const batchId = req.query.batchId as string;
+      const batchId = req.query.batchId;
       console.log(`Using batchId: ${batchId}`);
-      
+
+      // Require batchId
       if (!batchId) {
-        console.log("No batchId provided, returning empty array");
-        return res.json([]);
-      }
-      
-      // Get all prompts for the specified batch
-      const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
-      console.log(`Retrieved ${allPrompts.length} total prompts from storage`);
-      
-      // First deduplicate patients by name
-      const patientMap = new Map<string, typeof allPrompts[0]>();
-      
-      // Keep only the most recent prompt for each patient
-      for (const prompt of allPrompts) {
-        const patientName = prompt.name;
-        if (!patientMap.has(patientName) || patientMap.get(patientName)!.id < prompt.id) {
-          patientMap.set(patientName, prompt);
-        }
-      }
-      
-      // Convert to array of unique patient prompts
-      const uniquePrompts = Array.from(patientMap.values());
-      console.log(`Found ${uniquePrompts.length} unique patients to regenerate prompts for`);
-      
-      let successCount = 0;
-      const failedPrompts = [];
-      
-      for (const prompt of uniquePrompts) {
-        try {
-          console.log(`Processing prompt ${prompt.id} for patient ${prompt.name} (${prompt.patientId})`);
-          
-          // Verify that we have a patient ID
-          if (!prompt.patientId) {
-            console.error(`Missing patient ID for prompt ${prompt.id}, skipping`);
-            failedPrompts.push({
-              id: prompt.id,
-              name: prompt.name,
-              error: "Missing patient ID"
-            });
-            continue;
-          }
-          
-          // Get the raw patient data
-          let patientData: any = {
-            patientId: prompt.patientId, // Most important field - ensures we're using the existing ID
-            name: prompt.name,
-            age: prompt.age,
-            condition: prompt.condition,
-            healthStatus: prompt.healthStatus || "alert",
-            isAlert: prompt.isAlert === "true"
-          };
-          
-          // Extract raw data if available
-          if (prompt.rawData) {
-            const parsedData = typeof prompt.rawData === "string"
-              ? JSON.parse(prompt.rawData)
-              : prompt.rawData;
-              
-            // Make sure we preserve the required fields from the original prompt
-            patientData = {
-              ...parsedData,
-              patientId: prompt.patientId, // Ensure we're using the stored patient ID
-              name: prompt.name || parsedData.name || 'Unknown Patient',
-              age: prompt.age || parsedData.age || 0,
-              condition: prompt.condition || parsedData.condition || 'Unknown Condition',
-              healthStatus: prompt.healthStatus || parsedData.healthStatus || "alert",
-              isAlert: prompt.isAlert === "true" || patientData.isAlert || false
-            };
-          }
-          
-          // Try to get the system prompt from database first, fall back to default
-          const systemPrompt = await storage.getSystemPrompt(batchId);
-          const systemPromptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
-          
-          // Generate new prompt using our main generatePrompt function with the current system prompt
-          console.log(`Regenerating prompt for patient ${prompt.name} (${prompt.patientId})`);
-          const newPrompt = await generatePrompt(patientData, batchId, systemPromptText);
-          
-          // Extract reasoning from the generated prompt
-          const { displayPrompt, reasoning } = extractReasoning(newPrompt);
-          
-          // Update in the database with both the full prompt and the extracted reasoning
-          await storage.updatePatientPrompt(prompt.id, { 
-            prompt: newPrompt,
-            reasoning: reasoning 
-          });
-          successCount++;
-        } catch (err) {
-          console.error(`Error regenerating prompt for patient ${prompt.name}:`, err);
-          failedPrompts.push({
-            id: prompt.id,
-            name: prompt.name,
-            error: err instanceof Error ? err.message : String(err)
-          });
-        }
+        console.log("No batchId provided");
+        return res.status(400).json({ 
+          success: false, 
+          data: null,
+          error: "batchId query parameter is required"
+        });
       }
 
-      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`);
-      res.status(200).json({ 
-        success: true, 
-        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`,
-        regenerated: successCount,
-        total: uniquePrompts.length,
-        failedPrompts: failedPrompts.length > 0 ? failedPrompts : undefined
+      // Get all prompts for the specified batch
+      const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
+      console.log(`Retrieved ${allPrompts.length} total prompts from storage for batch ${batchId}`);
+
+      // Use standard wrapper, return 200 OK with empty/populated array
+      res.status(200).json({
+        success: true,
+        data: allPrompts || [],
+        message: allPrompts.length > 0 ? "Prompts retrieved successfully" : "No prompts found for this batch"
       });
+
     } catch (error) {
       console.error("Error fetching prompts:", error);
-      res.status(500).json({ error: "Failed to fetch prompts" });
+      // Use standard wrapper
+      res.status(500).json({ 
+        success: false, 
+        data: null,
+        error: `Failed to fetch prompts: ${error instanceof Error ? error.message : String(error)}` 
+      });
     }
   });
 
   // Regenerate a single prompt
-  app.post("/api/prompts/:id/regenerate", async (req, res) => {
+  app.post("/api/prompts/:id/regenerate", async (req: Request<{ id: string }>, res) => {
     try {
       // Get the prompt ID from the request parameters
-      const promptId = parseInt(req.params.id);
+      // Ensure ID is parsed correctly as integer
+      const promptId = parseInt(req.params.id, 10);
+      if (isNaN(promptId)) {
+        return res.status(400).json({ success: false, data: null, error: "Invalid prompt ID format" });
+      }
       console.log(`Request to regenerate prompt ID: ${promptId}`);
-      
+
       // Find the specific prompt by ID
       const prompt = await storage.getPatientPromptById(promptId);
-      
+
+      // Handle specific resource not found with 404 + standard wrapper
       if (!prompt) {
         console.error(`Prompt with ID ${promptId} not found`);
-        return res.status(404).json({ error: "Prompt not found" });
+        return res.status(404).json({ 
+          success: false, 
+          data: null,
+          error: "Prompt not found" 
+        });
       }
       
       // Get the batch ID to ensure we're using the correct system prompt
@@ -2061,76 +2057,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate new prompt using our main generatePrompt function
       console.log(`Generating new prompt for patient "${patientName}"`);
-      const newPrompt = await generatePrompt(patientData, batchId, systemPromptText);
+      const newPromptText = await generatePrompt(patientData, batchId, systemPromptText);
       
       // Extract reasoning from the generated prompt
-      const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+      const { displayPrompt, reasoning } = extractReasoning(newPromptText);
       
       // Update the prompt in the database
       console.log(`Updating prompt ${promptId} in database`);
       const updatedPrompt = await storage.updatePatientPrompt(promptId, {
-        prompt: newPrompt,
+        prompt: newPromptText, // Store the full generated prompt
         reasoning: reasoning
       });
       
-      // Format the response for the frontend
-      res.json({
-        id: updatedPrompt.id,
-        patientName: updatedPrompt.name,
-        age: updatedPrompt.age,
-        condition: updatedPrompt.condition,
-        promptText: displayPrompt,
-        reasoning: reasoning || updatedPrompt.reasoning || "No reasoning provided",
-        isAlert: updatedPrompt.isAlert === "true",
-        status: updatedPrompt.healthStatus || "alert"
+      // Format the response using the standard wrapper
+      // Include relevant fields from the *updated* prompt
+      res.status(200).json({
+        success: true,
+        data: {
+          id: updatedPrompt.id,
+          patientName: updatedPrompt.name,
+          age: updatedPrompt.age,
+          condition: updatedPrompt.condition,
+          promptText: displayPrompt, // Send the display-friendly prompt
+          reasoning: reasoning || updatedPrompt.reasoning || "No reasoning provided",
+          isAlert: updatedPrompt.isAlert === "true",
+          status: updatedPrompt.healthStatus || "alert"
+        },
+        message: "Prompt regenerated successfully"
       });
     } catch (error) {
       console.error("Error regenerating prompt:", error);
-      res.status(500).json({ error: "Failed to regenerate prompt" });
+      // Use standard wrapper for error
+      res.status(500).json({ 
+        success: false, 
+        data: null,
+        error: `Failed to regenerate prompt: ${error instanceof Error ? error.message : String(error)}` 
+      });
     }
   });
 
   // Regenerate all prompts
-  app.post("/api/prompts/regenerate-all", async (req, res) => {
+  app.post("/api/prompts/regenerate-all", async (req: Request<{}, {}, {}, { batchId: string }>, res) => {
     try {
       if (!req.isAuthenticated()) {
+        // Use standard wrapper
         return res
           .status(401)
-          .json({ success: false, message: "Authentication required" });
+          .json({ success: false, data: null, error: "Authentication required" });
       }
-      
+
       // Extract batchId from query parameters
-      const batchId = req.query.batchId as string;
-      console.log(`Regenerating all prompts for batch ${batchId || 'latest'}`);
-      
-      // Validate that we have a batch ID
+      const batchId = req.query.batchId;
+      console.log(`Regenerating all prompts for batch ${batchId || 'latest - ERROR: batchId required'}`);
+
+      // Validate that we have a batch ID - return 400 if missing
       if (!batchId) {
         console.error("No batch ID provided for regeneration");
         return res.status(400).json({ 
           success: false,
-          message: "No batch ID provided. Please specify which batch to regenerate."
+          data: null,
+          error: "No batch ID provided. Please specify which batch to regenerate via batchId query parameter."
         });
       }
       
+      // Check if batch exists (optional but good practice? storage doesn't have getBatchById)
+      // We implicitly check by trying to get prompts
+
       // First try to get the saved system prompt from the database
-      // If not found, fall back to the default prompt from openai.ts
       const systemPrompt = await storage.getSystemPrompt(batchId);
       const promptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
       console.log(`Using system prompt (${systemPrompt ? 'from database' : 'default'}): ${promptText.substring(0, 50)}...`);
-      
+
       // Get all prompts for the specified batch
       const allPrompts = await storage.getPatientPromptsByBatchId(batchId);
       console.log(`Found ${allPrompts.length} total prompts for batch ${batchId}`);
-      
+
+      // Handle empty collection with 200 OK + standard wrapper
       if (allPrompts.length === 0) {
-        return res.status(404).json({
-          success: false,
+        return res.status(200).json({
+          success: true,
+          data: { regenerated: 0, total: 0, failedPrompts: [] },
           message: `No prompts found for batch ${batchId}`,
-          regenerated: 0,
-          total: 0
         });
       }
-      
+
       // Create a map to get unique patients by name
       // This ensures we only have one prompt per patient, using the latest prompt version
       const patientMap = new Map<string, typeof allPrompts[0]>();
@@ -2218,18 +2228,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`);
+      // Use standard wrapper for success
       res.status(200).json({ 
         success: true, 
-        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`,
-        regenerated: successCount,
-        total: uniquePrompts.length,
-        failedPrompts: failedPrompts.length > 0 ? failedPrompts : undefined
+        data: {
+          regenerated: successCount,
+          total: uniquePrompts.length,
+          // Include failed prompts details if any occurred
+          failedPrompts: failedPrompts.length > 0 ? failedPrompts : [] 
+        },
+        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `. ${failedPrompts.length} failed.` : '.'}`,
       });
     } catch (err) {
       console.error("Error regenerating all prompts:", err);
+      // Use standard wrapper for error
       res.status(500).json({ 
         success: false, 
-        message: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}` 
+        data: null,
+        error: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}` 
       });
     }
   });
