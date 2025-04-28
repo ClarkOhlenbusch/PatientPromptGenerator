@@ -4,6 +4,21 @@ import { setupVite, serveStatic, log } from "./vite";
 import cors from 'cors';
 import { initializeDatabase } from "./lib/initDb";
 
+// Global error handlers to prevent server crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Promise Rejection:', reason);
+  // Log the promise details to help with debugging
+  console.error('Promise:', promise);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Log the error but don't exit the process in production
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('Server will continue running, but may be in an unstable state');
+  }
+});
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -52,12 +67,30 @@ app.use((req, res, next) => {
   
   const server = await registerRoutes(app);
 
+  // Standardized error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Log the error with full details
+    console.error(`Server error: ${err.message || 'Unknown error'}`, {
+      status: err.status || err.statusCode || 500,
+      stack: err.stack,
+      name: err.name,
+      code: err.code
+    });
+    
+    // Determine appropriate status code
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
+    
+    // Send standardized error response
+    res.status(status).json({ 
+      success: false, 
+      data: null,
+      error: message,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Don't throw the error after handling it - this would crash the server
+    // Instead just log it and let the server continue
   });
 
   // importantly only setup vite in development and after
