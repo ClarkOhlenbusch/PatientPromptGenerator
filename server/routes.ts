@@ -245,13 +245,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Regenerate a single prompt
+  // ROUTE 1: Regenerate a single prompt by batch and patient IDs
+  // This is a legacy route kept for backward compatibility
   app.post(
     "/api/patient-prompts/:batchId/regenerate/:patientId",
     async (req: Request<{ batchId: string, patientId: string }>, res) => {
       try {
-        // No auth check here? Assuming protected by middleware
+        if (!req.isAuthenticated()) {
+          return res.status(401).json({ 
+            success: false, 
+            data: null, 
+            error: "Authentication required" 
+          });
+        }
+        
+        // Extract parameters from URL
         const { batchId, patientId } = req.params;
+        console.log(`Legacy endpoint: Regenerating prompt for patient ${patientId} in batch ${batchId}`);
 
         const patientPrompt = await storage.getPatientPromptByIds(
           batchId,
@@ -263,7 +273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({
             success: false,
             data: null,
-            error: "Patient prompt not found"
+            error: `Patient prompt not found for patient ${patientId} in batch ${batchId}`
            });
         }
 
@@ -287,10 +297,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           prompt: newPrompt,
         });
 
-        // Use standard wrapper for success, maybe return the updated prompt?
+        // Extract reasoning from the generated prompt
+        const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+
+        // Use standard wrapper for success
         res.status(200).json({ 
           success: true, 
-          data: updatedPrompt, // Return the updated prompt object
+          data: {
+            ...updatedPrompt,
+            promptText: displayPrompt,
+            reasoning: reasoning || updatedPrompt.reasoning
+          },
           message: "Prompt regenerated successfully" 
         });
       } catch (err) {
@@ -305,11 +322,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // Regenerate all prompts for a batch
+  // ROUTE 2: Regenerate all prompts for a batch by batch ID in URL params
+  // This is a legacy route kept for backward compatibility
   app.post("/api/patient-prompts/:batchId/regenerate", async (req: Request<{ batchId: string }>, res) => {
     try {
-      // No auth check here? Assuming protected by middleware
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+          success: false, 
+          data: null, 
+          error: "Authentication required" 
+        });
+      }
+      
       const { batchId } = req.params;
+      console.log(`Legacy endpoint: Regenerating all prompts for batch ${batchId}`);
 
       const prompts = await storage.getPatientPromptsByBatchId(batchId);
 
@@ -320,8 +346,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ 
           success: true,
           // Provide consistent data structure even if empty
-          data: { regenerated: 0, total: 0 }, 
-          message: "No prompts to regenerate for this batch", 
+          data: { regenerated: 0, total: 0, failedPrompts: [] }, 
+          message: `No prompts found for batch ${batchId}. This batch exists but has no associated prompts.`, 
         });
       }
 
@@ -331,29 +357,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Regenerating ${prompts.length} prompts with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
 
-      // Process each prompt in parallel
-      // NOTE: This assumes Promise.all succeeds or fails entirely.
-      // More granular error handling might be needed if individual regenerations can fail.
-      await Promise.all(
-        prompts.map(async (prompt) => {
-          const rawData = prompt.rawData || {
+      // Create a map to get unique patients by name
+      const patientMap = new Map<string, typeof prompts[0]>();
+      
+      // Get the most recent prompt for each patient (by ID)
+      for (const prompt of prompts) {
+        const patientName = prompt.name;
+        
+        if (!patientMap.has(patientName) || patientMap.get(patientName)!.id < prompt.id) {
+          patientMap.set(patientName, prompt);
+        }
+      }
+      
+      // Convert the map values to an array of unique patient prompts
+      const uniquePrompts = Array.from(patientMap.values());
+      console.log(`Found ${uniquePrompts.length} unique patients to regenerate prompts for`);
+      
+      let successCount = 0;
+      const failedPrompts: Array<{id: number, name: string, error: string}> = [];
+      
+      for (const prompt of uniquePrompts) {
+        try {
+          console.log(`Processing prompt ${prompt.id} for patient ${prompt.name} (${prompt.patientId})`);
+          
+          // Get the raw patient data
+          let patientData: any = {
             patientId: prompt.patientId,
             name: prompt.name,
             age: prompt.age,
             condition: prompt.condition,
+            healthStatus: prompt.healthStatus || "alert",
+            isAlert: prompt.isAlert === "true"
           };
+          
+          // Extract raw data if available
+          if (prompt.rawData) {
+            const parsedData = typeof prompt.rawData === "string"
+              ? JSON.parse(prompt.rawData)
+              : prompt.rawData;
+              
+            // Make sure we preserve the required fields from the original prompt
+            patientData = {
+              ...parsedData,
+              patientId: prompt.patientId, // Ensure we're using the stored patient ID
+              name: prompt.name || parsedData.name || 'Unknown Patient',
+              age: prompt.age || parsedData.age || 0,
+              condition: prompt.condition || parsedData.condition || 'Unknown Condition',
+              healthStatus: prompt.healthStatus || parsedData.healthStatus || "alert",
+              isAlert: prompt.isAlert === "true" || patientData.isAlert || false
+            };
+          }
+          
+          // Generate new prompt using our main generatePrompt function with the current system prompt
+          console.log(`Regenerating prompt for patient ${prompt.name} (${prompt.patientId})`);
+          const newPrompt = await generatePrompt(patientData, batchId, customSystemPrompt);
+          
+          // Extract reasoning from the generated prompt
+          const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+          
+          // Update in the database with both the full prompt and the extracted reasoning
+          await storage.updatePatientPrompt(prompt.id, { 
+            prompt: newPrompt,
+            reasoning: reasoning 
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Error regenerating prompt for patient ${prompt.name}:`, err);
+          failedPrompts.push({
+            id: prompt.id,
+            name: prompt.name,
+            error: err instanceof Error ? err.message : String(err)
+          });
+        }
+      }
 
-          const newPrompt = await generatePrompt(rawData as any, batchId, customSystemPrompt);
-          await storage.updatePatientPrompt(prompt.id, { prompt: newPrompt });
-        }),
-      );
-
+      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`);
+      
       // Use standard wrapper for success
       res.status(200).json({ 
         success: true,
         // Report how many were processed
-        data: { regenerated: prompts.length, total: prompts.length }, 
-        message: "All prompts regenerated successfully" 
+        data: { 
+          regenerated: successCount, 
+          total: uniquePrompts.length,
+          failedPrompts: failedPrompts.length > 0 ? failedPrompts : []
+        }, 
+        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `. ${failedPrompts.length} failed.` : '.'}`
       });
     } catch (err) {
       console.error("Error regenerating prompts:", err);
