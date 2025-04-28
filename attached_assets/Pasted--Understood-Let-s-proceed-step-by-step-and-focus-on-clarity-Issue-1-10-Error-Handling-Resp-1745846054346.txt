@@ -1,0 +1,39 @@
+
+Understood. Let's proceed step-by-step and focus on clarity.
+
+**Issue 1 & 10: Error Handling & Response Format Consistency**
+
+The goal is to make API responses consistent so the frontend knows what to expect, especially differentiating between "found nothing" and "an error occurred".
+
+Currently, we see a mix:
+*   Some endpoints return raw data arrays (e.g., `/api/batches`).
+*   Some return simple objects (e.g., `/api/batches/latest`).
+*   Some use `{ success: ..., message: ... }` (e.g., `/api/upload`).
+*   Some return `404 Not Found` with a simple message (e.g., `/api/patient-prompts/:batchId` when empty, before your recent changes).
+*   Error catches often return `{ success: false, message: ... }` or just `{ message: ... }`.
+
+A common standard is to use a consistent wrapper object for *all* responses. A potential structure could be:
+
+```typescript
+interface ApiResponse<T> {
+  success: boolean; // true if the request was processed successfully, false otherwise
+  data: T | null;    // The actual data payload, or null
+  message?: string; // Optional user-friendly status message
+  error?: string;   // Optional technical error details if success is false
+}
+```
+
+**Applying this:**
+
+*   Successful requests finding data would return `200 OK` with `{ success: true, data: [...], message: "Data retrieved" }`.
+*   Requests that complete successfully but find *no* matching data (like an empty list of prompts for a batch) could return `200 OK` with `{ success: true, data: [], message: "No data found" }`.
+*   Server errors or failed operations would return an appropriate status code (e.g., `500`, `400`) with `{ success: false, data: null, error: "Detailed error message" }`.
+
+**Questions for you:**
+
+1.  **Do you agree with adopting a standard response wrapper like the `ApiResponse<T>` structure shown above for all backend API endpoints?**
+2.  **Specifically for cases where a resource or data isn't found (e.g., getting prompts for a non-existent batch ID, getting alerts when there are none), do you prefer:**
+    *   **Option A:** Return `200 OK` status with `{ success: true, data: null /* or [] for lists */, message: "Not Found" }`?
+    *   **Option B:** Return `404 Not Found` status but *still* use the standard wrapper in the body, like `{ success: false, data: null, error: "Resource not found" }`?
+
+Your preference here will guide how we refactor the "not found" logic across the different endpoints.
