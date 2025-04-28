@@ -2100,14 +2100,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Regenerate a single prompt
+  // ROUTE 3: Regenerate a single prompt by ID - primary endpoint used by the client
   app.post("/api/prompts/:id/regenerate", async (req: Request<{ id: string }>, res) => {
     try {
-      // Get the prompt ID from the request parameters
-      // Ensure ID is parsed correctly as integer
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+          success: false, 
+          data: null, 
+          error: "Authentication required" 
+        });
+      }
+
+      // Get the prompt ID from the request parameters - ensure it's an integer
       const promptId = parseInt(req.params.id, 10);
       if (isNaN(promptId)) {
-        return res.status(400).json({ success: false, data: null, error: "Invalid prompt ID format" });
+        return res.status(400).json({ 
+          success: false, 
+          data: null, 
+          error: "Invalid prompt ID format. Must be a number." 
+        });
       }
       console.log(`Request to regenerate prompt ID: ${promptId}`);
 
@@ -2120,7 +2131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ 
           success: false, 
           data: null,
-          error: "Prompt not found" 
+          error: `Prompt with ID ${promptId} not found` 
         });
       }
       

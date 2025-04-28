@@ -253,38 +253,44 @@ export default function AIPoweredTriage() {
     }
   }, [prompts]);
 
-  // Mutation for regenerating prompts
+  // Mutation for regenerating a single prompt
   const regeneratePromptMutation = useMutation({
     mutationFn: async (patientId: number) => {
-      // Use the correct endpoint for single prompt regeneration
-      // The API expects /api/prompts/:id/regenerate 
+      console.log(`Regenerating prompt with ID: ${patientId}`);
+      // Use the standardized endpoint for single prompt regeneration
       const res = await apiRequest("POST", `/api/prompts/${patientId}/regenerate`);
+      
+      // Handle non-2xx responses
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Failed with status: ${res.status}`);
+      }
+      
       return await res.json();
     },
-    onSuccess: () => {
-      console.log("Successfully regenerated single prompt");
+    onSuccess: (response) => {
+      console.log("Successfully regenerated single prompt:", response);
       
       // Force refetch the patient prompts to ensure we get the latest data
-      queryClient.clear(); // Clear entire cache to ensure fresh data
-      
-      // Refetch the data by invalidating relevant query keys
+      // First invalidate all queries that might contain this data
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
       if (effectiveBatchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
       }
       
-      // Delay the toast to give time for the data to refresh
+      // Show success message
+      toast({
+        title: "Success",
+        description: response.message || "Prompt regenerated successfully",
+      });
+      
+      // Force refetch the data after a short delay to allow the server to complete any processing
       setTimeout(() => {
-        toast({
-          title: "Success",
-          description: "Prompt regenerated successfully",
-        });
-        
-        // Force refetch the data
         queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
-      }, 1000);
+      }, 500);
     },
     onError: (error: Error) => {
+      console.error("Failed to regenerate prompt:", error);
       toast({
         title: "Error",
         description: `Failed to regenerate prompt: ${error.message}`,
@@ -293,39 +299,60 @@ export default function AIPoweredTriage() {
     }
   });
   
-  // Mutation for regenerating all prompts
+  // Mutation for regenerating all prompts in a batch
   const regenerateAllMutation = useMutation({
     mutationFn: async (batchId: string) => {
       if (!batchId) {
         throw new Error("No batch found to regenerate");
       }
       
-      // We'll keep using the /api/prompts/regenerate-all endpoint since it's specifically for regeneration
+      console.log(`Regenerating all prompts for batch: ${batchId}`);
+      // Use the standardized API endpoint
       const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${batchId}`);
+      
+      // Handle non-2xx responses
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Failed with status: ${res.status}`);
+      }
+      
       return await res.json();
     },
-    onSuccess: (data, batchId) => {
-      // Force refetch the patient prompts to ensure we get the latest data
-      queryClient.clear(); // Clear entire cache to ensure fresh data
+    onSuccess: (response, batchId) => {
+      console.log("Regeneration result:", response);
       
-      // Refetch the data by invalidating relevant query keys
+      // Clear any cached data to ensure we get fresh data
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", batchId] });
+      if (batchId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", batchId] });
+      }
       
-      // Delay the toast to give time for the data to refresh
-      setTimeout(() => {
+      // If we have data, show a success message with details
+      if (response.data) {
+        const { regenerated, total, failedPrompts } = response.data;
+        const hasFailures = failedPrompts && failedPrompts.length > 0;
+        
         toast({
           title: "Success",
-          description: data.regenerated 
-            ? `Successfully regenerated ${data.regenerated}/${data.total} prompts`
-            : "All prompts regenerated successfully",
+          description: hasFailures
+            ? `Regenerated ${regenerated}/${total} prompts. ${failedPrompts.length} failed.`
+            : `Successfully regenerated ${regenerated}/${total} prompts`,
         });
-        
-        // Force refetch the data
+      } else {
+        // If no data, show a generic success message
+        toast({
+          title: "Success",
+          description: response.message || "All prompts regenerated successfully",
+        });
+      }
+      
+      // Force refetch the data after a short delay to allow the server to complete any processing
+      setTimeout(() => {
         queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", batchId] });
-      }, 1000);
+      }, 500);
     },
     onError: (error: Error) => {
+      console.error("Failed to regenerate all prompts:", error);
       toast({
         title: "Error",
         description: `Failed to regenerate prompts: ${error.message}`,

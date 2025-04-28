@@ -83,7 +83,7 @@ export default function PromptEditingSandbox() {
     }
   });
 
-  // Regenerate all prompts mutation (still needed)
+  // Regenerate all prompts mutation (updated for consistency with other components)
   const regeneratePromptsMutation = useMutation({
     mutationFn: async () => {
       if (!latestBatch?.batchId) {
@@ -101,26 +101,43 @@ export default function PromptEditingSandbox() {
       
       return await res.json();
     },
-    onSuccess: (data) => {
-      console.log("Regeneration result:", data);
+    onSuccess: (response) => {
+      console.log("Regeneration result:", response);
       
-      // Handle cases where regeneration succeeded but no prompts were found/regenerated
-      if (data.data.total === 0) {
-        toast({
-          title: "No Prompts Found",
-          description: data.message || "No prompts were found to regenerate. Try uploading patient data first.",
-          variant: "default"
-        });
+      // If we have data, show appropriate success message
+      if (response.data) {
+        const { regenerated, total, failedPrompts } = response.data;
+        const hasFailures = failedPrompts && failedPrompts.length > 0;
+        
+        if (total === 0) {
+          toast({
+            title: "No Prompts Found",
+            description: response.message || "No prompts were found to regenerate. Try uploading patient data first.",
+            variant: "default"
+          });
+        } else {
+          toast({
+            title: "Success",
+            description: hasFailures
+              ? `Regenerated ${regenerated}/${total} prompts. ${failedPrompts.length} failed.`
+              : `Successfully regenerated ${regenerated}/${total} prompts`,
+          });
+        }
       } else {
+        // Generic success message if no data
         toast({
-          title: "Success", 
-          description: `Patient reports regenerated: ${data.data.regenerated}/${data.data.total}`,
+          title: "Success",
+          description: response.message || "All prompts regenerated successfully",
         });
       }
       
+      // Invalidate both prompts and patient-prompts queries to ensure data consistency
       queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
+      
       if (latestBatch?.batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
       }
     },
     onError: (error: Error) => {
