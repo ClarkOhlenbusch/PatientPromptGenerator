@@ -50,6 +50,11 @@ export default function Header() {
                   Triage
                 </span>
               </Link>
+              <Link href="/call-history">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/call-history" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  Call History
+                </span>
+              </Link>
               <Link href="/prompt-editing">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                   Prompt Editing

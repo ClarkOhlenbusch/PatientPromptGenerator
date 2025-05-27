@@ -15,6 +15,7 @@ import PromptEditingSandbox from "@/pages/PromptEditingSandbox";
 import AIPoweredTriage from "@/pages/AIPoweredTriage";
 import MonthlyReports from "@/pages/MonthlyReports";
 import SettingsPage from "@/pages/settings-page";
+import CallHistory from "@/pages/CallHistory";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
             <ProtectedRoute path="/patient-prompts/:id" component={PatientPrompts} />
             <ProtectedRoute path="/prompt-editing" component={PromptEditingSandbox} />
             <ProtectedRoute path="/triage" component={AIPoweredTriage} />
+            <ProtectedRoute path="/call-history" component={CallHistory} />
             <ProtectedRoute path="/monthly-reports" component={MonthlyReports} />
             <ProtectedRoute path="/settings" component={SettingsPage} />
             <Route path="/auth" component={AuthPage} />
