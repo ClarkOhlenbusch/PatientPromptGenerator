@@ -1918,13 +1918,7 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         }
       };
 
-      console.log("🔍 DEBUG: Variable values being sent to Vapi:", {
-        patientName: patientName,
-        condition: condition,
-        age: age,
-        bloodPressure: extractedData.bloodPressure,
-        heartRate: extractedData.heartRate
-      });
+      console.log("🔍 DEBUG: Complete call payload for Vapi:", JSON.stringify(vapiPayload, null, 2));
 
       // Make the call to Vapi API
       const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
