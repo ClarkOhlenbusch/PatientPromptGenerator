@@ -155,6 +155,37 @@ export type SystemSettings = typeof systemSettings.$inferSelect;
 export type InsertSystemSettings = z.infer<typeof insertSystemSettingsSchema>;
 
 // Add phone validation schema
+/**
+ * Call history table to store conversation summaries and context
+ * for follow-up calls with patients
+ */
+export const callHistory = pgTable("call_history", {
+  id: serial("id").primaryKey(),
+  callId: text("call_id").notNull(), // Vapi call ID
+  patientId: text("patient_id").notNull(), // Reference to patient
+  patientName: text("patient_name").notNull(),
+  phoneNumber: text("phone_number").notNull(),
+  duration: integer("duration"), // Call duration in seconds
+  status: text("status").notNull(), // completed, failed, no-answer, etc.
+  transcript: text("transcript"), // Full conversation transcript
+  summary: text("summary"), // AI-generated summary
+  keyPoints: text("key_points").array(), // Array of key talking points
+  healthConcerns: text("health_concerns").array(), // Array of health issues mentioned
+  followUpItems: text("follow_up_items").array(), // Items to mention in next call
+  callDate: timestamp("call_date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const insertCallHistorySchema = createInsertSchema(callHistory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type CallHistory = typeof callHistory.$inferSelect;
+export type InsertCallHistory = z.infer<typeof insertCallHistorySchema>;
+
 export const phoneSchema = z
   .string()
   .regex(

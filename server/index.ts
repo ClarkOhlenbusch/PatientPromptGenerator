@@ -4,6 +4,26 @@ import { setupVite, serveStatic, log } from "./vite";
 import cors from 'cors';
 import { initializeDatabase } from "./lib/initDb";
 
+// Validate required environment variables at startup
+function validateEnvironment() {
+  const required = ['DATABASE_URL', 'SESSION_SECRET'];
+  const optional = ['OPENAI_API_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER'];
+
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    console.error('❌ Missing required environment variables:', missing.join(', '));
+    process.exit(1);
+  }
+
+  const missingOptional = optional.filter(key => !process.env[key]);
+  if (missingOptional.length > 0) {
+    console.warn('⚠️  Missing optional environment variables:', missingOptional.join(', '));
+    console.warn('   Some features may not work properly.');
+  }
+
+  console.log('✅ Environment validation passed');
+}
+
 // Global error handlers to prevent server crashes
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Promise Rejection:', reason);
@@ -22,9 +42,9 @@ process.on('uncaughtException', (error) => {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cors({ 
+app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? 'https://' + process.env.REPL_SLUG + '.repl.co' : true,
-  credentials: true 
+  credentials: true
 }));
 
 app.use((req, res, next) => {
@@ -58,13 +78,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize database first
+  // Validate environment variables first
+  validateEnvironment();
+
+  // Initialize database
   try {
     await initializeDatabase();
   } catch (err) {
     console.error('Failed to initialize database:', err);
+    process.exit(1);
   }
-  
+
   const server = await registerRoutes(app);
 
   // Standardized error handling middleware
@@ -76,19 +100,19 @@ app.use((req, res, next) => {
       name: err.name,
       code: err.code
     });
-    
+
     // Determine appropriate status code
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    
+
     // Send standardized error response
-    res.status(status).json({ 
-      success: false, 
+    res.status(status).json({
+      success: false,
       data: null,
       error: message,
       timestamp: new Date().toISOString()
     });
-    
+
     // Don't throw the error after handling it - this would crash the server
     // Instead just log it and let the server continue
   });
@@ -111,6 +135,14 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
+    console.log('\n🏥 Patient Prompt Generator Server');
+    console.log('=====================================');
+    console.log(`🚀 Server running on port ${port}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📊 Database: ${process.env.DATABASE_URL ? '✅ Connected' : '❌ Not configured'}`);
+    console.log(`🤖 OpenAI: ${process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ Not configured'}`);
+    console.log(`📱 Twilio: ${process.env.TWILIO_ACCOUNT_SID ? '✅ Configured' : '❌ Not configured'}`);
+    console.log('=====================================\n');
     log(`serving on port ${port}`);
   });
 })();

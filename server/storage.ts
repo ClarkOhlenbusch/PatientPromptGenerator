@@ -5,6 +5,7 @@ import {
   systemPrompts,
   templateVariables,
   systemSettings,
+  callHistory,
   type User, 
   type InsertUser, 
   type PatientBatch, 
@@ -15,7 +16,9 @@ import {
   type InsertSystemPrompt,
   type TemplateVariable,
   type InsertTemplateVariable,
-  type SystemSettings
+  type SystemSettings,
+  type CallHistory,
+  type InsertCallHistory
 } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -71,6 +74,13 @@ export interface IStorage {
   // Monthly reports methods
   getMonthlyReports(): Promise<any[]>;
   generateMonthlyReport(monthYear: string): Promise<any>;
+  
+  // Call history methods
+  createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
+  getCallHistoryByPatient(patientId: string): Promise<CallHistory[]>;
+  getLatestCallForPatient(patientId: string): Promise<CallHistory | null>;
+  updateCallHistory(callId: string, updates: Partial<InsertCallHistory>): Promise<CallHistory>;
+  getAllCallHistory(): Promise<CallHistory[]>;
   
   // Session store
   sessionStore: session.Store;

@@ -6,8 +6,9 @@ import { DatabaseStorage } from "../storage";
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
-// Use a cache to store generated prompts by condition type
+// Use a cache to store generated prompts by condition type with size limit
 const promptCache = new Map<string, string>();
+const MAX_CACHE_SIZE = 1000; // Prevent memory leaks
 
 // Track token usage statistics
 let totalInputTokens = 0;
@@ -33,66 +34,66 @@ export function getTokenUsageStats() {
 export function extractReasoning(promptText: string): { displayPrompt: string, reasoning: string } {
   // First check for markdown-formatted reasoning with bold formatting
   const markdownReasoningMatch = promptText.match(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/);
-  
+
   if (markdownReasoningMatch) {
     // Extract the reasoning text
     const reasoning = markdownReasoningMatch[1].trim();
-    
+
     // Remove the reasoning section from the prompt
     const displayPrompt = promptText.replace(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/, '').trim();
-    
+
     console.log("Extracted reasoning (markdown):", reasoning);
     return { displayPrompt, reasoning };
   }
-  
+
   // Check for plaintext "Reasoning:" section
   const plainReasoningMatch = promptText.match(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i);
-  
+
   if (plainReasoningMatch) {
     // Extract the reasoning text
     const reasoning = plainReasoningMatch[1].trim();
-    
+
     // Remove the reasoning section from the prompt
     const displayPrompt = promptText.replace(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
-    
+
     console.log("Extracted reasoning (plaintext):", reasoning);
     return { displayPrompt, reasoning };
   }
-  
+
   // Check for a section with "**Reasoning**" (different format)
   const boldReasoningMatch = promptText.match(/\*\*Reasoning\*\*:?\s*([\s\S]*?)(\n\s*$|$)/i);
-  
+
   if (boldReasoningMatch) {
     // Extract the reasoning text
     const reasoning = boldReasoningMatch[1].trim();
-    
+
     // Remove the reasoning section from the prompt
     const displayPrompt = promptText.replace(/\*\*Reasoning\*\*:?\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
-    
+
     console.log("Extracted reasoning (bold):", reasoning);
     return { displayPrompt, reasoning };
   }
-  
+
   // If no reasoning section is found, check for a dedicated section at the end
   const lines = promptText.trim().split(/\n/);
-  const lastSectionIndex = lines.findIndex((line, index) => 
+  const lastSectionIndex = lines.findIndex((line, index) =>
     index > lines.length / 2 && // Only look in the second half of the content
     (
-      line.includes("Reasoning:") || 
-      line.includes("**Reasoning:**") || 
+      line.includes("Reasoning:") ||
+      line.includes("**Reasoning:**") ||
       line.includes("**Reasoning**") ||
       line.match(/^\*\*.*\*\*:$/) // Any bold section header with a colon
     )
   );
-  
+
   if (lastSectionIndex !== -1) {
     const displayPrompt = lines.slice(0, lastSectionIndex).join('\n').trim();
     const reasoning = lines.slice(lastSectionIndex).join('\n').trim();
-    
+
     console.log("Extracted reasoning (section):", reasoning);
     return { displayPrompt, reasoning };
   }
-  
+
   // If no reasoning section is found, return original prompt and empty reasoning
   console.log("No reasoning section found");
   return { displayPrompt: promptText, reasoning: "" };
@@ -131,8 +132,8 @@ export function getDefaultSystemPrompt(): string {
  * This is the main function used for triage and all prompt generation
  */
 export async function generatePrompt(
-  patient: PatientData, 
-  batchId?: string, 
+  patient: PatientData,
+  batchId?: string,
   customSystemPrompt?: string
 ): Promise<string> {
   try {
@@ -173,10 +174,10 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
     });
 
     const fullPrompt = completion.choices[0]?.message?.content || 'No prompt generated';
-    
+
     // Extract reasoning from the prompt
     const { displayPrompt, reasoning } = extractReasoning(fullPrompt);
-    
+
     // Force a check - if reasoning is empty but "Reasoning" exists in the prompt text,
     // try more aggressive pattern matching
     if (!reasoning && fullPrompt.includes("Reasoning")) {
@@ -186,28 +187,35 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
       if (lastReasoningIndex > fullPrompt.length / 2) { // Only check in latter half
         const forcedDisplayPrompt = fullPrompt.substring(0, lastReasoningIndex).trim();
         const forcedReasoning = fullPrompt.substring(lastReasoningIndex).trim();
-        
+
         if (forcedReasoning.length > 20) { // At least 20 chars of content to be valid
           console.log("Found reasoning with aggressive method:", forcedReasoning);
-          
+
           // Return the full prompt (the client will extract reasoning again)
           return fullPrompt;
         }
       }
     }
-    
+
     // Only cache if not using a custom system prompt
     if (!customSystemPrompt) {
+      // Clear oldest entries if cache is too large
+      if (promptCache.size >= MAX_CACHE_SIZE) {
+        const firstKey = promptCache.keys().next().value;
+        if (firstKey) {
+          promptCache.delete(firstKey);
+        }
+      }
       promptCache.set(cacheKey, fullPrompt);
     }
-    
+
     // Log token usage estimate
     const usageData = estimateSinglePromptUsage(systemPrompt, fullPrompt);
     totalInputTokens += usageData.inputTokens;
     totalOutputTokens += usageData.outputTokens;
     totalEstimatedCost += usageData.totalCost;
     totalApiCalls++;
-    
+
     console.log(`=== OpenAI API Cost Estimate ===`);
     console.log(`Input tokens: ${usageData.inputTokens} (est. $${usageData.inputCost.toFixed(6)})`);
     console.log(`Output tokens: ${usageData.outputTokens} (est. $${usageData.outputCost.toFixed(6)})`);
@@ -226,7 +234,7 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
  * This provides backward compatibility for the prompt editing feature
  */
 export async function generatePromptWithTemplate(
-  patient: PatientData, 
+  patient: PatientData,
   template: string
 ): Promise<string> {
   return generatePrompt(patient, undefined, template);
@@ -237,8 +245,8 @@ export async function generatePromptWithTemplate(
  * This provides backward compatibility for the system prompt + template approach
  */
 export async function generatePromptWithSystemAndTemplate(
-  patient: PatientData, 
-  systemPrompt: string, 
+  patient: PatientData,
+  systemPrompt: string,
   template: string
 ): Promise<string> {
   // Combine system prompt and template for backward compatibility
@@ -249,12 +257,12 @@ export async function generatePromptWithSystemAndTemplate(
 async function generatePlaceholders(systemPrompt: string, userPrompt: string): Promise<Record<string, string>> {
   let attempts = 0;
   const maxAttempts = 3;
-  
+
   while (attempts < maxAttempts) {
     try {
       // Calculate input tokens for tracking
       totalApiCalls++;
-      
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
@@ -265,22 +273,22 @@ async function generatePlaceholders(systemPrompt: string, userPrompt: string): P
         max_tokens: 500,
         temperature: 0.5,
       });
-      
+
       const content = response.choices[0]?.message?.content?.trim() || '';
-      
+
       // Estimate tokens and log
       const { estimateSinglePromptUsage } = await import("./tokenUsageEstimator");
       const usageData = estimateSinglePromptUsage(systemPrompt + userPrompt, content);
       totalInputTokens += usageData.inputTokens;
       totalOutputTokens += usageData.outputTokens;
       totalEstimatedCost += usageData.totalCost;
-      
+
       console.log(`=== OpenAI Template Placeholder API Cost Estimate ===`);
       console.log(`Input tokens: ${usageData.inputTokens} (est. $${usageData.inputCost.toFixed(6)})`);
       console.log(`Output tokens: ${usageData.outputTokens} (est. $${usageData.outputCost.toFixed(6)})`);
       console.log(`Total estimated cost: $${usageData.totalCost.toFixed(6)}`);
       console.log(`===================================================`);
-      
+
       try {
         // Parse the JSON response
         const placeholderValues = JSON.parse(content);
@@ -289,7 +297,7 @@ async function generatePlaceholders(systemPrompt: string, userPrompt: string): P
         console.error("Error parsing OpenAI JSON response:", jsonError);
         console.log("Raw response:", content);
         attempts++;
-        
+
         if (attempts >= maxAttempts) {
           console.error("Failed to parse JSON response after multiple attempts");
           return {};
@@ -297,18 +305,18 @@ async function generatePlaceholders(systemPrompt: string, userPrompt: string): P
       }
     } catch (apiError) {
       attempts++;
-      
+
       if (attempts >= maxAttempts) {
         console.error("Failed to generate placeholder content after multiple attempts:", apiError);
         return {};
       }
-      
+
       // Exponential backoff
       const delay = Math.pow(2, attempts) * 1000;
       console.warn(`Attempt ${attempts} failed. Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   return {};
 }
