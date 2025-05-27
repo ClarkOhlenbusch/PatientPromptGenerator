@@ -1740,7 +1740,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Prepare the Vapi call request
+      // Get previous conversation history for this patient
+      const previousCall = await storage.getLatestCallForPatient(patientId.toString());
+      let conversationContext = "";
+      
+      if (previousCall && previousCall.summary) {
+        conversationContext = `
+Previous conversation summary: ${previousCall.summary}
+${previousCall.followUpItems && previousCall.followUpItems.length > 0 ? 
+  `Follow-up items from last call: ${previousCall.followUpItems.join(', ')}` : ''}
+${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ? 
+  `Previous health concerns: ${previousCall.healthConcerns.join(', ')}` : ''}
+`;
+      }
+
+      // Prepare the Vapi call request with conversation history
       const vapiPayload = {
         assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Your agent ID
         phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08", // Your phone number ID
@@ -1752,8 +1766,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             patientName: patientName,
             carePrompt: carePrompt,
             condition: condition,
-            age: age.toString()
+            age: age.toString(),
+            conversationHistory: conversationContext
           }
+        },
+        metadata: {
+          patientId: patientId.toString(),
+          patientName: patientName
         }
       };
 
@@ -2957,6 +2976,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
           success: false,
           message: `Error resetting system prompt: ${err instanceof Error ? err.message : String(err)}`,
         });
+    }
+  });
+
+  // Get call history for a specific patient
+  app.get("/api/call-history/:patientId", async (req, res) => {
+    try {
+      const { patientId } = req.params;
+      const callHistory = await storage.getCallHistoryByPatient(patientId);
+      
+      return res.json({ 
+        success: true, 
+        callHistory: callHistory.map(call => ({
+          ...call,
+          keyPoints: call.keyPoints || [],
+          healthConcerns: call.healthConcerns || [],
+          followUpItems: call.followUpItems || []
+        }))
+      });
+    } catch (error) {
+      console.error("Error fetching call history:", error);
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to fetch call history" 
+      });
+    }
+  });
+
+  // Get all call history (for admin/dashboard view)
+  app.get("/api/call-history", async (req, res) => {
+    try {
+      const allCallHistory = await storage.getAllCallHistory();
+      
+      return res.json({ 
+        success: true, 
+        callHistory: allCallHistory.map(call => ({
+          ...call,
+          keyPoints: call.keyPoints || [],
+          healthConcerns: call.healthConcerns || [],
+          followUpItems: call.followUpItems || []
+        }))
+      });
+    } catch (error) {
+      console.error("Error fetching all call history:", error);
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to fetch call history" 
+      });
     }
   });
 

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, RotateCw, FileDown, Copy, Maximize2, Phone } from "lucide-react";
+import { Eye, RotateCw, FileDown, Copy, Maximize2, Phone, History, Clock, MessageSquare } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import ReactMarkdown from 'react-markdown';
@@ -25,6 +25,22 @@ interface PatientPrompt {
   reasoning: string;
   isAlert: boolean;
   status: 'healthy' | 'alert';
+}
+
+interface CallHistory {
+  id: number;
+  callId: string;
+  patientId: string;
+  patientName: string;
+  phoneNumber: string;
+  duration: number;
+  status: string;
+  summary: string;
+  keyPoints: string[];
+  healthConcerns: string[];
+  followUpItems: string[];
+  callDate: string;
+  transcript?: string;
 }
 
 // Utility function to extract reasoning from prompt text
