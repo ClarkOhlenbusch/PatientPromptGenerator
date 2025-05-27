@@ -1434,29 +1434,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Vapi webhook to receive call completion data
   app.post("/api/vapi/webhook", async (req, res) => {
     try {
-      const { message } = req.body;
+      console.log("Received Vapi webhook:", JSON.stringify(req.body, null, 2));
       
-      // Handle end-of-call-report
-      if (message?.type === "end-of-call-report") {
+      const webhookData = req.body;
+      
+      // Handle end-of-call-report event
+      if (webhookData.message?.type === "end-of-call-report") {
+        const { message } = webhookData;
         const call = message.call;
         const transcript = message.transcript;
         const summary = message.summary;
         
-        console.log("Received call completion webhook:", {
+        console.log("Processing end-of-call-report:", {
           callId: call?.id,
-          endReason: message.endedReason,
           hasTranscript: !!transcript,
-          hasSummary: !!summary
+          hasSummary: !!summary,
+          metadata: call?.metadata
         });
 
-        if (call?.id && transcript) {
-          // Generate AI-powered conversation summary
-          const aiSummary = await generateConversationSummary(transcript, summary);
+        if (call?.id) {
+          // Generate AI-powered conversation summary from transcript
+          const aiSummary = await generateConversationSummary(transcript || "", summary);
           
-          // Extract patient info from call metadata (stored when call was initiated)
+          // Extract patient info from call metadata
           const patientId = call.metadata?.patientId || "unknown";
           const patientName = call.metadata?.patientName || "Unknown Patient";
           const phoneNumber = call.customer?.number || "";
+          
+          // Calculate call duration
+          const duration = call.endedAt && call.startedAt ? 
+            Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000) : 0;
+          
+          // Determine call status based on end reason
+          let callStatus = "completed";
+          if (message.endedReason) {
+            switch (message.endedReason.toLowerCase()) {
+              case "customer-hangup":
+              case "assistant-hangup":
+                callStatus = "completed";
+                break;
+              case "customer-did-not-answer":
+                callStatus = "no-answer";
+                break;
+              case "customer-busy":
+                callStatus = "busy";
+                break;
+              case "error":
+                callStatus = "failed";
+                break;
+              default:
+                callStatus = message.endedReason;
+            }
+          }
           
           // Store call history in database
           await storage.createCallHistory({
@@ -1464,10 +1493,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             patientId,
             patientName,
             phoneNumber,
-            duration: call.endedAt && call.startedAt ? 
-              Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000) : 0,
-            status: message.endedReason || "completed",
-            transcript,
+            duration,
+            status: callStatus,
+            transcript: transcript || "",
             summary: aiSummary.summary,
             keyPoints: aiSummary.keyPoints,
             healthConcerns: aiSummary.healthConcerns,
@@ -1475,13 +1503,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             callDate: call.endedAt ? new Date(call.endedAt) : new Date()
           });
 
-          console.log(`Stored call history for patient ${patientName}`);
+          console.log(`✅ Stored call history for patient ${patientName} (${call.id})`);
         }
       }
       
       return res.status(200).json({ success: true });
     } catch (error) {
-      console.error("Error processing Vapi webhook:", error);
+      console.error("❌ Error processing Vapi webhook:", error);
       return res.status(500).json({ 
         success: false, 
         message: "Error processing webhook" 
@@ -1595,6 +1623,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (systemPrompt || model) {
+        // Create a system prompt that uses proper Vapi variable syntax
+        const enhancedSystemPrompt = systemPrompt || `You are an AI voice assistant for a home-health care service. Your job is to place a brief (max 15 minute) follow-up call to a patient.
+
+Before you begin:
+- Confirm you are speaking with {{patientName}} and that it's still a good time for a 10–15 minute check-in.
+
+During the call:
+- Reference their current health data: blood pressure {{bloodPressure}}, heart rate {{heartRate}}, weight {{weight}}
+- Ask about their primary condition ({{condition}}) and any new or worsening symptoms
+- {{#if conversationHistory}}Reference previous conversation: {{conversationHistory}}{{/if}}
+- Use their care recommendations: {{carePrompt}}
+
+Tone & Style:
+- Calm, empathetic, patient, and clear
+- Natural conversation flow
+
+Ending the call:
+- Ask if there's anything else they'd like to share
+- Remind them of their next appointment: {{nextAppointmentDate}}
+- Thank them and let them know their care team will review this summary`;
+
         // Preserve existing model configuration and only update what's specified
         updatePayload.model = {
           provider: "openai",
@@ -1602,12 +1651,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           messages: [
             {
               role: "system",
-              content: systemPrompt || currentAgent.model?.messages?.[0]?.content || "You are a helpful healthcare assistant."
+              content: enhancedSystemPrompt
             }
           ],
           // Preserve other model settings if they exist
           ...(currentAgent.model?.temperature !== undefined && { temperature: currentAgent.model.temperature }),
           ...(currentAgent.model?.maxTokens !== undefined && { maxTokens: currentAgent.model.maxTokens })
+        };
+      }
+
+      // Configure webhook URL for call completion events
+      if (!updatePayload.server) {
+        updatePayload.server = {
+          url: `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/api/vapi/webhook`,
+          secret: process.env.VAPI_WEBHOOK_SECRET || "webhook-secret-key"
         };
       }
 
@@ -1801,7 +1858,25 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
 `;
       }
 
-      // Prepare the Vapi call request with conversation history
+      // Extract key patient data from the care prompt for variables
+      const extractedData = {
+        bloodPressure: "monitoring required",
+        heartRate: "being tracked", 
+        weight: "stable",
+        medications: "as prescribed",
+        nextAppointment: "scheduled with your care team"
+      };
+
+      // Try to extract specific values from the care prompt
+      const bpMatch = carePrompt.match(/blood pressure[:\s]+(\d+\/\d+)/i);
+      const hrMatch = carePrompt.match(/heart rate[:\s]+(\d+)/i);
+      const weightMatch = carePrompt.match(/weight[:\s]+(\d+(?:\.\d+)?)\s*lbs?/i);
+
+      if (bpMatch) extractedData.bloodPressure = bpMatch[1];
+      if (hrMatch) extractedData.heartRate = hrMatch[1] + " bpm";
+      if (weightMatch) extractedData.weight = weightMatch[1] + " lbs";
+
+      // Prepare the Vapi call request with conversation history and proper variables
       const vapiPayload = {
         assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Your agent ID
         phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08", // Your phone number ID
@@ -1811,15 +1886,20 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         assistantOverrides: {
           variableValues: {
             patientName: patientName,
-            carePrompt: carePrompt,
             condition: condition,
             age: age.toString(),
-            conversationHistory: conversationContext
+            bloodPressure: extractedData.bloodPressure,
+            heartRate: extractedData.heartRate,
+            weight: extractedData.weight,
+            carePrompt: carePrompt,
+            conversationHistory: conversationContext,
+            nextAppointmentDate: extractedData.nextAppointment
           }
         },
         metadata: {
           patientId: patientId.toString(),
-          patientName: patientName
+          patientName: patientName,
+          batchId: "current_batch" // Add batch tracking
         }
       };
 
