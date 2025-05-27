@@ -1347,6 +1347,230 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === VAPI VOICE CALLING ENDPOINTS ===
   
+  // Get current Vapi agent configuration
+  app.get("/api/vapi/agent", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiPrivateKey) {
+        return res.status(500).json({
+          success: false,
+          message: "Vapi API key not configured"
+        });
+      }
+
+      const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
+
+      // Fetch agent configuration from Vapi
+      const vapiResponse = await fetch(`https://api.vapi.ai/assistant/${agentId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${vapiPrivateKey}`
+        }
+      });
+
+      if (!vapiResponse.ok) {
+        const errorData = await vapiResponse.json();
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: "Failed to fetch agent configuration",
+          details: errorData
+        });
+      }
+
+      const agentData = await vapiResponse.json();
+
+      return res.status(200).json({
+        success: true,
+        data: agentData
+      });
+
+    } catch (error) {
+      console.error("Error fetching Vapi agent config:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error fetching agent config: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+
+  // Update Vapi agent configuration
+  app.patch("/api/vapi/agent", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { firstMessage, systemPrompt, voiceProvider, voiceId, model } = req.body;
+
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiPrivateKey) {
+        return res.status(500).json({
+          success: false,
+          message: "Vapi API key not configured"
+        });
+      }
+
+      const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
+
+      // Prepare the update payload for Vapi
+      const updatePayload = {
+        firstMessage: firstMessage || undefined,
+        voice: {
+          provider: voiceProvider || "playht",
+          voiceId: voiceId || "jennifer"
+        },
+        model: {
+          provider: "openai",
+          model: model || "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt || "You are a helpful healthcare assistant."
+            }
+          ]
+        }
+      };
+
+      // Update agent configuration via Vapi API
+      const vapiResponse = await fetch(`https://api.vapi.ai/assistant/${agentId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${vapiPrivateKey}`
+        },
+        body: JSON.stringify(updatePayload)
+      });
+
+      if (!vapiResponse.ok) {
+        const errorData = await vapiResponse.json();
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: "Failed to update agent configuration",
+          details: errorData
+        });
+      }
+
+      const updatedAgent = await vapiResponse.json();
+
+      return res.status(200).json({
+        success: true,
+        message: "Agent configuration updated successfully",
+        data: updatedAgent
+      });
+
+    } catch (error) {
+      console.error("Error updating Vapi agent:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating agent: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+
+  // Test call with custom agent configuration
+  app.post("/api/vapi/test-call", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { phoneNumber, firstMessage, systemPrompt, voiceProvider, voiceId, model } = req.body;
+
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required for test call"
+        });
+      }
+
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiPrivateKey) {
+        return res.status(500).json({
+          success: false,
+          message: "Vapi API key not configured"
+        });
+      }
+
+      // Use transient assistant configuration for test call
+      const testCallPayload = {
+        phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08",
+        customer: {
+          number: phoneNumber
+        },
+        assistant: {
+          firstMessage: firstMessage || "Hello, this is a test call from your AI healthcare assistant.",
+          voice: {
+            provider: voiceProvider || "playht",
+            voiceId: voiceId || "jennifer"
+          },
+          model: {
+            provider: "openai",
+            model: model || "gpt-4",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt || "You are a helpful healthcare assistant conducting a test call. Keep the conversation brief and friendly."
+              }
+            ]
+          },
+          transcriber: {
+            provider: "deepgram",
+            model: "nova",
+            language: "en-US"
+          }
+        }
+      };
+
+      // Make test call via Vapi API
+      const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${vapiPrivateKey}`
+        },
+        body: JSON.stringify(testCallPayload)
+      });
+
+      const vapiData = await vapiResponse.json();
+
+      if (!vapiResponse.ok) {
+        console.error("Vapi test call error:", vapiData);
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: vapiData.message || "Failed to initiate test call",
+          details: vapiData
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Test call initiated successfully",
+        data: {
+          callId: vapiData.id,
+          phoneNumber,
+          status: "initiated"
+        }
+      });
+
+    } catch (error) {
+      console.error("Error initiating test call:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error initiating test call: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+
   // Initiate a call to a patient via Vapi
   app.post("/api/vapi/call", async (req, res) => {
     try {
