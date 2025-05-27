@@ -1562,24 +1562,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
 
-      // Prepare the update payload for Vapi
-      const updatePayload = {
-        firstMessage: firstMessage || undefined,
-        voice: {
-          provider: voiceProvider || "playht",
-          voiceId: voiceId || "jennifer"
-        },
-        model: {
+      // First, get the current agent configuration to preserve existing settings
+      const currentAgentResponse = await fetch(`https://api.vapi.ai/assistant/${agentId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${vapiPrivateKey}`
+        }
+      });
+
+      if (!currentAgentResponse.ok) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to fetch current agent configuration"
+        });
+      }
+
+      const currentAgent = await currentAgentResponse.json();
+
+      // Prepare the update payload for Vapi, preserving existing configuration
+      const updatePayload = {};
+      
+      // Only include fields that are being updated
+      if (firstMessage !== undefined) {
+        updatePayload.firstMessage = firstMessage;
+      }
+      
+      if (voiceProvider || voiceId) {
+        updatePayload.voice = {
+          provider: voiceProvider || currentAgent.voice?.provider || "playht",
+          voiceId: voiceId || currentAgent.voice?.voiceId || "jennifer"
+        };
+      }
+      
+      if (systemPrompt || model) {
+        // Preserve existing model configuration and only update what's specified
+        updatePayload.model = {
           provider: "openai",
-          model: model || "gpt-4",
+          model: model || currentAgent.model?.model || "gpt-4o-mini",
           messages: [
             {
               role: "system",
-              content: systemPrompt || "You are a helpful healthcare assistant."
+              content: systemPrompt || currentAgent.model?.messages?.[0]?.content || "You are a helpful healthcare assistant."
             }
-          ]
-        }
-      };
+          ],
+          // Preserve other model settings if they exist
+          ...(currentAgent.model?.temperature !== undefined && { temperature: currentAgent.model.temperature }),
+          ...(currentAgent.model?.maxTokens !== undefined && { maxTokens: currentAgent.model.maxTokens })
+        };
+      }
+
+      console.log("Vapi update payload:", JSON.stringify(updatePayload, null, 2));
 
       // Update agent configuration via Vapi API
       const vapiResponse = await fetch(`https://api.vapi.ai/assistant/${agentId}`, {
@@ -1592,11 +1624,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!vapiResponse.ok) {
-        const errorData = await vapiResponse.json();
+        const errorText = await vapiResponse.text();
+        console.error("Vapi API error:", {
+          status: vapiResponse.status,
+          statusText: vapiResponse.statusText,
+          body: errorText,
+          headers: Object.fromEntries(vapiResponse.headers.entries())
+        });
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+        
         return res.status(vapiResponse.status).json({
           success: false,
           message: "Failed to update agent configuration",
-          details: errorData
+          details: errorData,
+          vapiError: errorText
         });
       }
 
