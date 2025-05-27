@@ -1580,7 +1580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentAgent = await currentAgentResponse.json();
 
       // Prepare the update payload for Vapi, preserving existing configuration
-      const updatePayload = {};
+      const updatePayload: any = {};
       
       // Only include fields that are being updated
       if (firstMessage !== undefined) {
@@ -1589,8 +1589,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (voiceProvider || voiceId) {
         updatePayload.voice = {
-          provider: voiceProvider || currentAgent.voice?.provider || "playht",
-          voiceId: voiceId || currentAgent.voice?.voiceId || "jennifer"
+          provider: voiceProvider || currentAgent.voice?.provider || "vapi",
+          voiceId: voiceId || currentAgent.voice?.voiceId || "Kylie"
         };
       }
       

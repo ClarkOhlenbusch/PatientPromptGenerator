@@ -35,7 +35,7 @@ export default function PromptEditingSandbox() {
     firstMessage: "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
     systemPrompt: "You are a professional healthcare assistant calling a patient. Speak clearly, compassionately, and keep the conversation focused on their health needs. Always be respectful of their time and provide clear, actionable information.",
     voiceProvider: "vapi",
-    voiceId: "kylie",
+    voiceId: "Kylie",
     model: "gpt-4o-mini"
   });
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
@@ -441,6 +441,7 @@ export default function PromptEditingSandbox() {
                 onValueChange={(value) => {
                   // Reset voice ID when provider changes to avoid invalid combinations
                   const defaultVoices = {
+                    vapi: "Kylie",
                     playht: "jennifer",
                     aws: "joanna", 
                     azure: "jenny",
@@ -480,9 +481,16 @@ export default function PromptEditingSandbox() {
                 <SelectContent>
                   {vapiConfig.voiceProvider === "vapi" && (
                     <>
-                      <SelectItem value="kylie">Kylie (Current Voice)</SelectItem>
-                      <SelectItem value="jennifer">Jennifer (Female)</SelectItem>
-                      <SelectItem value="matt">Matt (Male)</SelectItem>
+                      <SelectItem value="Kylie">Kylie (Female)</SelectItem>
+                      <SelectItem value="Elliot">Elliot (Male)</SelectItem>
+                      <SelectItem value="Rohan">Rohan (Male)</SelectItem>
+                      <SelectItem value="Lily">Lily (Female)</SelectItem>
+                      <SelectItem value="Savannah">Savannah (Female)</SelectItem>
+                      <SelectItem value="Hana">Hana (Female)</SelectItem>
+                      <SelectItem value="Thomas">Thomas (Male)</SelectItem>
+                      <SelectItem value="Henry">Henry (Male)</SelectItem>
+                      <SelectItem value="Paige">Paige (Female)</SelectItem>
+                      <SelectItem value="Spencer">Spencer (Male)</SelectItem>
                     </>
                   )}
                   {vapiConfig.voiceProvider === "playht" && (
