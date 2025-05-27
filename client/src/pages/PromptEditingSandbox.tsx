@@ -3,8 +3,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RefreshCw, Save, Undo2 } from "lucide-react";
+import { RefreshCw, Save, Undo2, Phone, Volume2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -28,6 +31,14 @@ The prompt should be detailed but concise, focusing on the most important aspect
 
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
+  const [vapiConfig, setVapiConfig] = useState({
+    firstMessage: "",
+    systemPrompt: "",
+    voiceProvider: "playht",
+    voiceId: "jennifer",
+    model: "gpt-4"
+  });
+  const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const { toast } = useToast();
   
   // Query to get the current default system prompt initially
@@ -48,6 +59,25 @@ export default function PromptEditingSandbox() {
         });
         // Fallback to hardcoded default if fetch fails
         return INITIAL_DEFAULT_SYSTEM_PROMPT;
+      }
+    }
+  });
+
+  // Query to get current Vapi agent configuration
+  const { data: vapiAgentConfig, isLoading: isVapiLoading } = useQuery({
+    queryKey: ["/api/vapi/agent"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/vapi/agent");
+        return await res.json();
+      } catch (error) {
+        console.error("Failed to fetch Vapi agent config:", error);
+        toast({
+          title: "Info",
+          description: "Could not load current agent settings. You can configure them below.",
+          variant: "default"
+        });
+        return null;
       }
     }
   });
@@ -80,6 +110,52 @@ export default function PromptEditingSandbox() {
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/batches/latest");
       return await res.json();
+    }
+  });
+
+  // Update Vapi agent configuration mutation
+  const updateVapiAgentMutation = useMutation({
+    mutationFn: async (config: typeof vapiConfig) => {
+      const res = await apiRequest("PATCH", "/api/vapi/agent", config);
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Voice agent configuration updated successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/vapi/agent"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update voice agent: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Test call mutation
+  const testCallMutation = useMutation({
+    mutationFn: async ({ phoneNumber, config }: { phoneNumber: string; config: typeof vapiConfig }) => {
+      const res = await apiRequest("POST", "/api/vapi/test-call", {
+        phoneNumber,
+        ...config
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Test Call Initiated",
+        description: "Test call started successfully! You should receive a call shortly.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Test Call Failed",
+        description: `Failed to initiate test call: ${error.message}`,
+        variant: "destructive"
+      });
     }
   });
 
@@ -168,6 +244,20 @@ export default function PromptEditingSandbox() {
     }
   }, [defaultSystemPrompt]);
 
+  useEffect(() => {
+    // Initialize Vapi config when agent data is loaded
+    if (vapiAgentConfig && vapiAgentConfig.success) {
+      const agent = vapiAgentConfig.data;
+      setVapiConfig({
+        firstMessage: agent.firstMessage || "",
+        systemPrompt: agent.model?.messages?.[0]?.content || "",
+        voiceProvider: agent.voice?.provider || "playht",
+        voiceId: agent.voice?.voiceId || "jennifer",
+        model: agent.model?.model || "gpt-4"
+      });
+    }
+  }, [vapiAgentConfig]);
+
   const handleSaveSystemPrompt = () => {
     updateSystemPromptMutation.mutate(corePrompt);
   };
@@ -184,6 +274,58 @@ export default function PromptEditingSandbox() {
 
   const handleRegeneratePrompts = () => {
     regeneratePromptsMutation.mutate();
+  };
+
+  // Vapi Agent handlers
+  const handleSaveVapiAgent = () => {
+    updateVapiAgentMutation.mutate(vapiConfig);
+  };
+
+  const handleResetVapiAgent = () => {
+    if (vapiAgentConfig && vapiAgentConfig.success) {
+      const agent = vapiAgentConfig.data;
+      setVapiConfig({
+        firstMessage: agent.firstMessage || "",
+        systemPrompt: agent.model?.messages?.[0]?.content || "",
+        voiceProvider: agent.voice?.provider || "playht",
+        voiceId: agent.voice?.voiceId || "jennifer",
+        model: agent.model?.model || "gpt-4"
+      });
+    }
+    toast({
+      title: "Reset",
+      description: "Voice agent configuration reset to current saved settings.",
+    });
+  };
+
+  const handleTestCall = () => {
+    if (!testPhoneNumber || testPhoneNumber.trim() === '') {
+      toast({
+        title: "Phone Number Required",
+        description: "Please enter a phone number for the test call",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Basic phone number validation
+    const cleanPhone = testPhoneNumber.replace(/\D/g, '');
+    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number (10-15 digits)",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Format phone number to E.164 format
+    const formattedPhone = cleanPhone.startsWith('1') ? `+${cleanPhone}` : `+1${cleanPhone}`;
+
+    testCallMutation.mutate({
+      phoneNumber: formattedPhone,
+      config: vapiConfig
+    });
   };
 
   return (
@@ -240,6 +382,166 @@ export default function PromptEditingSandbox() {
                 {updateSystemPromptMutation.isPending
                   ? "Saving your custom prompt..."
                   : "Regenerating all patient reports..."}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Vapi Agent Configuration Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Volume2 className="w-5 h-5" />
+            AI Voice Agent Configuration
+          </CardTitle>
+          <CardDescription>
+            Configure your AI voice agent's behavior, voice, and responses for patient calls.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* First Message Configuration */}
+          <div className="space-y-2">
+            <Label htmlFor="firstMessage">First Message (Greeting)</Label>
+            <Textarea
+              id="firstMessage"
+              placeholder="Hello, this is your healthcare assistant calling with an update..."
+              value={vapiConfig.firstMessage}
+              onChange={(e) => setVapiConfig(prev => ({ ...prev, firstMessage: e.target.value }))}
+              className="min-h-[100px]"
+              disabled={isVapiLoading}
+            />
+            <p className="text-sm text-gray-500">
+              The greeting message your AI agent will speak when calls are answered.
+            </p>
+          </div>
+
+          {/* System Prompt Configuration */}
+          <div className="space-y-2">
+            <Label htmlFor="vapiSystemPrompt">AI Agent System Prompt</Label>
+            <Textarea
+              id="vapiSystemPrompt"
+              placeholder="You are a professional healthcare assistant. Speak clearly and compassionately..."
+              value={vapiConfig.systemPrompt}
+              onChange={(e) => setVapiConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
+              className="min-h-[200px] font-mono text-sm"
+              disabled={isVapiLoading}
+            />
+            <p className="text-sm text-gray-500">
+              Instructions that define your AI agent's personality, role, and conversation guidelines.
+            </p>
+          </div>
+
+          {/* Voice and Model Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="voiceProvider">Voice Provider</Label>
+              <Select
+                value={vapiConfig.voiceProvider}
+                onValueChange={(value) => setVapiConfig(prev => ({ ...prev, voiceProvider: value }))}
+                disabled={isVapiLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="playht">PlayHT</SelectItem>
+                  <SelectItem value="aws">Amazon Polly</SelectItem>
+                  <SelectItem value="azure">Azure Speech</SelectItem>
+                  <SelectItem value="deepgram">Deepgram</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="voiceId">Voice ID</Label>
+              <Select
+                value={vapiConfig.voiceId}
+                onValueChange={(value) => setVapiConfig(prev => ({ ...prev, voiceId: value }))}
+                disabled={isVapiLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="jennifer">Jennifer (Female)</SelectItem>
+                  <SelectItem value="matthew">Matthew (Male)</SelectItem>
+                  <SelectItem value="joanna">Joanna (Female)</SelectItem>
+                  <SelectItem value="brian">Brian (Male)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="model">AI Model</Label>
+              <Select
+                value={vapiConfig.model}
+                onValueChange={(value) => setVapiConfig(prev => ({ ...prev, model: value }))}
+                disabled={isVapiLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt-4">GPT-4 (Advanced)</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 (Standard)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Test Call Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4">Test Your Voice Agent</h3>
+            <div className="flex gap-2">
+              <Input
+                type="tel"
+                placeholder="Your phone number (555) 123-4567"
+                value={testPhoneNumber}
+                onChange={(e) => setTestPhoneNumber(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                onClick={handleTestCall}
+                disabled={testCallMutation.isPending}
+                variant="outline"
+                className="flex-shrink-0"
+              >
+                <Phone className="w-4 h-4 mr-2" />
+                Test Call
+              </Button>
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              Enter your phone number to receive a test call with your current agent configuration.
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSaveVapiAgent}
+              disabled={updateVapiAgentMutation.isPending || isVapiLoading}
+              className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Agent Config
+            </Button>
+            <Button
+              onClick={handleResetVapiAgent}
+              disabled={isVapiLoading}
+              variant="outline"
+            >
+              <Undo2 className="w-4 h-4 mr-2" />
+              Reset to Saved
+            </Button>
+          </div>
+
+          {(updateVapiAgentMutation.isPending || testCallMutation.isPending) && (
+            <Alert>
+              <AlertDescription>
+                {updateVapiAgentMutation.isPending
+                  ? "Saving voice agent configuration..."
+                  : "Initiating test call..."}
               </AlertDescription>
             </Alert>
           )}
