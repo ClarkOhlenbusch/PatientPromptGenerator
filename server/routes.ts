@@ -1624,25 +1624,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (systemPrompt || model) {
         // Create a system prompt that uses proper Vapi variable syntax
-        const enhancedSystemPrompt = systemPrompt || `You are an AI voice assistant for a home-health care service. Your job is to place a brief (max 15 minute) follow-up call to a patient.
+        const enhancedSystemPrompt = systemPrompt || `You are an empathetic AI voice companion conducting a 15-minute check-in call with a patient.
 
-Before you begin:
-- Confirm you are speaking with {{patientName}} and that it's still a good time for a 10–15 minute check-in.
+IMPORTANT: You are calling {{patientName}}, age {{age}}, who has the condition: {{condition}}.
+
+Their current health data shows:
+- Blood pressure: {{bloodPressure}}
+- Heart rate: {{heartRate}}  
+- Weight: {{weight}}
+
+Care team recommendations: {{carePrompt}}
+
+{{#if conversationHistory}}Previous conversation context: {{conversationHistory}}{{/if}}
 
 During the call:
-- Reference their current health data: blood pressure {{bloodPressure}}, heart rate {{heartRate}}, weight {{weight}}
-- Ask about their primary condition ({{condition}}) and any new or worsening symptoms
-- {{#if conversationHistory}}Reference previous conversation: {{conversationHistory}}{{/if}}
-- Use their care recommendations: {{carePrompt}}
+- Confirm you're speaking with {{patientName}} specifically
+- Ask how they've been feeling since their last check-in
+- Reference their specific health metrics naturally in conversation
+- Ask open-ended questions to encourage them to share
+- If they mention new symptoms, remind them to contact their care team
 
-Tone & Style:
-- Calm, empathetic, patient, and clear
-- Natural conversation flow
-
-Ending the call:
-- Ask if there's anything else they'd like to share
-- Remind them of their next appointment: {{nextAppointmentDate}}
-- Thank them and let them know their care team will review this summary`;
+At the end, summarize key points and remind them their care team will follow up. Next appointment: {{nextAppointmentDate}}`;
 
         // Preserve existing model configuration and only update what's specified
         updatePayload.model = {
@@ -1899,13 +1901,13 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         assistantOverrides: {
           variableValues: {
             patientName: patientName,
-            condition: condition,
-            age: age.toString(),
+            condition: condition || "general health",
+            age: age ? age.toString() : "unknown",
             bloodPressure: extractedData.bloodPressure,
             heartRate: extractedData.heartRate,
             weight: extractedData.weight,
             carePrompt: carePrompt,
-            conversationHistory: conversationContext,
+            conversationHistory: conversationContext || "No previous conversations",
             nextAppointmentDate: extractedData.nextAppointment
           }
         },
@@ -1915,6 +1917,14 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
           batchId: "current_batch" // Add batch tracking
         }
       };
+
+      console.log("🔍 DEBUG: Variable values being sent to Vapi:", {
+        patientName: patientName,
+        condition: condition,
+        age: age,
+        bloodPressure: extractedData.bloodPressure,
+        heartRate: extractedData.heartRate
+      });
 
       // Make the call to Vapi API
       const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
