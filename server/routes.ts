@@ -30,6 +30,68 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Generate AI-powered conversation summary from call transcript
+async function generateConversationSummary(transcript: string, vapiSummary?: string) {
+  try {
+    const prompt = `
+Analyze this healthcare call transcript and extract key information for follow-up care. 
+Provide your response in JSON format with the following structure:
+
+{
+  "summary": "Brief 2-3 sentence overview of the call",
+  "keyPoints": ["Key talking point 1", "Key talking point 2", ...],
+  "healthConcerns": ["Health concern 1", "Health concern 2", ...], 
+  "followUpItems": ["Follow-up item 1", "Follow-up item 2", ...]
+}
+
+Focus on:
+- Patient's current health status and any new symptoms
+- Medication compliance and concerns
+- Lifestyle updates that could affect health
+- Questions or concerns the patient raised
+- Items that should be mentioned in future calls
+
+Transcript:
+${transcript}
+
+${vapiSummary ? `Vapi Summary: ${vapiSummary}` : ''}
+`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Using your preferred model for speed and cost
+      messages: [
+        {
+          role: "system",
+          content: "You are a healthcare assistant analyzing patient call transcripts. Extract key information that would be valuable for healthcare providers and future follow-up calls."
+        },
+        {
+          role: "user", 
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    
+    return {
+      summary: result.summary || "Call completed successfully",
+      keyPoints: result.keyPoints || [],
+      healthConcerns: result.healthConcerns || [],
+      followUpItems: result.followUpItems || []
+    };
+  } catch (error) {
+    console.error("Error generating conversation summary:", error);
+    return {
+      summary: vapiSummary || "Call completed - summary generation failed",
+      keyPoints: [],
+      healthConcerns: [],
+      followUpItems: []
+    };
+  }
+}
+
 // Set up multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1368,6 +1430,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // === VAPI VOICE CALLING ENDPOINTS ===
+  
+  // Vapi webhook to receive call completion data
+  app.post("/api/vapi/webhook", async (req, res) => {
+    try {
+      const { message } = req.body;
+      
+      // Handle end-of-call-report
+      if (message?.type === "end-of-call-report") {
+        const call = message.call;
+        const transcript = message.transcript;
+        const summary = message.summary;
+        
+        console.log("Received call completion webhook:", {
+          callId: call?.id,
+          endReason: message.endedReason,
+          hasTranscript: !!transcript,
+          hasSummary: !!summary
+        });
+
+        if (call?.id && transcript) {
+          // Generate AI-powered conversation summary
+          const aiSummary = await generateConversationSummary(transcript, summary);
+          
+          // Extract patient info from call metadata (stored when call was initiated)
+          const patientId = call.metadata?.patientId || "unknown";
+          const patientName = call.metadata?.patientName || "Unknown Patient";
+          const phoneNumber = call.customer?.number || "";
+          
+          // Store call history in database
+          await storage.createCallHistory({
+            callId: call.id,
+            patientId,
+            patientName,
+            phoneNumber,
+            duration: call.endedAt && call.startedAt ? 
+              Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000) : 0,
+            status: message.endedReason || "completed",
+            transcript,
+            summary: aiSummary.summary,
+            keyPoints: aiSummary.keyPoints,
+            healthConcerns: aiSummary.healthConcerns,
+            followUpItems: aiSummary.followUpItems,
+            callDate: call.endedAt ? new Date(call.endedAt) : new Date()
+          });
+
+          console.log(`Stored call history for patient ${patientName}`);
+        }
+      }
+      
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Error processing Vapi webhook:", error);
+      return res.status(500).json({ 
+        success: false, 
+        message: "Error processing webhook" 
+      });
+    }
+  });
 
   // Get current Vapi agent configuration
   app.get("/api/vapi/agent", async (req, res) => {

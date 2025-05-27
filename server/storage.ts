@@ -1113,6 +1113,49 @@ Your Healthcare Provider`;
       throw error;
     }
   }
+
+  // Call history methods
+  async createCallHistory(callData: InsertCallHistory): Promise<CallHistory> {
+    const [callRecord] = await db
+      .insert(callHistory)
+      .values(callData)
+      .returning();
+    return callRecord;
+  }
+
+  async getCallHistoryByPatient(patientId: string): Promise<CallHistory[]> {
+    return await db
+      .select()
+      .from(callHistory)
+      .where(eq(callHistory.patientId, patientId))
+      .orderBy(desc(callHistory.callDate));
+  }
+
+  async getLatestCallForPatient(patientId: string): Promise<CallHistory | null> {
+    const [latestCall] = await db
+      .select()
+      .from(callHistory)
+      .where(eq(callHistory.patientId, patientId))
+      .orderBy(desc(callHistory.callDate))
+      .limit(1);
+    return latestCall || null;
+  }
+
+  async updateCallHistory(callId: string, updates: Partial<InsertCallHistory>): Promise<CallHistory> {
+    const [updatedCall] = await db
+      .update(callHistory)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(callHistory.callId, callId))
+      .returning();
+    return updatedCall;
+  }
+
+  async getAllCallHistory(): Promise<CallHistory[]> {
+    return await db
+      .select()
+      .from(callHistory)
+      .orderBy(desc(callHistory.callDate));
+  }
 }
 
 // Export an instance of DatabaseStorage
