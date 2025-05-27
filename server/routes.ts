@@ -1345,6 +1345,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // === VAPI VOICE CALLING ENDPOINTS ===
+  
+  // Initiate a call to a patient via Vapi
+  app.post("/api/vapi/call", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { patientId, phoneNumber, patientName, carePrompt, condition, age } = req.body;
+
+      if (!patientId || !phoneNumber || !patientName || !carePrompt) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: patientId, phoneNumber, patientName, carePrompt"
+        });
+      }
+
+      // Check for Vapi API key
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiPrivateKey) {
+        return res.status(500).json({
+          success: false,
+          message: "Vapi API key not configured"
+        });
+      }
+
+      // Prepare the Vapi call request
+      const vapiPayload = {
+        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Your agent ID
+        phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08", // Your phone number ID
+        customer: {
+          number: phoneNumber
+        },
+        assistantOverrides: {
+          variableValues: {
+            patientName: patientName,
+            carePrompt: carePrompt,
+            condition: condition,
+            age: age.toString()
+          }
+        }
+      };
+
+      // Make the call to Vapi API
+      const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${vapiPrivateKey}`
+        },
+        body: JSON.stringify(vapiPayload)
+      });
+
+      const vapiData = await vapiResponse.json();
+
+      if (!vapiResponse.ok) {
+        console.error("Vapi API error:", vapiData);
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: vapiData.message || "Failed to initiate call with Vapi",
+          details: vapiData
+        });
+      }
+
+      // Return success response
+      return res.status(200).json({
+        success: true,
+        message: `Call initiated successfully to ${patientName}`,
+        data: {
+          callId: vapiData.id,
+          patientName,
+          phoneNumber,
+          status: "initiated"
+        }
+      });
+
+    } catch (error) {
+      console.error("Error initiating Vapi call:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error initiating call: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+
   // === MONTHLY REPORTS ENDPOINTS ===
 
   // Dedicated server-side monthly-report endpoint for PDF generation using latest data

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, RotateCw, FileDown, Copy, Maximize2 } from "lucide-react";
+import { Eye, RotateCw, FileDown, Copy, Maximize2, Phone } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import ReactMarkdown from 'react-markdown';
@@ -101,6 +101,7 @@ export default function AIPoweredTriage() {
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [reasoningDialogOpen, setReasoningDialogOpen] = useState(false);
   const [processedPrompts, setProcessedPrompts] = useState<PatientPrompt[]>([]);
+  const [phoneNumbers, setPhoneNumbers] = useState<Record<number, string>>({});
 
   // Query to get the latest batch
   const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
@@ -360,6 +361,44 @@ export default function AIPoweredTriage() {
       });
     }
   });
+
+  // Mutation for calling patients via Vapi
+  const callPatientMutation = useMutation({
+    mutationFn: async ({ patientId, phoneNumber, patientData }: { 
+      patientId: number; 
+      phoneNumber: string; 
+      patientData: PatientPrompt 
+    }) => {
+      const res = await apiRequest("POST", "/api/vapi/call", {
+        patientId,
+        phoneNumber,
+        patientName: patientData.patientName,
+        carePrompt: patientData.promptText,
+        condition: patientData.condition,
+        age: patientData.age
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `Failed with status: ${res.status}`);
+      }
+      
+      return await res.json();
+    },
+    onSuccess: (response, variables) => {
+      toast({
+        title: "Call Initiated",
+        description: `Successfully calling ${variables.patientData.patientName} at ${variables.phoneNumber}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Call Failed",
+        description: `Failed to initiate call: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  });
   
   // Deduplicate prompts by patient name
   const uniquePatientPrompts = processedPrompts ? 
@@ -399,6 +438,47 @@ export default function AIPoweredTriage() {
   const handleViewReasoning = (prompt: PatientPrompt) => {
     setSelectedPrompt(prompt);
     setReasoningDialogOpen(true);
+  };
+
+  // Handle phone number changes
+  const handlePhoneNumberChange = (patientId: number, phoneNumber: string) => {
+    setPhoneNumbers(prev => ({
+      ...prev,
+      [patientId]: phoneNumber
+    }));
+  };
+
+  // Handle calling a patient
+  const handleCallPatient = (prompt: PatientPrompt) => {
+    const phoneNumber = phoneNumbers[prompt.id];
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      toast({
+        title: "Phone Number Required",
+        description: "Please enter a phone number before calling",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Basic phone number validation (E.164 format)
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number (10-15 digits)",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Format phone number to E.164 format
+    const formattedPhone = cleanPhone.startsWith('1') ? `+${cleanPhone}` : `+1${cleanPhone}`;
+
+    callPatientMutation.mutate({
+      patientId: prompt.id,
+      phoneNumber: formattedPhone,
+      patientData: prompt
+    });
   };
   
   // Add CSV export function
@@ -491,14 +571,15 @@ export default function AIPoweredTriage() {
                 <TableHead>Patient Name</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead>Condition</TableHead>
-                <TableHead className="w-[40%]">Generated Prompt</TableHead>
+                <TableHead className="w-[30%]">Generated Prompt</TableHead>
+                <TableHead className="w-[180px]">Phone Number</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isPromptsLoading || isBatchLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <div className="flex justify-center items-center">
                       <RotateCw className="w-6 h-6 animate-spin text-gray-400" />
             </div>
@@ -506,13 +587,13 @@ export default function AIPoweredTriage() {
                 </TableRow>
               ) : !latestBatch?.batchId ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No batch found. Please upload a patient data file first.
                   </TableCell>
                 </TableRow>
               ) : filteredPrompts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No prompts found in the current batch.
                   </TableCell>
                 </TableRow>
@@ -534,8 +615,26 @@ export default function AIPoweredTriage() {
                         {prompt.promptText}
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <Input
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        value={phoneNumbers[prompt.id] || ''}
+                        onChange={(e) => handlePhoneNumberChange(prompt.id, e.target.value)}
+                        className="w-full"
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCallPatient(prompt)}
+                          disabled={callPatientMutation.isPending}
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
