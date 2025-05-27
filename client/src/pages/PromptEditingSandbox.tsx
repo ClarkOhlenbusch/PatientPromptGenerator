@@ -34,9 +34,9 @@ export default function PromptEditingSandbox() {
   const [vapiConfig, setVapiConfig] = useState({
     firstMessage: "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
     systemPrompt: "You are a professional healthcare assistant calling a patient. Speak clearly, compassionately, and keep the conversation focused on their health needs. Always be respectful of their time and provide clear, actionable information.",
-    voiceProvider: "playht",
-    voiceId: "jennifer",
-    model: "gpt-4"
+    voiceProvider: "vapi",
+    voiceId: "kylie",
+    model: "gpt-4o-mini"
   });
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const { toast } = useToast();
@@ -458,7 +458,8 @@ export default function PromptEditingSandbox() {
                   <SelectValue placeholder="Select provider" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="playht">PlayHT (Recommended)</SelectItem>
+                  <SelectItem value="vapi">Vapi (Current)</SelectItem>
+                  <SelectItem value="playht">PlayHT</SelectItem>
                   <SelectItem value="aws">Amazon Polly</SelectItem>
                   <SelectItem value="azure">Azure Speech</SelectItem>
                   <SelectItem value="deepgram">Deepgram</SelectItem>
@@ -477,6 +478,13 @@ export default function PromptEditingSandbox() {
                   <SelectValue placeholder="Select voice" />
                 </SelectTrigger>
                 <SelectContent>
+                  {vapiConfig.voiceProvider === "vapi" && (
+                    <>
+                      <SelectItem value="kylie">Kylie (Current Voice)</SelectItem>
+                      <SelectItem value="jennifer">Jennifer (Female)</SelectItem>
+                      <SelectItem value="matt">Matt (Male)</SelectItem>
+                    </>
+                  )}
                   {vapiConfig.voiceProvider === "playht" && (
                     <>
                       <SelectItem value="jennifer">Jennifer (Female, Natural)</SelectItem>
@@ -539,9 +547,10 @@ export default function PromptEditingSandbox() {
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4">GPT-4 (Advanced, Recommended)</SelectItem>
+                  <SelectItem value="gpt-4o-mini">GPT-4o Mini (Current - Fast & Cost-Effective)</SelectItem>
+                  <SelectItem value="gpt-4">GPT-4 (Advanced)</SelectItem>
                   <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Fast & Advanced)</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Standard, Cost-Effective)</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Standard)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
