@@ -1668,6 +1668,19 @@ Ending the call:
         };
       }
 
+      // Configure variables for the assistant
+      updatePayload.variables = [
+        { name: "patientName", description: "The patient's full name" },
+        { name: "age", description: "The patient's age" },
+        { name: "condition", description: "The patient's primary medical condition" },
+        { name: "bloodPressure", description: "Patient's blood pressure reading" },
+        { name: "heartRate", description: "Patient's heart rate measurement" },
+        { name: "weight", description: "Patient's weight" },
+        { name: "carePrompt", description: "Personalized care recommendations for the patient" },
+        { name: "conversationHistory", description: "Summary of previous conversations" },
+        { name: "nextAppointmentDate", description: "Next scheduled appointment information" }
+      ];
+
       console.log("Vapi update payload:", JSON.stringify(updatePayload, null, 2));
 
       // Update agent configuration via Vapi API
