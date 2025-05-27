@@ -32,8 +32,8 @@ The prompt should be detailed but concise, focusing on the most important aspect
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
   const [vapiConfig, setVapiConfig] = useState({
-    firstMessage: "",
-    systemPrompt: "",
+    firstMessage: "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
+    systemPrompt: "You are a professional healthcare assistant calling a patient. Speak clearly, compassionately, and keep the conversation focused on their health needs. Always be respectful of their time and provide clear, actionable information.",
     voiceProvider: "playht",
     voiceId: "jennifer",
     model: "gpt-4"
@@ -438,14 +438,27 @@ export default function PromptEditingSandbox() {
               <Label htmlFor="voiceProvider">Voice Provider</Label>
               <Select
                 value={vapiConfig.voiceProvider}
-                onValueChange={(value) => setVapiConfig(prev => ({ ...prev, voiceProvider: value }))}
+                onValueChange={(value) => {
+                  // Reset voice ID when provider changes to avoid invalid combinations
+                  const defaultVoices = {
+                    playht: "jennifer",
+                    aws: "joanna", 
+                    azure: "jenny",
+                    deepgram: "aura-asteria-en"
+                  };
+                  setVapiConfig(prev => ({ 
+                    ...prev, 
+                    voiceProvider: value,
+                    voiceId: defaultVoices[value as keyof typeof defaultVoices] || "jennifer"
+                  }));
+                }}
                 disabled={isVapiLoading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select provider" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="playht">PlayHT</SelectItem>
+                  <SelectItem value="playht">PlayHT (Recommended)</SelectItem>
                   <SelectItem value="aws">Amazon Polly</SelectItem>
                   <SelectItem value="azure">Azure Speech</SelectItem>
                   <SelectItem value="deepgram">Deepgram</SelectItem>
@@ -461,15 +474,58 @@ export default function PromptEditingSandbox() {
                 disabled={isVapiLoading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select voice" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="jennifer">Jennifer (Female)</SelectItem>
-                  <SelectItem value="matthew">Matthew (Male)</SelectItem>
-                  <SelectItem value="joanna">Joanna (Female)</SelectItem>
-                  <SelectItem value="brian">Brian (Male)</SelectItem>
+                  {vapiConfig.voiceProvider === "playht" && (
+                    <>
+                      <SelectItem value="jennifer">Jennifer (Female, Natural)</SelectItem>
+                      <SelectItem value="melissa">Melissa (Female, Professional)</SelectItem>
+                      <SelectItem value="will">Will (Male, Warm)</SelectItem>
+                      <SelectItem value="chris">Chris (Male, Clear)</SelectItem>
+                      <SelectItem value="matt">Matt (Male, Friendly)</SelectItem>
+                      <SelectItem value="ruby">Ruby (Female, Energetic)</SelectItem>
+                    </>
+                  )}
+                  {vapiConfig.voiceProvider === "aws" && (
+                    <>
+                      <SelectItem value="joanna">Joanna (Female, US English)</SelectItem>
+                      <SelectItem value="matthew">Matthew (Male, US English)</SelectItem>
+                      <SelectItem value="ivy">Ivy (Female, US English)</SelectItem>
+                      <SelectItem value="justin">Justin (Male, US English)</SelectItem>
+                      <SelectItem value="kendra">Kendra (Female, US English)</SelectItem>
+                      <SelectItem value="kimberly">Kimberly (Female, US English)</SelectItem>
+                      <SelectItem value="salli">Salli (Female, US English)</SelectItem>
+                      <SelectItem value="joey">Joey (Male, US English)</SelectItem>
+                    </>
+                  )}
+                  {vapiConfig.voiceProvider === "azure" && (
+                    <>
+                      <SelectItem value="jenny">Jenny (Female, Neural)</SelectItem>
+                      <SelectItem value="guy">Guy (Male, Neural)</SelectItem>
+                      <SelectItem value="aria">Aria (Female, Neural)</SelectItem>
+                      <SelectItem value="davis">Davis (Male, Neural)</SelectItem>
+                      <SelectItem value="jane">Jane (Female, Neural)</SelectItem>
+                      <SelectItem value="jason">Jason (Male, Neural)</SelectItem>
+                    </>
+                  )}
+                  {vapiConfig.voiceProvider === "deepgram" && (
+                    <>
+                      <SelectItem value="aura-asteria-en">Asteria (Female, Conversational)</SelectItem>
+                      <SelectItem value="aura-luna-en">Luna (Female, Warm)</SelectItem>
+                      <SelectItem value="aura-stella-en">Stella (Female, Professional)</SelectItem>
+                      <SelectItem value="aura-athena-en">Athena (Female, Clear)</SelectItem>
+                      <SelectItem value="aura-hera-en">Hera (Female, Confident)</SelectItem>
+                      <SelectItem value="aura-orion-en">Orion (Male, Strong)</SelectItem>
+                      <SelectItem value="aura-arcas-en">Arcas (Male, Friendly)</SelectItem>
+                      <SelectItem value="aura-perseus-en">Perseus (Male, Professional)</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-gray-500">
+                Voice options vary by provider. PlayHT recommended for best quality.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -480,13 +536,17 @@ export default function PromptEditingSandbox() {
                 disabled={isVapiLoading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4">GPT-4 (Advanced)</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 (Standard)</SelectItem>
+                  <SelectItem value="gpt-4">GPT-4 (Advanced, Recommended)</SelectItem>
+                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Fast & Advanced)</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Standard, Cost-Effective)</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-gray-500">
+                GPT-4 provides better conversation quality for healthcare scenarios.
+              </p>
             </div>
           </div>
 
