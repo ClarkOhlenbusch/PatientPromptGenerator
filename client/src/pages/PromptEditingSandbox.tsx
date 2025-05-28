@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RefreshCw, Save, Undo2, Phone, Volume2 } from "lucide-react";
+import { RefreshCw, Save, Undo2, Phone, Volume2, BarChart3 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -413,7 +414,29 @@ IMPORTANT: You have access to their latest health data and personalized care rec
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <Card>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Prompt Editing</h1>
+          <p className="text-gray-600 mt-2">
+            Customize AI prompts for triage, companion calls, and monthly reports
+          </p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="triage" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="triage" className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" />
+            Triage Prompts
+          </TabsTrigger>
+          <TabsTrigger value="voice" className="flex items-center gap-2">
+            <Volume2 className="w-4 h-4" />
+            Voice Agent
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="triage">
+          <Card>
         <CardHeader>
           <CardTitle>Core Prompt Editor</CardTitle>
           <CardDescription>
@@ -469,10 +492,11 @@ IMPORTANT: You have access to their latest health data and personalized care rec
             </Alert>
           )}
         </CardContent>
-      </Card>
+          </Card>
+        </TabsContent>
 
-      {/* Vapi Agent Configuration Card */}
-      <Card>
+        <TabsContent value="voice">
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Volume2 className="w-5 h-5" />
@@ -731,7 +755,9 @@ IMPORTANT: You have access to their latest health data and personalized care rec
             </Alert>
           )}
         </CardContent>
-      </Card>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

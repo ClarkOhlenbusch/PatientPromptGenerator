@@ -13,6 +13,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import PromptEditingSandbox from "@/pages/PromptEditingSandbox";
 import AIPoweredTriage from "@/pages/AIPoweredTriage";
+import AICompanionCalls from "@/pages/AICompanionCalls";
 import MonthlyReports from "@/pages/MonthlyReports";
 import SettingsPage from "@/pages/settings-page";
 import CallHistory from "@/pages/CallHistory";
@@ -28,6 +29,7 @@ function Router() {
             <ProtectedRoute path="/patient-prompts/:id" component={PatientPrompts} />
             <ProtectedRoute path="/prompt-editing" component={PromptEditingSandbox} />
             <ProtectedRoute path="/triage" component={AIPoweredTriage} />
+            <ProtectedRoute path="/companion-calls" component={AICompanionCalls} />
             <ProtectedRoute path="/call-history" component={CallHistory} />
             <ProtectedRoute path="/monthly-reports" component={MonthlyReports} />
             <ProtectedRoute path="/settings" component={SettingsPage} />

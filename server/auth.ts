@@ -177,7 +177,7 @@ export function setupAuth(app: Express) {
     res.status(200).json({ success: true, user: userWithoutPassword });
   });
 
-  // Middleware to check if user is authenticated for all API routes except login/logout/health/vapi/webhook
+  // Middleware to check if user is authenticated for all API routes except login/logout/health/vapi/webhook (including test)
   app.use(/^\/api\/(?!login|logout|health|vapi\/webhook).*$/, (req, res, next) => {
     if (!req.isAuthenticated()) {
       console.log(`Unauthorized access attempt to ${req.originalUrl}`);

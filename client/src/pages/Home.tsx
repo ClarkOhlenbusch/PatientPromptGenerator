@@ -6,7 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { FileUploadResponse } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, Loader2, CheckCircle2 } from "lucide-react";
+import { FileUp, Loader2, CheckCircle2, Heart, Phone, MessageSquare, BarChart3 } from "lucide-react";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -54,7 +54,7 @@ export default function Home() {
       });
       return;
     }
-    
+
     const formData = new FormData();
     formData.append('file', file);
     uploadMutation.mutate(formData);
@@ -62,11 +62,75 @@ export default function Home() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Upload Patient Data</h1>
+      <h1 className="text-3xl font-bold mb-6">Patient Care Dashboard</h1>
       <p className="text-gray-600 mb-8">
-        Upload an Excel file containing patient vitals and measurements.
+        Comprehensive AI-powered patient care management system
       </p>
-      
+
+      {/* Quick Actions Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/prompt-editing")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <MessageSquare className="w-5 h-5 text-blue-600" />
+              Prompt Editing
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">
+              Customize AI prompts for triage, companion calls, and reports
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/triage")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BarChart3 className="w-5 h-5 text-green-600" />
+              AI Triage
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">
+              AI-powered patient triage and priority assessment
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/companion-calls")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Heart className="w-5 h-5 text-red-500" />
+              AI Companion Calls
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">
+              Initiate caring, personalized conversations with patients
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/monthly-reports")}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BarChart3 className="w-5 h-5 text-purple-600" />
+              Monthly Reports
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">
+              Generate comprehensive patient care reports
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <h2 className="text-2xl font-bold mb-4">Upload Patient Data</h2>
+      <p className="text-gray-600 mb-6">
+        Upload an Excel file containing patient vitals and measurements to get started.
+      </p>
+
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle>Upload Excel File</CardTitle>
@@ -113,7 +177,7 @@ export default function Home() {
                 </Button>
               </div>
             )}
-            
+
             <div className="flex justify-end">
               <Button
                 onClick={handleUpload}
@@ -135,7 +199,7 @@ export default function Home() {
           </div>
         </CardContent>
       </Card>
-      
+
       {uploadMutation.isSuccess && (
         <Card className="max-w-2xl mx-auto mt-6 border-green-200 bg-green-50">
           <CardContent className="pt-6">

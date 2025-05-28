@@ -45,19 +45,24 @@ export default function Header() {
                   Upload Data
                 </span>
               </Link>
+              <Link href="/prompt-editing">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  Prompt Editing
+                </span>
+              </Link>
               <Link href="/triage">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/triage" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                  Triage
+                  AI Triage
+                </span>
+              </Link>
+              <Link href="/companion-calls">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/companion-calls" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                  AI Companion
                 </span>
               </Link>
               <Link href="/call-history">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/call-history" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                   Call History
-                </span>
-              </Link>
-              <Link href="/prompt-editing">
-                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                  Prompt Editing
                 </span>
               </Link>
               <Link href="/monthly-reports">
@@ -88,9 +93,9 @@ export default function Header() {
                 <User className="mr-1 h-3 w-3" />
                 {user.username}
               </div>
-              <Button 
-                onClick={handleLogout} 
-                variant="outline" 
+              <Button
+                onClick={handleLogout}
+                variant="outline"
                 size="sm"
                 disabled={logoutMutation.isPending}
               >
@@ -103,9 +108,9 @@ export default function Header() {
               </Button>
             </div>
           ) : (
-            <Button 
+            <Button
               onClick={handleLogin}
-              variant="outline" 
+              variant="outline"
               size="sm"
             >
               Login
@@ -122,19 +127,24 @@ export default function Header() {
                     Upload Data
                   </span>
                 </Link>
+                <Link href="/prompt-editing" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    Prompt Editing
+                  </span>
+                </Link>
                 <Link href="/triage" onClick={() => setMobileMenuOpen(false)}>
                   <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/triage" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                    Triage
+                    AI Triage
+                  </span>
+                </Link>
+                <Link href="/companion-calls" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/companion-calls" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    AI Companion
                   </span>
                 </Link>
                 <Link href="/call-history" onClick={() => setMobileMenuOpen(false)}>
                   <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/call-history" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                     Call History
-                  </span>
-                </Link>
-                <Link href="/prompt-editing" onClick={() => setMobileMenuOpen(false)}>
-                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/prompt-editing" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                    Prompt Editing
                   </span>
                 </Link>
                 <Link href="/monthly-reports" onClick={() => setMobileMenuOpen(false)}>
@@ -152,12 +162,12 @@ export default function Header() {
                   <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
                 </Link>
                 <hr className="my-2" />
-                <Button 
+                <Button
                   onClick={() => {
                     handleLogout();
                     setMobileMenuOpen(false);
                   }}
-                  variant="outline" 
+                  variant="outline"
                   size="sm"
                   disabled={logoutMutation.isPending}
                   className="w-full"
@@ -172,7 +182,7 @@ export default function Header() {
               </nav>
             </div>
           )}
-          <button 
+          <button
             className="text-gray-600 hover:text-gray-900"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >

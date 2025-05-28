@@ -5,12 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Phone, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  MessageSquare, 
+import {
+  Phone,
+  Clock,
+  CheckCircle,
+  XCircle,
+  MessageSquare,
   Search,
   Calendar,
   AlertTriangle,
@@ -52,6 +52,7 @@ export default function CallHistory() {
   const [callDetailDialogOpen, setCallDetailDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("date");
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
 
   // Query to fetch all call history
   const { data: callHistoryData, isLoading, error, refetch } = useQuery({
@@ -66,6 +67,41 @@ export default function CallHistory() {
   });
 
   const callHistory: CallHistory[] = callHistoryData?.callHistory || [];
+
+  // Test webhook function
+  const testWebhook = async () => {
+    setIsTestingWebhook(true);
+    try {
+      console.log("🧪 Frontend: Starting webhook test...");
+      const response = await apiRequest("POST", "/api/vapi/webhook/test");
+      console.log("🧪 Frontend: Response status:", response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("🧪 Frontend: Response data:", result);
+        toast({
+          title: "Test Webhook Successful",
+          description: `Created test call: ${result.callId}`,
+        });
+        // Refresh the call history
+        console.log("🧪 Frontend: Refreshing call history...");
+        refetch();
+      } else {
+        const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
+        console.error("🧪 Frontend: Error response:", errorData);
+        throw new Error(errorData.message || "Failed to test webhook");
+      }
+    } catch (error) {
+      console.error("🧪 Frontend: Catch block error:", error);
+      toast({
+        title: "Test Webhook Failed",
+        description: error.message || "Could not create test call record",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTestingWebhook(false);
+    }
+  };
 
   // Filter and search logic
   const filteredCalls = callHistory
@@ -210,9 +246,20 @@ export default function CallHistory() {
       {/* Call History Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" />
-            Patient Calls ({filteredCalls.length})
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Patient Calls ({filteredCalls.length})
+            </div>
+            <Button
+              onClick={testWebhook}
+              disabled={isTestingWebhook}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              {isTestingWebhook ? "Testing..." : "🧪 Test Webhook"}
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -225,8 +272,8 @@ export default function CallHistory() {
             <div className="text-center py-8">
               <Phone className="w-12 h-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-600">
-                {searchQuery || statusFilter !== "all" 
-                  ? "No calls match your search criteria" 
+                {searchQuery || statusFilter !== "all"
+                  ? "No calls match your search criteria"
                   : "No call history available yet"}
               </p>
             </div>

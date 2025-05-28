@@ -1585,6 +1585,308 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Test endpoint to simulate a VAPI webhook for testing call history
+  app.post("/api/vapi/webhook/test", async (req, res) => {
+    try {
+      console.log("🧪 SIMULATING VAPI WEBHOOK FOR TESTING - START");
+      console.log("🧪 Request headers:", req.headers);
+      console.log("🧪 Request body:", req.body);
+
+      // Create a simulated webhook payload
+      const simulatedWebhook = {
+        message: {
+          type: "end-of-call-report",
+          call: {
+            id: "test-call-" + Date.now(),
+            startedAt: new Date(Date.now() - 120000).toISOString(), // 2 minutes ago
+            endedAt: new Date().toISOString(),
+            customer: {
+              number: "+1234567890"
+            },
+            metadata: {
+              patientId: "Diane, Affre (11/16/1943 )",
+              patientName: "Diane, Affre",
+              batchId: "test-batch"
+            }
+          },
+          transcript: "Hello Diane, this is your healthcare assistant calling to check in on how you're feeling today. How have you been since our last conversation? I see from your recent health data that everything looks good - your heart rate is stable at 86 bpm. That's excellent! Are you keeping up with your regular physical activity? Great to hear. Remember to maintain that balanced diet we discussed, especially those heart-healthy foods rich in omega-3 fatty acids. Is there anything specific about your health that you'd like to discuss today?",
+          summary: "Routine check-in call with Diane Affre. Patient reports feeling well and maintaining good health habits. Heart rate stable, continuing recommended diet and exercise routine.",
+          endedReason: "customer-hangup"
+        }
+      };
+
+      // Process the simulated webhook through our existing webhook handler
+      const webhookData = simulatedWebhook;
+
+      if (webhookData.message?.type === "end-of-call-report") {
+        const { message } = webhookData;
+        const call = message.call;
+        const transcript = message.transcript;
+        const summary = message.summary;
+
+        console.log("🧪 Processing simulated end-of-call-report:", {
+          callId: call?.id,
+          hasTranscript: !!transcript,
+          hasSummary: !!summary,
+          metadata: call?.metadata
+        });
+
+        if (call?.id) {
+          console.log("🧪 Step 1: Generating AI summary...");
+          // Generate AI-powered conversation summary from transcript
+          const aiSummary = await generateConversationSummary(transcript || "", summary);
+          console.log("🧪 Step 1 Complete: AI summary generated:", aiSummary);
+
+          // Extract patient info from call metadata
+          const patientId = call.metadata?.patientId || "test-patient";
+          const patientName = call.metadata?.patientName || "Test Patient";
+          const phoneNumber = call.customer?.number || "+1234567890";
+
+          // Calculate call duration
+          const duration = call.endedAt && call.startedAt ?
+            Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000) : 120;
+
+          console.log("🧪 Step 2: Preparing call history data:", {
+            callId: call.id,
+            patientId,
+            patientName,
+            phoneNumber,
+            duration,
+            status: "completed"
+          });
+
+          // Store call history in database
+          console.log("🧪 Step 3: Storing in database...");
+          const storedCall = await storage.createCallHistory({
+            callId: call.id,
+            patientId,
+            patientName,
+            phoneNumber,
+            duration,
+            status: "completed",
+            transcript: transcript || "",
+            summary: aiSummary.summary,
+            keyPoints: aiSummary.keyPoints,
+            healthConcerns: aiSummary.healthConcerns,
+            followUpItems: aiSummary.followUpItems,
+            callDate: call.endedAt ? new Date(call.endedAt) : new Date()
+          });
+
+          console.log(`🧪 ✅ Step 3 Complete: Stored test call history for patient ${patientName} (${call.id})`);
+          console.log("🧪 Stored call record:", storedCall);
+        } else {
+          console.log("🧪 ❌ No call ID found in webhook data");
+        }
+      }
+
+      console.log("🧪 ✅ WEBHOOK TEST COMPLETED SUCCESSFULLY");
+      return res.status(200).json({
+        success: true,
+        message: "Test webhook processed successfully",
+        callId: simulatedWebhook.message.call.id
+      });
+    } catch (error) {
+      console.error("🧪 ❌ WEBHOOK TEST FAILED - Error processing test webhook:", error);
+      console.error("🧪 Error stack:", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "Error processing test webhook",
+        error: error.message
+      });
+    }
+  });
+
+  // Initiate companion call endpoint
+  app.post("/api/vapi/companion-call", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required"
+        });
+      }
+
+      const { patientId, patientName, phoneNumber, personalInfo, callConfig } = req.body;
+
+      if (!patientId || !patientName || !phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: patientId, patientName, phoneNumber"
+        });
+      }
+
+      console.log("🤝 Initiating companion call:", {
+        patientId,
+        patientName,
+        phoneNumber,
+        callConfig
+      });
+
+      // Get voice agent template
+      const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
+
+      // Create companion-specific system prompt using the voice agent template
+      let companionSystemPrompt = voiceAgentTemplate;
+
+      // Replace placeholders with companion call specific data
+      companionSystemPrompt = companionSystemPrompt
+        .replace(/PATIENT_NAME/g, patientName)
+        .replace(/PATIENT_AGE/g, "unknown age") // We don't have age in companion calls
+        .replace(/PATIENT_CONDITION/g, "general wellness check")
+        .replace(/PATIENT_PROMPT/g, `Personal Information: ${personalInfo || "No specific personal information provided"}
+
+This is a companion call focused on general wellbeing and emotional support.
+Conversation Style: ${callConfig?.conversationStyle || "friendly"}
+Max Duration: ${callConfig?.maxDuration || 15} minutes`)
+        .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
+
+      console.log("🤝 Using Voice Agent template for companion call:", {
+        templateLength: voiceAgentTemplate.length,
+        finalPromptLength: companionSystemPrompt.length
+      });
+
+      // Format phone number to E.164 format (based on VAPI documentation)
+      function formatPhoneNumberE164(phoneNumber: string): string {
+        // Remove all non-digit characters except +
+        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+        // If it doesn't start with +, assume US number
+        if (!cleaned.startsWith('+')) {
+          // Remove any leading 1 if present, then add +1
+          cleaned = cleaned.replace(/^1/, '');
+          cleaned = '+1' + cleaned;
+        }
+
+        return cleaned;
+      }
+
+      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
+      console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
+
+      // Prepare call request using EXACT format from working triage calls
+      const callRequest = {
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "f412bd32-9764-4d70-94e7-90f87f84ef08",
+        customer: {
+          number: formattedPhoneNumber
+        },
+        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82",
+        assistantOverrides: {
+          variableValues: {
+            patientName: patientName,
+            patientAge: 0, // Default age if not available
+            patientPrompt: companionSystemPrompt,
+            conversationHistory: "This is your first conversation with this patient."
+          }
+        }
+      };
+
+      // Check for VAPI keys - try both private and public
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
+
+      if (!vapiPrivateKey && !vapiPublicKey) {
+        return res.status(500).json({
+          success: false,
+          message: "VAPI API key not configured (need either VAPI_PRIVATE_KEY or VAPI_PUBLIC_KEY)"
+        });
+      }
+
+      // Try private key first, then public key
+      const apiKey = vapiPrivateKey || vapiPublicKey;
+      const keyType = vapiPrivateKey ? "private" : "public";
+
+      console.log(`🔑 Using VAPI ${keyType} key for companion call`);
+
+      // Make call to VAPI (using same endpoint as triage calls)
+      const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(callRequest)
+      });
+
+      if (!vapiResponse.ok) {
+        const errorData = await vapiResponse.json();
+        console.error(`❌ VAPI companion call error (using ${keyType} key):`, {
+          status: vapiResponse.status,
+          statusText: vapiResponse.statusText,
+          error: errorData,
+          keyType,
+          hasPrivateKey: !!vapiPrivateKey,
+          hasPublicKey: !!vapiPublicKey
+        });
+        
+        // Return proper error response instead of throwing
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: errorData.message || "Failed to initiate companion call",
+          vapiError: errorData
+        });
+      }
+
+      const callData = await vapiResponse.json();
+      console.log("🤝 ✅ Companion call initiated successfully:", callData.id);
+
+      return res.status(200).json({
+        success: true,
+        message: "Companion call initiated successfully",
+        callId: callData.id
+      });
+
+    } catch (error) {
+      console.error("❌ Error initiating companion call:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to initiate companion call"
+      });
+    }
+  });
+
+  // Get patients for companion calls
+  app.get("/api/patients", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required"
+        });
+      }
+
+      // Get unique patients from patient alerts (which includes all patients)
+      const patientPrompts = await storage.getPatientAlerts();
+      const uniquePatients = new Map();
+
+      patientPrompts.forEach(patient => {
+        if (!uniquePatients.has(patient.patientId)) {
+          uniquePatients.set(patient.patientId, {
+            id: patient.patientId,
+            name: patient.name || patient.patientId.split(' (')[0], // Use name field or extract from ID
+            age: patient.age || "Unknown",
+            condition: patient.condition || "Unknown",
+            phoneNumber: "", // TODO: Add phone number storage
+            personalInfo: "" // TODO: Add personal info storage
+          });
+        }
+      });
+
+      const patients = Array.from(uniquePatients.values());
+
+      return res.status(200).json({
+        success: true,
+        patients
+      });
+
+    } catch (error) {
+      console.error("❌ Error fetching patients:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch patients"
+      });
+    }
+  });
+
   // Get current Vapi agent configuration
   app.get("/api/vapi/agent", async (req, res) => {
     try {
