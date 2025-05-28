@@ -40,7 +40,7 @@ export default function PromptEditingSandbox() {
   });
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const { toast } = useToast();
-  
+
   // Query to get the current default system prompt initially
   const { data: defaultSystemPrompt, isLoading: isPromptLoading } = useQuery({
     queryKey: ["/api/system-prompt"],
@@ -77,6 +77,21 @@ export default function PromptEditingSandbox() {
           description: "Could not load current agent settings. You can configure them below.",
           variant: "default"
         });
+        return null;
+      }
+    }
+  });
+
+  // Query to get current voice agent template
+  const { data: voiceAgentTemplate } = useQuery({
+    queryKey: ["/api/voice-agent-template"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/voice-agent-template");
+        const data = await res.json();
+        return data.template;
+      } catch (error) {
+        console.error("Failed to fetch voice agent template:", error);
         return null;
       }
     }
@@ -165,26 +180,26 @@ export default function PromptEditingSandbox() {
       if (!latestBatch?.batchId) {
         throw new Error("No batch found to regenerate");
       }
-      
+
       console.log(`Regenerating prompts for batch: ${latestBatch.batchId}`);
       const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`);
-      
+
       // Handle non-2xx status codes
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || `Failed with status: ${res.status}`);
       }
-      
+
       return await res.json();
     },
     onSuccess: (response) => {
       console.log("Regeneration result:", response);
-      
+
       // If we have data, show appropriate success message
       if (response.data) {
         const { regenerated, total, failedPrompts } = response.data;
         const hasFailures = failedPrompts && failedPrompts.length > 0;
-        
+
         if (total === 0) {
           toast({
             title: "No Prompts Found",
@@ -206,11 +221,11 @@ export default function PromptEditingSandbox() {
           description: response.message || "All prompts regenerated successfully",
         });
       }
-      
+
       // Invalidate both prompts and patient-prompts queries to ensure data consistency
       queryClient.invalidateQueries({ queryKey: ["/api/prompts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
-      
+
       if (latestBatch?.batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
         queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
@@ -218,17 +233,17 @@ export default function PromptEditingSandbox() {
     },
     onError: (error: Error) => {
       console.error("Regeneration error:", error);
-      
+
       // Friendly error message with suggestions for common issues
       let errorMessage = error.message;
-      
+
       // Check for common error patterns
       if (errorMessage.includes("not found")) {
         errorMessage = "Batch not found. The data may have been deleted. Try uploading new patient data.";
       } else if (errorMessage.includes("No prompts found")) {
         errorMessage = "No prompts found for this batch. Try uploading new patient data.";
       }
-      
+
       toast({
         title: "Error",
         description: errorMessage,
@@ -250,13 +265,13 @@ export default function PromptEditingSandbox() {
       const agent = vapiAgentConfig.data;
       setVapiConfig({
         firstMessage: agent.firstMessage || "",
-        systemPrompt: agent.model?.messages?.[0]?.content || "",
+        systemPrompt: voiceAgentTemplate || agent.model?.messages?.[0]?.content || "",
         voiceProvider: agent.voice?.provider || "playht",
         voiceId: agent.voice?.voiceId || "jennifer",
         model: agent.model?.model || "gpt-4"
       });
     }
-  }, [vapiAgentConfig]);
+  }, [vapiAgentConfig, voiceAgentTemplate]);
 
   const handleSaveSystemPrompt = () => {
     updateSystemPromptMutation.mutate(corePrompt);
@@ -277,8 +292,39 @@ export default function PromptEditingSandbox() {
   };
 
   // Vapi Agent handlers
-  const handleSaveVapiAgent = () => {
-    updateVapiAgentMutation.mutate(vapiConfig);
+  const handleSaveVapiAgent = async () => {
+    try {
+      // First save the template to our database
+      const templateResponse = await fetch('/api/voice-agent-template', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          template: vapiConfig.systemPrompt
+        })
+      });
+
+      if (!templateResponse.ok) {
+        throw new Error('Failed to save voice agent template');
+      }
+
+      // Then update the VAPI agent configuration
+      updateVapiAgentMutation.mutate(vapiConfig);
+
+      toast({
+        title: "Template Saved",
+        description: "Voice agent template saved successfully. This template will be used for all patient calls with dynamic patient data.",
+      });
+
+    } catch (error) {
+      console.error('Error saving voice agent template:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save voice agent template. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleResetVapiAgent = () => {
@@ -295,6 +341,43 @@ export default function PromptEditingSandbox() {
     toast({
       title: "Reset",
       description: "Voice agent configuration reset to current saved settings.",
+    });
+  };
+
+  const handleResetVapiToDefault = () => {
+    const defaultSystemPrompt = `You are a healthcare AI assistant calling PATIENT_NAME, a PATIENT_AGE-year-old patient with PATIENT_CONDITION.
+
+PATIENT INFORMATION:
+- Name: PATIENT_NAME
+- Age: PATIENT_AGE
+- Primary Condition: PATIENT_CONDITION
+
+LATEST CARE ASSESSMENT:
+PATIENT_PROMPT
+
+CONVERSATION_HISTORY
+
+CALL INSTRUCTIONS:
+- You are calling on behalf of their healthcare team
+- Be warm, professional, and empathetic in your approach
+- Address the patient by their name (PATIENT_NAME)
+- Reference their specific health condition (PATIENT_CONDITION) and any concerns mentioned above
+- Ask about their current symptoms, medication adherence, and overall well-being
+- Provide appropriate health guidance based on their condition and the care assessment
+- Offer to schedule follow-up appointments if needed
+- Keep the conversation focused on their health but maintain a natural, caring tone
+- If they have questions about their condition or treatment, provide helpful information based on the care assessment
+
+IMPORTANT: You have access to their latest health data and personalized care recommendations above. Use this information throughout the conversation to provide relevant, personalized care.`;
+
+    setVapiConfig(prev => ({
+      ...prev,
+      systemPrompt: defaultSystemPrompt
+    }));
+
+    toast({
+      title: "Reset to Default",
+      description: "System prompt reset to default template with patient placeholders. Save to apply changes.",
     });
   };
 
@@ -360,7 +443,7 @@ export default function PromptEditingSandbox() {
             <Button
               onClick={handleResetToDefault}
               // Disable button only while initial prompt is loading
-              disabled={isPromptLoading} 
+              disabled={isPromptLoading}
               variant="outline"
             >
               <Undo2 className="w-4 h-4 mr-2" />
@@ -430,6 +513,22 @@ export default function PromptEditingSandbox() {
             <p className="text-sm text-gray-500">
               Instructions that define your AI agent's personality, role, and conversation guidelines.
             </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+              <p className="text-sm font-medium text-blue-800 mb-2">💡 Dynamic Patient Context</p>
+              <p className="text-sm text-blue-700 mb-2">
+                Use these placeholders in your prompt to automatically inject patient-specific information:
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs text-blue-600 font-mono">
+                <div><code>PATIENT_NAME</code> - Patient's full name</div>
+                <div><code>PATIENT_AGE</code> - Patient's age</div>
+                <div><code>PATIENT_CONDITION</code> - Patient's medical condition</div>
+                <div><code>PATIENT_PROMPT</code> - Latest generated care prompt</div>
+                <div><code>CONVERSATION_HISTORY</code> - Previous call history</div>
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                ⚠️ Note: These placeholders will be replaced with actual patient data when making calls.
+              </p>
+            </div>
           </div>
 
           {/* Voice and Model Configuration */}
@@ -443,12 +542,12 @@ export default function PromptEditingSandbox() {
                   const defaultVoices = {
                     vapi: "Kylie",
                     playht: "jennifer",
-                    aws: "joanna", 
+                    aws: "joanna",
                     azure: "jenny",
                     deepgram: "aura-asteria-en"
                   };
-                  setVapiConfig(prev => ({ 
-                    ...prev, 
+                  setVapiConfig(prev => ({
+                    ...prev,
                     voiceProvider: value,
                     voiceId: defaultVoices[value as keyof typeof defaultVoices] || "jennifer"
                   }));
@@ -594,7 +693,7 @@ export default function PromptEditingSandbox() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               onClick={handleSaveVapiAgent}
               disabled={updateVapiAgentMutation.isPending || isVapiLoading}
@@ -610,6 +709,15 @@ export default function PromptEditingSandbox() {
             >
               <Undo2 className="w-4 h-4 mr-2" />
               Reset to Saved
+            </Button>
+            <Button
+              onClick={handleResetVapiToDefault}
+              disabled={isVapiLoading}
+              variant="outline"
+              className="border-orange-300 text-orange-600 hover:bg-orange-50"
+            >
+              <Undo2 className="w-4 h-4 mr-2" />
+              Reset to Default Template
             </Button>
           </div>
 

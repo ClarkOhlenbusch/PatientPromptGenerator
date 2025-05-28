@@ -35,7 +35,7 @@ async function comparePasswords(supplied: string, stored: string) {
 export function setupAuth(app: Express) {
   // Generate a random session secret if not provided
   const sessionSecret = process.env.SESSION_SECRET || nanoid(32);
-  
+
   const sessionSettings: session.SessionOptions = {
     secret: sessionSecret,
     resave: false,
@@ -62,7 +62,7 @@ export function setupAuth(app: Express) {
     new LocalStrategy(async (username, password, done) => {
       try {
         console.log(`Login attempt for username: ${username}`);
-        
+
         // Only allow admin login
         if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
           console.log(`Login failed: Invalid credentials`);
@@ -91,13 +91,13 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
-      
+
       // If user no longer exists in the database (e.g., deleted)
       if (!user) {
         console.log(`User ID ${id} no longer exists in the database`);
         return done(null, false);
       }
-      
+
       done(null, user);
     } catch (err) {
       console.error(`Error deserializing user ID ${id}:`, err);
@@ -108,7 +108,7 @@ export function setupAuth(app: Express) {
 
   app.post("/api/login", (req, res, next) => {
     console.log("Login request received:", { username: req.body.username });
-    
+
     passport.authenticate("local", (err: Error, user: SelectUser) => {
       if (err) {
         console.error("Passport authentication error:", err);
@@ -126,7 +126,7 @@ export function setupAuth(app: Express) {
         console.log(`Admin user successfully logged in`);
         // Don't return the password hash to the client
         const { password, ...userWithoutPassword } = user;
-        
+
         // Log environment info to debug auth issues
         console.log("Auth successful with environment:", {
           NODE_ENV: process.env.NODE_ENV,
@@ -138,7 +138,7 @@ export function setupAuth(app: Express) {
             path: sessionSettings.cookie?.path,
           }
         });
-        
+
         res.status(200).json({ success: true, user: userWithoutPassword });
       });
     })(req, res, next);
@@ -147,14 +147,14 @@ export function setupAuth(app: Express) {
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
       if (err) return next(err);
-      
+
       // Destroy the session to ensure it's completely removed
       req.session.destroy((err) => {
         if (err) {
           console.error("Error destroying session:", err);
           return next(err);
         }
-        
+
         // Clear the cookie on the client side
         res.clearCookie('calico_session', {
           path: '/',
@@ -162,7 +162,7 @@ export function setupAuth(app: Express) {
           secure: process.env.NODE_ENV === "production",
           sameSite: 'strict'
         });
-        
+
         res.status(200).json({ success: true, message: "Logged out successfully" });
       });
     });
@@ -176,15 +176,15 @@ export function setupAuth(app: Express) {
     const { password, ...userWithoutPassword } = req.user;
     res.status(200).json({ success: true, user: userWithoutPassword });
   });
-  
-  // Middleware to check if user is authenticated for all API routes except login/logout/health
-  app.use(/^\/api\/(?!login|logout|health).*$/, (req, res, next) => {
+
+  // Middleware to check if user is authenticated for all API routes except login/logout/health/vapi/webhook
+  app.use(/^\/api\/(?!login|logout|health|vapi\/webhook).*$/, (req, res, next) => {
     if (!req.isAuthenticated()) {
       console.log(`Unauthorized access attempt to ${req.originalUrl}`);
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         data: null,
-        error: "Authentication required" 
+        error: "Authentication required"
       });
     }
     next();

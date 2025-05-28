@@ -34,13 +34,13 @@ const openai = new OpenAI({
 async function generateConversationSummary(transcript: string, vapiSummary?: string) {
   try {
     const prompt = `
-Analyze this healthcare call transcript and extract key information for follow-up care. 
+Analyze this healthcare call transcript and extract key information for follow-up care.
 Provide your response in JSON format with the following structure:
 
 {
   "summary": "Brief 2-3 sentence overview of the call",
   "keyPoints": ["Key talking point 1", "Key talking point 2", ...],
-  "healthConcerns": ["Health concern 1", "Health concern 2", ...], 
+  "healthConcerns": ["Health concern 1", "Health concern 2", ...],
   "followUpItems": ["Follow-up item 1", "Follow-up item 2", ...]
 }
 
@@ -65,7 +65,7 @@ ${vapiSummary ? `Vapi Summary: ${vapiSummary}` : ''}
           content: "You are a healthcare assistant analyzing patient call transcripts. Extract key information that would be valuable for healthcare providers and future follow-up calls."
         },
         {
-          role: "user", 
+          role: "user",
           content: prompt
         }
       ],
@@ -74,7 +74,7 @@ ${vapiSummary ? `Vapi Summary: ${vapiSummary}` : ''}
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+
     return {
       summary: result.summary || "Call completed successfully",
       keyPoints: result.keyPoints || [],
@@ -1430,21 +1430,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // === VAPI VOICE CALLING ENDPOINTS ===
-  
+
+  // Get voice agent template
+  app.get("/api/voice-agent-template", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const template = await storage.getVoiceAgentTemplate();
+      return res.status(200).json({
+        success: true,
+        template: template
+      });
+
+    } catch (error) {
+      console.error("Error fetching voice agent template:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error fetching template: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+
+  // Update voice agent template
+  app.post("/api/voice-agent-template", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { template } = req.body;
+      if (!template) {
+        return res.status(400).json({
+          success: false,
+          message: "Template is required"
+        });
+      }
+
+      await storage.updateVoiceAgentTemplate(template);
+      return res.status(200).json({
+        success: true,
+        message: "Voice agent template updated successfully"
+      });
+
+    } catch (error) {
+      console.error("Error updating voice agent template:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating template: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+
   // Vapi webhook to receive call completion data (no auth required for webhooks)
   app.post("/api/vapi/webhook", async (req, res) => {
     try {
-      console.log("Received Vapi webhook:", JSON.stringify(req.body, null, 2));
-      
+      console.log("🎯 WEBHOOK RECEIVED! Timestamp:", new Date().toISOString());
+      console.log("🎯 Webhook headers:", req.headers);
+      console.log("🎯 Webhook body:", JSON.stringify(req.body, null, 2));
+
       const webhookData = req.body;
-      
+
       // Handle end-of-call-report event
       if (webhookData.message?.type === "end-of-call-report") {
         const { message } = webhookData;
         const call = message.call;
         const transcript = message.transcript;
         const summary = message.summary;
-        
+
         console.log("Processing end-of-call-report:", {
           callId: call?.id,
           hasTranscript: !!transcript,
@@ -1455,16 +1513,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (call?.id) {
           // Generate AI-powered conversation summary from transcript
           const aiSummary = await generateConversationSummary(transcript || "", summary);
-          
+
           // Extract patient info from call metadata
           const patientId = call.metadata?.patientId || "unknown";
           const patientName = call.metadata?.patientName || "Unknown Patient";
           const phoneNumber = call.customer?.number || "";
-          
+
           // Calculate call duration
-          const duration = call.endedAt && call.startedAt ? 
+          const duration = call.endedAt && call.startedAt ?
             Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000) : 0;
-          
+
           // Determine call status based on end reason
           let callStatus = "completed";
           if (message.endedReason) {
@@ -1486,7 +1544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 callStatus = message.endedReason;
             }
           }
-          
+
           // Store call history in database
           await storage.createCallHistory({
             callId: call.id,
@@ -1506,15 +1564,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`✅ Stored call history for patient ${patientName} (${call.id})`);
         }
       }
-      
+
       return res.status(200).json({ success: true });
     } catch (error) {
       console.error("❌ Error processing Vapi webhook:", error);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Error processing webhook" 
+      return res.status(500).json({
+        success: false,
+        message: "Error processing webhook"
       });
     }
+  });
+
+  // Test endpoint to verify webhook is accessible (for debugging)
+  app.get("/api/vapi/webhook", async (req, res) => {
+    console.log("🧪 Webhook test endpoint accessed");
+    return res.status(200).json({
+      success: true,
+      message: "Webhook endpoint is accessible",
+      timestamp: new Date().toISOString()
+    });
   });
 
   // Get current Vapi agent configuration
@@ -1609,19 +1677,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Prepare the update payload for Vapi, preserving existing configuration
       const updatePayload: any = {};
-      
+
       // Only include fields that are being updated
       if (firstMessage !== undefined) {
         updatePayload.firstMessage = firstMessage;
       }
-      
+
       if (voiceProvider || voiceId) {
         updatePayload.voice = {
           provider: voiceProvider || currentAgent.voice?.provider || "vapi",
           voiceId: voiceId || currentAgent.voice?.voiceId || "Kylie"
         };
       }
-      
+
       if (systemPrompt || model) {
         // Create a system prompt that uses the complete patient prompt as context
         const enhancedSystemPrompt = systemPrompt || `You are an empathetic AI voice companion conducting a 15-minute check-in call with a patient.
@@ -1694,14 +1762,14 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
           body: errorText,
           headers: Object.fromEntries(vapiResponse.headers.entries())
         });
-        
+
         let errorData;
         try {
           errorData = JSON.parse(errorText);
         } catch {
           errorData = { message: errorText };
         }
-        
+
         return res.status(vapiResponse.status).json({
           success: false,
           message: "Failed to update agent configuration",
@@ -1841,43 +1909,57 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      // Fetch the actual patient data from the database
-      const patientData = await storage.getPatientPromptByIds(batchId, patientId);
+      // Fetch the latest patient prompt data from the database
+      // First try to get the latest prompt for this patient (regardless of batch)
+      let patientData = await storage.getLatestPatientPrompt(patientId);
+
+      // If no latest prompt found, fall back to the specific batch method
+      if (!patientData) {
+        patientData = await storage.getPatientPromptByIds(batchId, patientId);
+      }
+
       if (!patientData) {
         return res.status(404).json({
           success: false,
-          message: `Patient not found: ${patientId} in batch ${batchId}`
+          message: `Patient not found: ${patientId}. No prompts available for this patient.`
         });
       }
+
+      console.log("🔍 DEBUG: Using patient prompt data:", {
+        promptId: patientData.id,
+        patientId: patientData.patientId,
+        batchId: patientData.batchId,
+        createdAt: patientData.createdAt,
+        isLatest: "Using latest available prompt for patient"
+      });
 
       const { name: patientName, prompt: carePrompt, condition, age, patientId: dbPatientId } = patientData;
 
-      // Check for Vapi API key
-      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
-      if (!vapiPrivateKey) {
-        return res.status(500).json({
-          success: false,
-          message: "Vapi API key not configured"
-        });
-      }
+      console.log("🔍 DEBUG: Extracted patient data fields:");
+      console.log("patientName:", patientName);
+      console.log("carePrompt length:", carePrompt?.length || 0);
+      console.log("carePrompt preview:", carePrompt?.substring(0, 200) + "..." || "No prompt");
+      console.log("condition:", condition);
+      console.log("age:", age);
+      console.log("dbPatientId:", dbPatientId);
 
       // Get previous conversation history for this patient
       const previousCall = await storage.getLatestCallForPatient(dbPatientId || patientId.toString());
       let conversationContext = "";
-      
+
       if (previousCall && previousCall.summary) {
         conversationContext = `
 Previous conversation summary: ${previousCall.summary}
-${previousCall.followUpItems && previousCall.followUpItems.length > 0 ? 
+${previousCall.followUpItems && previousCall.followUpItems.length > 0 ?
   `Follow-up items from last call: ${previousCall.followUpItems.join(', ')}` : ''}
-${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ? 
+${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
   `Previous health concerns: ${previousCall.healthConcerns.join(', ')}` : ''}
 `;
       }
 
       // Extract patient name without parentheses and birth date if present
       const cleanPatientName = patientName.replace(/\s*\([^)]*\)\s*/g, '').trim();
-      
+
       // Calculate patient age from the prompt data or use the stored age
       const patientAge = age || "unknown age";
 
@@ -1890,7 +1972,68 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         hasConversationHistory: !!conversationContext
       });
 
-      // Prepare the Vapi call request with proper variable mapping
+      // Check for Vapi API key
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      if (!vapiPrivateKey) {
+        return res.status(500).json({
+          success: false,
+          message: "Vapi API key not configured"
+        });
+      }
+
+      // Get the saved VAPI agent configuration to use the user's voice/model settings
+      const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
+      let savedAgentConfig = null;
+
+      try {
+        const agentResponse = await fetch(`https://api.vapi.ai/assistant/${agentId}`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${vapiPrivateKey}`
+          }
+        });
+
+        if (agentResponse.ok) {
+          savedAgentConfig = await agentResponse.json();
+          console.log("🔍 DEBUG: Retrieved saved agent config:", {
+            voiceProvider: savedAgentConfig.voice?.provider,
+            voiceId: savedAgentConfig.voice?.voiceId,
+            model: savedAgentConfig.model?.model,
+            provider: savedAgentConfig.model?.provider
+          });
+        }
+      } catch (error) {
+        console.warn("Could not fetch saved agent config, using defaults:", error);
+      }
+
+      // Build the system prompt with patient data
+      const systemPrompt = `You are a healthcare AI assistant calling ${cleanPatientName}, a ${patientAge}-year-old patient with ${condition}.
+
+PATIENT INFORMATION:
+- Name: ${cleanPatientName}
+- Age: ${patientAge}
+- Primary Condition: ${condition}
+
+LATEST CARE ASSESSMENT:
+${carePrompt || "No specific care assessment available"}
+
+${conversationContext ? `PREVIOUS CONVERSATION HISTORY:
+${conversationContext}` : "This is your first conversation with this patient."}
+
+CALL INSTRUCTIONS:
+- You are calling on behalf of their healthcare team
+- Be warm, professional, and empathetic in your approach
+- Address the patient by their name (${cleanPatientName})
+- Reference their specific health condition (${condition}) and any concerns mentioned above
+- Ask about their current symptoms, medication adherence, and overall well-being
+- Provide appropriate health guidance based on their condition and the care assessment
+- Offer to schedule follow-up appointments if needed
+- Keep the conversation focused on their health but maintain a natural, caring tone
+- If they have questions about their condition or treatment, provide helpful information based on the care assessment
+
+IMPORTANT: You have access to their latest health data and personalized care recommendations above. Use this information throughout the conversation to provide relevant, personalized care.`;
+
+      // Prepare the Vapi call request with comprehensive context
       const vapiPayload = {
         assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Your agent ID
         phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08", // Your phone number ID
@@ -1898,6 +2041,21 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
           number: phoneNumber
         },
         assistantOverrides: {
+          model: {
+            provider: savedAgentConfig?.model?.provider || "openai",
+            model: savedAgentConfig?.model?.model || "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              }
+            ]
+          },
+          voice: savedAgentConfig?.voice ? {
+            provider: savedAgentConfig.voice.provider,
+            voiceId: savedAgentConfig.voice.voiceId
+          } : undefined,
+          firstMessage: savedAgentConfig?.firstMessage || "Hello, this is your healthcare assistant calling with an important update about your health.",
           variableValues: {
             patientName: cleanPatientName,
             patientAge: patientAge.toString(),
@@ -1912,11 +2070,21 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         }
       };
 
-      console.log("🔍 DEBUG: Variable values being sent to Vapi:", {
-        patientName: vapiPayload.assistantOverrides.variableValues.patientName,
-        patientAge: vapiPayload.assistantOverrides.variableValues.patientAge,
-        promptPreview: vapiPayload.assistantOverrides.variableValues.patientPrompt.substring(0, 100) + "...",
-        hasHistory: !!vapiPayload.assistantOverrides.variableValues.conversationHistory
+      // Get the actual system prompt that will be sent to VAPI
+      const actualSystemPrompt = vapiPayload.assistantOverrides.model.messages[0].content;
+
+      console.log("🔍 DEBUG: Complete system prompt being sent to Vapi:");
+      console.log("=".repeat(80));
+      console.log(actualSystemPrompt);
+      console.log("=".repeat(80));
+
+      console.log("🔍 DEBUG: Patient data summary:", {
+        patientName: cleanPatientName,
+        patientAge: patientAge,
+        condition: condition,
+        promptLength: carePrompt?.length || 0,
+        hasHistory: !!conversationContext,
+        systemPromptLength: actualSystemPrompt.length
       });
 
       // Make the call to Vapi API
@@ -3133,9 +3301,9 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
     try {
       const { patientId } = req.params;
       const callHistory = await storage.getCallHistoryByPatient(patientId);
-      
-      return res.json({ 
-        success: true, 
+
+      return res.json({
+        success: true,
         callHistory: callHistory.map(call => ({
           ...call,
           keyPoints: call.keyPoints || [],
@@ -3145,9 +3313,9 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
       });
     } catch (error) {
       console.error("Error fetching call history:", error);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Failed to fetch call history" 
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch call history"
       });
     }
   });
@@ -3156,9 +3324,9 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
   app.get("/api/call-history", async (req, res) => {
     try {
       const allCallHistory = await storage.getAllCallHistory();
-      
-      return res.json({ 
-        success: true, 
+
+      return res.json({
+        success: true,
         callHistory: allCallHistory.map(call => ({
           ...call,
           keyPoints: call.keyPoints || [],
@@ -3168,9 +3336,9 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
       });
     } catch (error) {
       console.error("Error fetching all call history:", error);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Failed to fetch call history" 
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch call history"
       });
     }
   });
