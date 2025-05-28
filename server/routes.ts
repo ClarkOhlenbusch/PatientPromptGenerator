@@ -1862,7 +1862,8 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
 `;
       }
 
-      // Prepare the Vapi call request with the complete patient prompt as context
+      // Prepare the Vapi call request with the complete patient care prompt
+      // Let the intelligent AI agent extract patient information naturally from the care prompt
       const vapiPayload = {
         assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Your agent ID
         phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08", // Your phone number ID
@@ -1870,16 +1871,36 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
           number: phoneNumber
         },
         assistantOverrides: {
-          variableValues: {
-            patientName: patientName,
-            patientPrompt: carePrompt,
-            conversationHistory: conversationContext || "No previous conversations"
+          model: {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: `You are an empathetic AI voice companion conducting a 15-minute check-in call with a patient.
+
+PATIENT CARE INFORMATION:
+${carePrompt}
+
+${conversationContext ? `PREVIOUS CONVERSATION CONTEXT:\n${conversationContext}\n\n` : ''}
+
+INSTRUCTIONS:
+- Use the patient's actual name from the care information above
+- Reference specific health details and recommendations from the care prompt
+- Ask how they've been feeling since their last check-in
+- Ask open-ended questions to encourage them to share
+- If they mention new or worsening symptoms, remind them to contact their care team
+- At the end, summarize key points and remind them their care team will follow up
+
+Keep the conversation warm, natural, and personalized based on the care information provided.`
+              }
+            ]
           }
         },
         metadata: {
           patientId: patientId.toString(),
           patientName: patientName,
-          batchId: "current_batch" // Add batch tracking
+          batchId: "current_batch"
         }
       };
 
