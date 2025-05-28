@@ -1627,21 +1627,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const enhancedSystemPrompt = systemPrompt || `You are an empathetic AI voice companion conducting a 15-minute check-in call with a patient.
 
 PATIENT INFORMATION:
-You are calling {{patientName}}.
+You are calling {{patientName}}, who is {{patientAge}} years old.
 
 CARE PROMPT CONTEXT:
 {{patientPrompt}}
 
-{{#if conversationHistory}}PREVIOUS CONVERSATION:
-{{conversationHistory}}{{/if}}
+PREVIOUS CONVERSATION HISTORY:
+{{conversationHistory}}
 
 INSTRUCTIONS:
 - Use the patient's actual name ({{patientName}}) throughout the conversation
-- Reference specific details from the care prompt naturally
+- Reference their age ({{patientAge}}) when appropriate
+- Reference specific details from the care prompt naturally in your conversation
 - Ask how they've been feeling since their last check-in
 - Ask open-ended questions to encourage them to share
 - If they mention new or worsening symptoms, remind them to contact their care team
 - At the end, summarize key points and remind them their care team will follow up
+- Be conversational and natural - don't sound robotic or overly clinical
 
 Keep the conversation warm, natural, and personalized based on the care prompt information above.`;
 
@@ -1848,7 +1850,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      const { name: patientName, prompt: carePrompt, condition, age } = patientData;
+      const { name: patientName, prompt: carePrompt, condition, age, patientId: dbPatientId } = patientData;
 
       // Check for Vapi API key
       const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
@@ -1860,7 +1862,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       }
 
       // Get previous conversation history for this patient
-      const previousCall = await storage.getLatestCallForPatient(patientId.toString());
+      const previousCall = await storage.getLatestCallForPatient(dbPatientId || patientId.toString());
       let conversationContext = "";
       
       if (previousCall && previousCall.summary) {
@@ -1873,7 +1875,22 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
 `;
       }
 
-      // Prepare the Vapi call request using simple variable approach
+      // Extract patient name without parentheses and birth date if present
+      const cleanPatientName = patientName.replace(/\s*\([^)]*\)\s*/g, '').trim();
+      
+      // Calculate patient age from the prompt data or use the stored age
+      const patientAge = age || "unknown age";
+
+      console.log("🔍 DEBUG: Patient data for call:", {
+        patientId: dbPatientId || patientId,
+        patientName: cleanPatientName,
+        age: patientAge,
+        condition,
+        promptLength: carePrompt?.length || 0,
+        hasConversationHistory: !!conversationContext
+      });
+
+      // Prepare the Vapi call request with proper variable mapping
       const vapiPayload = {
         assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Your agent ID
         phoneNumberId: "f412bd32-9764-4d70-94e7-90f87f84ef08", // Your phone number ID
@@ -1882,18 +1899,25 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         },
         assistantOverrides: {
           variableValues: {
-            patientCareInfo: carePrompt,
+            patientName: cleanPatientName,
+            patientAge: patientAge.toString(),
+            patientPrompt: carePrompt || "No specific care prompt available",
             conversationHistory: conversationContext || "No previous conversations"
           }
         },
         metadata: {
-          patientId: patientId.toString(),
-          patientName: patientName,
+          patientId: (dbPatientId || patientId).toString(),
+          patientName: cleanPatientName,
           batchId: batchId
         }
       };
 
-      console.log("🔍 DEBUG: Complete call payload for Vapi:", JSON.stringify(vapiPayload, null, 2));
+      console.log("🔍 DEBUG: Variable values being sent to Vapi:", {
+        patientName: vapiPayload.assistantOverrides.variableValues.patientName,
+        patientAge: vapiPayload.assistantOverrides.variableValues.patientAge,
+        promptPreview: vapiPayload.assistantOverrides.variableValues.patientPrompt.substring(0, 100) + "...",
+        hasHistory: !!vapiPayload.assistantOverrides.variableValues.conversationHistory
+      });
 
       // Make the call to Vapi API
       const vapiResponse = await fetch("https://api.vapi.ai/call/phone", {
@@ -1916,13 +1940,19 @@ ${previousCall.healthConcerns && previousCall.healthConcerns.length > 0 ?
         });
       }
 
+      console.log("✅ Call initiated successfully:", {
+        callId: vapiData.id,
+        patientName: cleanPatientName,
+        phoneNumber
+      });
+
       // Return success response
       return res.status(200).json({
         success: true,
-        message: `Call initiated successfully to ${patientName}`,
+        message: `Call initiated successfully to ${cleanPatientName}`,
         data: {
           callId: vapiData.id,
-          patientName,
+          patientName: cleanPatientName,
           phoneNumber,
           status: "initiated"
         }
