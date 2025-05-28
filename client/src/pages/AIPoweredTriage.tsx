@@ -48,46 +48,46 @@ const extractReasoning = (promptText: string): { displayPrompt: string, reasonin
   // First check for explicitly marked reasoning section with various formats
   // Format 1: **Reasoning:** text
   const markdownReasoningMatch = promptText.match(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/);
-  
+
   if (markdownReasoningMatch) {
     // Extract the reasoning text
     const reasoning = markdownReasoningMatch[1].trim();
-    
+
     // Remove the reasoning section from the prompt
     const displayPrompt = promptText.replace(/\*\*Reasoning:\*\*\s*([\s\S]*?)(\n\s*$|$)/, '').trim();
-    
+
     return { displayPrompt, reasoning };
   }
-  
+
   // Format 2: Reasoning: text
   const plainReasoningMatch = promptText.match(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i);
-  
+
   if (plainReasoningMatch) {
     // Extract the reasoning text
     const reasoning = plainReasoningMatch[1].trim();
-    
+
     // Remove the reasoning section from the prompt
     const displayPrompt = promptText.replace(/(?:^|\n|\r)Reasoning:\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
-    
+
     return { displayPrompt, reasoning };
   }
-  
+
   // Format 3: **Reasoning** text or **Reasoning**:text
   const boldReasoningMatch = promptText.match(/\*\*Reasoning\*\*:?\s*([\s\S]*?)(\n\s*$|$)/i);
-  
+
   if (boldReasoningMatch) {
     // Extract the reasoning text
     const reasoning = boldReasoningMatch[1].trim();
-    
+
     // Remove the reasoning section from the prompt
     const displayPrompt = promptText.replace(/\*\*Reasoning\*\*:?\s*([\s\S]*?)(\n\s*$|$)/i, '').trim();
-    
+
     return { displayPrompt, reasoning };
   }
-  
+
   // If no specific format is found, check for a section labeled with anything like "Reasoning"
   const lines = promptText.trim().split(/\n/);
-  
+
   // Look for any heading that might be a reasoning section in the latter half of the document
   const reasoningHeaderIndex = lines.findIndex((line, index) => 
     index > lines.length / 2 && ( // Only look in the second half of the content
@@ -97,15 +97,15 @@ const extractReasoning = (promptText: string): { displayPrompt: string, reasonin
       (line.startsWith("**") && line.endsWith("**")) // Any bold section header
     )
   );
-  
+
   if (reasoningHeaderIndex !== -1) {
     // Extract everything after the reasoning header
     const displayPrompt = lines.slice(0, reasoningHeaderIndex).join('\n').trim();
     const reasoning = lines.slice(reasoningHeaderIndex).join('\n').trim();
-    
+
     return { displayPrompt, reasoning };
   }
-  
+
   // Fallback: If no reasoning section is found at all, return original with no reasoning
   return { displayPrompt: promptText, reasoning: "No explicit reasoning provided." };
 };
@@ -130,7 +130,7 @@ export default function AIPoweredTriage() {
     },
     retry: 1 // Limit retries to prevent excessive calls
   });
-  
+
   // Get all batches to find one with prompts
   const { data: allBatches, isLoading: isBatchesLoading } = useQuery<any[]>({
     queryKey: ["/api/batches"],
@@ -142,10 +142,10 @@ export default function AIPoweredTriage() {
     },
     retry: 1
   });
-  
+
   // Find the most recent batch that has prompts
   const [batchWithPrompts, setBatchWithPrompts] = useState<string | null>(null);
-  
+
   useEffect(() => {
     // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
     async function findBatchWithPrompts() {
@@ -160,7 +160,7 @@ export default function AIPoweredTriage() {
                 'Content-Type': 'application/json'
               }
             });
-            
+
             if (response.ok) {
               const data = await response.json();
               // Handle standardized API response format
@@ -176,15 +176,15 @@ export default function AIPoweredTriage() {
         }
       }
     }
-    
+
     if (!batchWithPrompts) {
       findBatchWithPrompts();
     }
   }, [allBatches, batchWithPrompts]);
-  
+
   // Use either the batch with prompts or the latest batch
   const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
-  
+
   // Query to get all patient prompts
   const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
     queryKey: ["/api/patient-prompts", effectiveBatchId],
@@ -196,14 +196,14 @@ export default function AIPoweredTriage() {
         // Use the correct API endpoint that returns an array of prompts
         const res = await apiRequest("GET", `/api/patient-prompts/${effectiveBatchId}`);
         const data = await res.json();
-        
+
         // Handle standardized API response format
         if (data.success && data.data) {
           if (Array.isArray(data.data)) {
             return data.data;
           }
         }
-          
+
         // If the data doesn't match the expected format, log error and show toast
         console.error("API did not return expected data format:", data);
         toast({
@@ -225,7 +225,7 @@ export default function AIPoweredTriage() {
     enabled: !!effectiveBatchId,
     retry: 1
   });
-  
+
   // Process prompts to extract reasoning when they change
   useEffect(() => {
     if (prompts) {
@@ -233,7 +233,7 @@ export default function AIPoweredTriage() {
         // The API returns 'prompt' but our component expects 'promptText'
         // Handle both possible field names
         const promptContent = (prompt as any).promptText || (prompt as any).prompt;
-        
+
         if (!promptContent) {
           console.error("Prompt content is missing:", prompt);
           return {
@@ -242,11 +242,11 @@ export default function AIPoweredTriage() {
             reasoning: "No reasoning available due to missing prompt content"
           };
         }
-        
+
         // Extract reasoning from the prompt text regardless of whether reasoning exists
         // This ensures we always separate the reasoning from the prompt text
         const { displayPrompt, reasoning } = extractReasoning(promptContent);
-        
+
         // Map the status field - database has healthStatus but frontend expects status
         let status: 'healthy' | 'alert' = 'alert'; // Default to alert
         if ((prompt as any).status) {
@@ -256,7 +256,7 @@ export default function AIPoweredTriage() {
         } else if ((prompt as any).isAlert === 'false') {
           status = 'healthy';
         }
-        
+
         return {
           ...prompt,
           patientName: ((prompt as any).patientName || (prompt as any).name).replace(/\s*\([^)]*\)\s*/g, ''), // Remove parentheses from name
@@ -276,31 +276,31 @@ export default function AIPoweredTriage() {
       console.log(`Regenerating prompt with ID: ${patientId}`);
       // Use the standardized endpoint for single prompt regeneration
       const res = await apiRequest("POST", `/api/prompts/${patientId}/regenerate`);
-      
+
       // Handle non-2xx responses
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || `Failed with status: ${res.status}`);
       }
-      
+
       return await res.json();
     },
     onSuccess: (response) => {
       console.log("Successfully regenerated single prompt:", response);
-      
+
       // Force refetch the patient prompts to ensure we get the latest data
       // First invalidate all queries that might contain this data
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
       if (effectiveBatchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
       }
-      
+
       // Show success message
       toast({
         title: "Success",
         description: response.message || "Prompt regenerated successfully",
       });
-      
+
       // Force refetch the data after a short delay to allow the server to complete any processing
       setTimeout(() => {
         queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
@@ -315,40 +315,40 @@ export default function AIPoweredTriage() {
       });
     }
   });
-  
+
   // Mutation for regenerating all prompts in a batch
   const regenerateAllMutation = useMutation({
     mutationFn: async (batchId: string) => {
       if (!batchId) {
         throw new Error("No batch found to regenerate");
       }
-      
+
       console.log(`Regenerating all prompts for batch: ${batchId}`);
       // Use the standardized API endpoint
       const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${batchId}`);
-      
+
       // Handle non-2xx responses
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || `Failed with status: ${res.status}`);
       }
-      
+
       return await res.json();
     },
     onSuccess: (response, batchId) => {
       console.log("Regeneration result:", response);
-      
+
       // Clear any cached data to ensure we get fresh data
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
       if (batchId) {
         queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", batchId] });
       }
-      
+
       // If we have data, show a success message with details
       if (response.data) {
         const { regenerated, total, failedPrompts } = response.data;
         const hasFailures = failedPrompts && failedPrompts.length > 0;
-        
+
         toast({
           title: "Success",
           description: hasFailures
@@ -362,7 +362,7 @@ export default function AIPoweredTriage() {
           description: response.message || "All prompts regenerated successfully",
         });
       }
-      
+
       // Force refetch the data after a short delay to allow the server to complete any processing
       setTimeout(() => {
         queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", batchId] });
@@ -386,22 +386,22 @@ export default function AIPoweredTriage() {
       patientData: PatientPrompt 
     }) => {
       // Get the current batch ID from the latest batch query
-      const batchData = latestBatch?.data;
+      const batchData = latestBatch;
       if (!batchData?.batchId) {
         throw new Error("No batch ID available for call");
       }
 
       const res = await apiRequest("POST", "/api/vapi/call", {
-        patientId: patientData.patientName, // Use patient name as ID for database lookup
+        patientId: patientData.id,
         phoneNumber,
         batchId: batchData.batchId
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.message || `Failed with status: ${res.status}`);
       }
-      
+
       return await res.json();
     },
     onSuccess: (response, variables) => {
@@ -418,7 +418,7 @@ export default function AIPoweredTriage() {
       });
     }
   });
-  
+
   // Deduplicate prompts by patient name
   const uniquePatientPrompts = processedPrompts ? 
     Object.values(
@@ -499,12 +499,12 @@ export default function AIPoweredTriage() {
       patientData: prompt
     });
   };
-  
+
   // Add CSV export function
   const handleExportCSV = () => {
     // Create CSV header
     const headers = ['Patient Name', 'Age', 'Condition', 'Status', 'Generated Prompt', 'Reasoning'];
-    
+
     // Convert prompts to CSV rows
     const csvRows = [
       headers.join(','), // Header row
@@ -514,7 +514,7 @@ export default function AIPoweredTriage() {
           const cleaned = field.replace(/"/g, '""'); // Escape quotes
           return `"${cleaned}"`; // Wrap in quotes to handle commas and newlines
         };
-        
+
         return [
           escapeCsvField(prompt.patientName),
           prompt.age,
@@ -530,7 +530,7 @@ export default function AIPoweredTriage() {
     const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `patient_prompts_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
@@ -543,7 +543,7 @@ export default function AIPoweredTriage() {
       description: "CSV file downloaded successfully",
     });
   };
-  
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-6">
@@ -571,7 +571,7 @@ export default function AIPoweredTriage() {
                 </Button>
               </div>
             </div>
-            
+
       <div className="mb-6">
         <Input
           placeholder="Search patients..."
@@ -580,7 +580,7 @@ export default function AIPoweredTriage() {
           className="max-w-md"
         />
       </div>
-      
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -706,11 +706,11 @@ export default function AIPoweredTriage() {
               Age: {selectedPrompt?.age} - Condition: {selectedPrompt?.condition}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="mt-4 bg-gray-50 p-4 rounded-md prose prose-sm max-w-none">
             <ReactMarkdown>{selectedPrompt?.promptText || ""}</ReactMarkdown>
                           </div>
-                          
+
           <div className="flex justify-end gap-2 mt-4">
             <Button 
               variant="outline" 
@@ -738,7 +738,7 @@ export default function AIPoweredTriage() {
               The AI's reasoning process for generating this patient's prompt
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="mt-4 bg-gray-50 p-4 rounded-md prose prose-sm max-w-none">
             {selectedPrompt?.reasoning && selectedPrompt.reasoning.trim().length > 0 ? (
               <ReactMarkdown>{selectedPrompt.reasoning}</ReactMarkdown>
