@@ -381,7 +381,7 @@ export default function AIPoweredTriage() {
   // Mutation for calling patients via Vapi
   const callPatientMutation = useMutation({
     mutationFn: async ({ patientId, phoneNumber, patientData }: { 
-      patientId: number; 
+      patientId: string; 
       phoneNumber: string; 
       patientData: PatientPrompt 
     }) => {
@@ -392,7 +392,7 @@ export default function AIPoweredTriage() {
       }
 
       const res = await apiRequest("POST", "/api/vapi/call", {
-        patientId: patientData.id,
+        patientId: patientData.patientId || patientData.id.toString(),
         phoneNumber,
         batchId: batchData.batchId
       });
@@ -494,7 +494,7 @@ export default function AIPoweredTriage() {
     const formattedPhone = cleanPhone.startsWith('1') ? `+${cleanPhone}` : `+1${cleanPhone}`;
 
     callPatientMutation.mutate({
-      patientId: prompt.id,
+      patientId: (prompt as any).patientId || prompt.id.toString(),
       phoneNumber: formattedPhone,
       patientData: prompt
     });
