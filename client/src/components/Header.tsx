@@ -36,10 +36,10 @@ export default function Header() {
             <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">Caretaker Prompt Generator</h1>
           </div>
         </Link>
-        
+
         <div className="hidden md:flex items-center space-x-4">
           {user && (
-            <nav className="flex items-center space-x-4 mr-4">
+            <nav className="flex items-center space-x-6 mr-4">
               <Link href="/">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                   Upload Data
@@ -67,17 +67,16 @@ export default function Header() {
               </Link>
               <Link href="/settings">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/settings" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                  <Settings className="inline h-3 w-3 mr-1" />
                   Settings
                 </span>
               </Link>
             </nav>
           )}
-          
+
           <Link href="/faq">
             <span className="text-gray-600 hover:text-primary text-sm font-medium transition-colors cursor-pointer">Help</span>
           </Link>
-          
+
           {isLoading ? (
             <Button disabled variant="outline" size="sm">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -113,7 +112,7 @@ export default function Header() {
             </Button>
           )}
         </div>
-        
+
         <div className="md:hidden relative">
           {user && mobileMenuOpen && (
             <div className="absolute top-10 right-0 bg-white shadow-lg rounded-md p-4 min-w-[200px] z-10 border">
@@ -126,6 +125,11 @@ export default function Header() {
                 <Link href="/triage" onClick={() => setMobileMenuOpen(false)}>
                   <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/triage" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                     Triage
+                  </span>
+                </Link>
+                <Link href="/call-history" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/call-history" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+                    Call History
                   </span>
                 </Link>
                 <Link href="/prompt-editing" onClick={() => setMobileMenuOpen(false)}>
