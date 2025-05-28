@@ -1669,12 +1669,8 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         };
       }
 
-      // Configure variables for the assistant
-      updatePayload.variables = [
-        { name: "patientName", description: "The patient's full name" },
-        { name: "patientPrompt", description: "Complete personalized care prompt containing all patient information" },
-        { name: "conversationHistory", description: "Summary of previous conversations" }
-      ];
+      // Note: Variables are passed via assistantOverrides.variableValues during calls,
+      // not stored in the assistant configuration itself
 
       console.log("Vapi update payload:", JSON.stringify(updatePayload, null, 2));
 

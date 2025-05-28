@@ -1,0 +1,145 @@
+Great, I’ll find out whether Vapi provides an endpoint to update an existing assistant (e.g. PATCH /assistant/{id}), what configuration fields can be updated (like system prompt, voice, etc.), and the best practices for test calls versus production updates. I’ll also check if current assistant settings can be fetched via API so you can preload the form in your prompt editor.
+
+I’ll get back to you shortly with everything needed to build a robust configuration UI for the voice agent.
+
+
+# Vapi API for Assistant Configuration (Agents)
+
+## 1. Updating an Existing Assistant via API
+
+Yes – Vapi provides an endpoint to update an assistant’s configuration. The API uses a **PATCH** request on the assistant resource. The full endpoint is:
+
+```
+PATCH https://api.vapi.ai/assistant/{assistantId}
+```
+
+This will update the existing assistant with the given ID. For example, using cURL:
+
+```bash
+curl -X PATCH "https://api.vapi.ai/assistant/YOUR_ASSISTANT_ID" \
+ -H "Authorization: Bearer <YOUR_API_KEY>" \
+ -H "Content-Type: application/json" \
+ -d '{
+       "firstMessage": "Hello! How can I help you today?",
+       "voice": { "provider": "playht", "voiceId": "jennifer" },
+       "model": {
+          "provider": "openai",
+          "model": "gpt-4",
+          "messages": [ 
+             { "role": "system", "content": "You are a helpful assistant..." } 
+          ]
+       }
+     }'
+```
+
+According to the API reference, the `PATCH /assistant/{id}` endpoint is explicitly provided for updating an assistant’s settings. Make sure to include an authorization header with your API key. The above JSON payload would update fields like the assistant’s first message, voice, and model (including the system prompt) in one request.
+
+## 2. Fields That Can Be Updated via API
+
+Most of the assistant’s configuration fields can be modified through the update API. In general, any field used when creating the assistant can also be changed with the PATCH call. Key fields include:
+
+* **firstMessage** – The first message the assistant will say to a caller (can also be a URL to an audio file). If this is unspecified, the assistant will initially wait for the user to speak rather than greeting first.
+* **voice** – An object defining the text-to-speech voice settings (e.g. `provider` and `voiceId`). This selects which TTS engine and voice the assistant uses. For example, you might set `"voice": { "provider": "azure", "voiceId": "en-US-JennyNeural" }`.
+* **transcriber** – An object for speech-to-text (STT) configuration (e.g. provider, model, language). This determines how the caller’s speech is transcribed to text.
+* **model** – An object specifying the AI model (LLM) and its parameters. This includes the `provider` (e.g. `"openai"` or `"anthropic"`), the `model` name (e.g. `"gpt-4"`), and the prompt/messages such as the **system prompt** (usually provided as the first message in the `model.messages` array). You can update the system behavior by changing `model.messages[0].content` (the system role’s content). *Note:* When updating the `model` configuration, you must supply the entire `model` object in the PATCH payload (it will **overwrite** the existing model config, not merge).
+* **Additional messages and prompts** – Fields like `voicemailMessage` (what the assistant says if a call goes to voicemail) and `endCallMessage` (farewell when ending the call) can be set or updated as needed. Similarly, you can update lists like `endCallPhrases` (trigger phrases to hang up) or idle messages via the appropriate fields (these are part of the assistant’s `messagePlan` in newer versions).
+* **Other settings** – You can also update metadata and advanced settings such as `analysisPlan` (call analytics setup), `artifactPlan` (recording/transcript settings), `startSpeakingPlan` (when the assistant begins talking), etc., if your use-case requires. Most of these are optional; if not provided, defaults are used. For typical configurations, you may not need to touch these advanced fields.
+
+**Usage Note:** The PATCH request supports partial updates, but for object fields like `model`, `voice`, or `transcriber`, you should include the full object if you intend to change any part of it. Any field omitted in the payload retains its current value (except for sub-objects which get replaced in entirety). The example above demonstrates updating `firstMessage`, `voice`, and `model` all at once. You could just send one or two fields in the JSON if you only want to change those (e.g. just the `firstMessage`). Unspecified fields will remain as before.
+
+## 3. Testing Configuration Changes: Update vs. Overrides
+
+When conducting test calls with a modified assistant configuration, you do **not** necessarily have to persist those changes by updating the assistant each time. Vapi supports **transient overrides** and inline configurations for testing purposes. This means you can supply a temporary config at call time without altering the saved assistant object.
+
+**Recommended approach:** Use an ephemeral (overridden) configuration for test calls, unless you specifically want to save the changes. For example, if you’re using the JavaScript Web SDK, you can start a call by passing a configuration object directly instead of an assistant ID. This creates a one-time assistant instance just for that call (it is **not** saved to your account). In code, it might look like:
+
+```js
+// Start a call with a temporary assistant configuration (no ID)
+vapi.start({
+  firstMessage: "This is a test greeting!",
+  voice: { provider: "playht", voiceId: "jennifer" },
+  model: { provider: "openai", model: "gpt-3.5-turbo", messages: [ { role: "system", content: "Test prompt..." } ] }
+});
+```
+
+Alternatively, if you already have an assistant ID and just want to override certain fields for a test call, you can pass an `assistantOverrides` object along with the assistant ID when starting the call. For example, you might keep the same base assistant but override the voice or first message for the test:
+
+```js
+const overrides = { 
+  voice: { provider: "azure", voiceId: "en-US-JennyNeural" }, 
+  firstMessage: "Testing a different greeting..." 
+};
+vapi.start("YOUR_ASSISTANT_ID", overrides);
+```
+
+Using `assistantOverrides` lets you try out changes (like a new voice or prompt) on a call without permanently modifying the assistant’s stored configuration. The Vapi documentation notes that starting a call with an inline config or overrides will create an *ephemeral assistant* for that call only. This is ideal for experimentation and QA. Once you’re satisfied with the changes, you can then update the assistant object via the API (or dashboard) to make them permanent.
+
+In summary, **for quick tests, use transient overrides or an ephemeral assistant**. Reserve the PATCH update for when you want to commit the configuration changes long-term.
+
+## 4. Fetching an Assistant’s Current Configuration (GET)
+
+Yes – there is an API endpoint to retrieve the full configuration of a saved assistant. You can use a **GET** request to `GET /assistant/{id}` to fetch the assistant’s details. For example:
+
+```
+GET https://api.vapi.ai/assistant/YOUR_ASSISTANT_ID 
+   (with Authorization header)
+```
+
+A successful response returns a JSON object representing the assistant. It will include all the assistant’s settings and metadata, such as its `name`, `firstMessage`, `voice` config, `transcriber` config, `model` (LLM settings), and various message or tool configurations, as well as timestamps and IDs. For instance, a response might look like:
+
+```json
+{
+  "id": "79f3...ce48",
+  "orgId": "6da6...3a17",
+  "name": "NurseAssist Bot",
+  "firstMessage": "Hello, thank you for calling our clinic. How can I help you today?",
+  "voicemailMessage": "I'm sorry we missed your call. Please leave a message.",
+  "endCallMessage": "Thank you and goodbye.",
+  "voice": {
+    "provider": "playht",
+    "voiceId": "jennifer"
+  },
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova",
+    "language": "en-US"
+  },
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "messages": [
+      { "role": "system", "content": "You are a helpful assistant for a medical clinic..." },
+      { "role": "assistant", "content": "" }
+    ],
+    "temperature": 0.2,
+    "toolIds": [ ... ],
+    ... (other model parameters)
+  },
+  "createdAt": "2024-11-13T19:20:24.606Z",
+  "updatedAt": "2024-11-15T10:05:42.123Z"
+}
+```
+
+This allows your front-end configuration UI to **prefill all current values** by fetching the assistant’s record. You can then display these defaults in form fields (for example, show the existing firstMessage text, the selected voice, the current system prompt, etc.). The GET endpoint is useful to load the config for editing – just be mindful to secure the request since it requires your API key. (In practice, you might call your own backend which then calls Vapi’s API, to avoid exposing the API key on the client side.)
+
+## 5. Fields Suitable for Nurse-Facing Configuration UI
+
+When building a UI for nurses (or other non-developer users) to adjust the voice agent’s behavior, you’ll want to expose **high-level, safe-to-edit fields** that meaningfully affect the assistant’s behavior without requiring technical knowledge. Based on Vapi’s assistant model, the following fields are both useful and safe for a nurse or admin UI:
+
+* **First Message** – The greeting that the assistant speaks at the start of a call. This is a simple text (or audio URL) field. Nurses can customize the greeting message (e.g. “Hello, Dr. Smith’s office, how may I assist you?”) easily. If the first message is left blank, the assistant will wait for the caller to speak first, so you might also provide a toggle for **“Assistant speaks first”** vs **“Wait for user”** (behind the scenes this just controls whether a firstMessage is set). This is a user-friendly setting to include.
+
+* **System Prompt (Assistant Role/Persona)** – This is the initial system instruction that defines the assistant’s role, tone, and boundaries. It might be phrased in the UI as “Assistant Role Description” or “Guidelines for the AI”. For example, a nurse could input something like: *“You are a virtual nurse assistant. Answer questions about appointments and medications in a friendly, concise manner,”* which becomes the system prompt. Exposing this field lets domain experts fine-tune the assistant’s behavior. (In the API this corresponds to the content of the first `system` message in `model.messages`.)
+
+* **Voice Selection** – Allow the user to choose the voice the assistant uses for TTS. This can be a dropdown of voice options (e.g. different providers and voice names). The underlying fields are `voice.provider` and `voice.voiceId`. For instance, you might list voices like “Allison (Female, English)” or “Brian (Male, English)” and map those to the appropriate provider/voiceId values. Changing the voice is non-technical and directly affects how the agent sounds, so it’s a very user-friendly configuration. The Vapi documentation provides available voice providers and IDs (e.g. Azure, Play.ht, ElevenLabs, etc.). In JSON this is simply an object as shown above (e.g. `"voice": { "provider": "playht", "voiceId": "jennifer" }`).
+
+* **Model Type** – Let the user select which underlying AI model the assistant uses. For example, options might include “OpenAI GPT-4” vs “OpenAI GPT-3.5”, or other model providers that your system supports (Anthropic, etc.). This corresponds to the `model.provider` and `model.model` fields in the config. Non-technical users may not know the details of each model, but you can present choices like “Standard AI vs. Advanced AI (more accurate)” in the UI. It’s safe to allow this choice if cost and performance trade-offs are a consideration, assuming your platform has access to multiple models. The system prompt can remain the same; only the model engine changes. (You might restrict this field or omit it if you always want to use a specific model, but it can be exposed if desired.)
+
+* **Call Closing and Voicemail Messages** – If applicable, expose fields for the **“Voicemail message”** (what the assistant says when it reaches a voicemail) and **“End-call message”** (what the assistant says before hanging up). For example, a nurse could customize the voicemail prompt (“Sorry we can’t come to the phone...”) or the sign-off message (“Thank you, have a nice day, goodbye.”). These fields are simple text and are safe to edit. In the API they map to `voicemailMessage` and `endCallMessage` respectively. If not set, the assistant will default to hanging up silently or using default behavior, so giving control here can improve the call experience.
+
+* **Assistant Name (Optional)** – In some contexts, you might let users set a name for the assistant (especially if the platform supports transferring calls between assistants or logging by name). This is more of an internal label (`name` field) and not spoken aloud, so it’s less critical, but it can be made editable for clarity (e.g. “Dr. Smith’s Appointment Bot”).
+
+In contrast, fields that are more technical (like `analysisPlan`, `credentials`, `toolIds`, `silenceTimeoutSeconds`, etc.) should typically be hidden from a nurse-facing UI or pre-configured by developers. The goal is to present only the controls that a nurse or admin would understand and find useful for tailoring the bot’s interactions, without exposing low-level settings.
+
+By focusing on the **greeting (first message)**, **assistant’s persona (system prompt)**, **voice choice**, **AI model choice**, and a few **call flow messages** (like voicemail or goodbye message), you give nurses the ability to customize the agent’s tone and behavior in a safe way. All these map cleanly to fields in the Vapi assistant configuration, so your frontend can simply collect those inputs and send them via the PATCH API to update the assistant. Make sure to use the GET endpoint to preload the form with current values, and then PATCH the changes when the nurse saves the configuration. This will ensure a smooth UI/UX for configuring the Vapi voice agent.
+
+**Sources:** The Vapi API documentation and references confirm the available endpoints and fields. For instance, the official Swagger reference lists **PATCH** `/assistant/{id}` for updates and **GET** `/assistant/{id}` for fetching an assistant. The assistant object includes fields like `firstMessage`, `voice`, `model` (with system prompt in `messages[0]`), etc., as shown in the docs. Vapi’s guides also note that passing a config inline will create an ephemeral assistant (useful for test calls), and that you can override specific settings per call with an `assistantOverrides` parameter. These features allow flexibility in testing and configuration without always requiring permanent changes. Each of the recommended UI fields corresponds to documented assistant properties (for example, *firstMessage* controls whether the assistant speaks first, *voice* settings determine TTS voice, and the *model* block defines which LLM and prompt are used). By leveraging these documented API fields, you can confidently build a nurse-friendly configuration interface for your Vapi voice assistant.
