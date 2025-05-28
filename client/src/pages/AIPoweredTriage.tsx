@@ -385,13 +385,16 @@ export default function AIPoweredTriage() {
       phoneNumber: string; 
       patientData: PatientPrompt 
     }) => {
+      // Get the current batch ID from the latest batch query
+      const batchData = latestBatch?.data;
+      if (!batchData?.batchId) {
+        throw new Error("No batch ID available for call");
+      }
+
       const res = await apiRequest("POST", "/api/vapi/call", {
-        patientId,
+        patientId: patientData.patientName, // Use patient name as ID for database lookup
         phoneNumber,
-        patientName: patientData.patientName,
-        carePrompt: patientData.promptText,
-        condition: patientData.condition,
-        age: patientData.age
+        batchId: batchData.batchId
       });
       
       if (!res.ok) {
