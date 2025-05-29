@@ -392,7 +392,7 @@ export default function AIPoweredTriage() {
       }
 
       const res = await apiRequest("POST", "/api/vapi/triage-call", {
-        patientId: patientData.patientId || patientData.id.toString(),
+        patientId,
         phoneNumber,
         batchId: batchData.batchId
       });
