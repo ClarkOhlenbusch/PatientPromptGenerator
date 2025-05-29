@@ -391,7 +391,7 @@ export default function AIPoweredTriage() {
         throw new Error("No batch ID available for call");
       }
 
-      const res = await apiRequest("POST", "/api/vapi/call", {
+      const res = await apiRequest("POST", "/api/vapi/triage-call", {
         patientId: patientData.patientId || patientData.id.toString(),
         phoneNumber,
         batchId: batchData.batchId
