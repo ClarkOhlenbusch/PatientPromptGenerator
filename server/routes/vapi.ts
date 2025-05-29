@@ -788,19 +788,12 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      const { patientId, batchId, phoneNumber } = req.body;
+      const { patientId, batchId } = req.body;
 
       if (!patientId) {
         return res.status(400).json({
           success: false,
           message: "Patient ID is required"
-        });
-      }
-
-      if (!phoneNumber) {
-        return res.status(400).json({
-          success: false,
-          message: "Phone number is required"
         });
       }
 
@@ -816,8 +809,18 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      // Use the phone number from request body (no need to extract from patient data)
-      console.log("📞 Using phone number from request:", phoneNumber);
+      // Get the phone number from the patient data
+      let phoneNumber = "";
+      if (patientPrompt.rawData) {
+        try {
+          const rawData = typeof patientPrompt.rawData === "string"
+            ? JSON.parse(patientPrompt.rawData)
+            : patientPrompt.rawData;
+          phoneNumber = rawData.phoneNumber || rawData.phone || "";
+        } catch (e) {
+          console.warn("Error parsing raw data for phone number:", e);
+        }
+      }
 
       if (!phoneNumber) {
         return res.status(400).json({

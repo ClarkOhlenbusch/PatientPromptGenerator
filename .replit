@@ -14,6 +14,10 @@ build = ["sh", "-c", "npm ci && npm run build"]
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 7622
+externalPort = 3000
+
 [workflows]
 runButton = "Project"
 
