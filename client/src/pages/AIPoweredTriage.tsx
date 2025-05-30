@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -120,7 +120,7 @@ export default function AIPoweredTriage() {
   const [phoneNumbers, setPhoneNumbers] = useState<Record<number, string>>({});
 
   // Query to get the latest batch
-  const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
+  const { data: latestBatch, isLoading: isBatchLoading, error: batchError } = useQuery({
     queryKey: ["/api/batches/latest"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/batches/latest");
@@ -128,10 +128,11 @@ export default function AIPoweredTriage() {
       // Handle standardized API response format
       return data.success && data.data ? data.data : null;
     },
-    retry: 1 // Limit retries to prevent excessive calls
+    retry: 2,
+    staleTime: 30000 // Cache for 30 seconds
   });
 
-  // Get all batches to find one with prompts
+  // Get all batches - only run if latest batch doesn't have prompts
   const { data: allBatches, isLoading: isBatchesLoading } = useQuery<any[]>({
     queryKey: ["/api/batches"],
     queryFn: async () => {
@@ -140,68 +141,102 @@ export default function AIPoweredTriage() {
       // Handle standardized API response format
       return data.success && data.data ? data.data : [];
     },
-    retry: 1
+    retry: 2,
+    staleTime: 30000 // Cache for 30 seconds
   });
 
-  // Find the most recent batch that has prompts
-  const [batchWithPrompts, setBatchWithPrompts] = useState<string | null>(null);
+  // Check if latest batch has prompts
+  const { data: latestBatchHasPrompts, isLoading: isCheckingLatestBatch } = useQuery({
+    queryKey: ["/api/patient-prompts", latestBatch?.batchId, "check"],
+    queryFn: async () => {
+      if (!latestBatch?.batchId) return false;
+      
+      try {
+        const res = await apiRequest("GET", `/api/patient-prompts/${latestBatch.batchId}`);
+        const data = await res.json();
+        const prompts = data.success && data.data ? data.data : [];
+        return Array.isArray(prompts) && prompts.length > 0;
+      } catch (error) {
+        console.error("Error checking latest batch prompts:", error);
+        return false;
+      }
+    },
+    enabled: !!latestBatch?.batchId,
+    retry: 1,
+    staleTime: 30000
+  });
 
-  useEffect(() => {
-    // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
-    async function findBatchWithPrompts() {
-      if (allBatches && allBatches.length > 0) {
-        // Try each batch in reverse order (newest to oldest) until we find one with prompts
-        for (const batch of [...allBatches].reverse()) {
-          try {
-            const response = await fetch(`/api/patient-prompts/${batch.batchId}`, {
-              method: 'GET',
-              credentials: 'include',
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              // Handle standardized API response format
-              const prompts = data.success && data.data ? data.data : [];
-              if (Array.isArray(prompts) && prompts.length > 0) {
-                setBatchWithPrompts(batch.batchId);
-                break;
-              }
-            }
-          } catch (error) {
-            console.error(`Error checking batch ${batch.batchId}:`, error);
+  // Find batch with prompts (only if latest doesn't have prompts)
+  const { data: batchWithPrompts, isLoading: isFindingBatchWithPrompts } = useQuery({
+    queryKey: ["/api/batches", "with-prompts"],
+    queryFn: async () => {
+      if (!allBatches?.length) return null;
+      
+      // Try each batch in reverse order (newest to oldest)
+      for (const batch of [...allBatches].reverse()) {
+        try {
+          const res = await apiRequest("GET", `/api/patient-prompts/${batch.batchId}`);
+          const data = await res.json();
+          const prompts = data.success && data.data ? data.data : [];
+          
+          if (Array.isArray(prompts) && prompts.length > 0) {
+            return batch.batchId;
           }
+        } catch (error) {
+          console.error(`Error checking batch ${batch.batchId}:`, error);
+          continue;
         }
       }
+      return null;
+    },
+    enabled: !!(
+      allBatches?.length && 
+      latestBatchHasPrompts === false && 
+      !isCheckingLatestBatch
+    ),
+    retry: 1,
+    staleTime: 30000
+  });
+
+  // Determine the effective batch ID using a more predictable approach
+  const effectiveBatchId = useMemo(() => {
+    // If latest batch has prompts, use it
+    if (latestBatchHasPrompts === true && latestBatch?.batchId) {
+      console.log("Using latest batch with prompts:", latestBatch.batchId);
+      return latestBatch.batchId;
     }
-
-    if (!batchWithPrompts) {
-      findBatchWithPrompts();
+    
+    // If latest batch doesn't have prompts, use the one we found
+    if (latestBatchHasPrompts === false && batchWithPrompts) {
+      console.log("Using alternative batch with prompts:", batchWithPrompts);
+      return batchWithPrompts;
     }
-  }, [allBatches, batchWithPrompts]);
+    
+    // Fallback to latest batch if it exists
+    if (latestBatch?.batchId) {
+      console.log("Fallback to latest batch:", latestBatch.batchId);
+      return latestBatch.batchId;
+    }
+    
+    console.log("No effective batch ID found");
+    return null;
+  }, [latestBatchHasPrompts, latestBatch?.batchId, batchWithPrompts]);
 
-  // Use either the batch with prompts or the latest batch
-  const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
-
-  // Query to get all patient prompts
-  const { data: prompts, isLoading: isPromptsLoading } = useQuery<PatientPrompt[]>({
+  // Query to get all patient prompts - now with stable dependency
+  const { data: prompts, isLoading: isPromptsLoading, error: promptsError } = useQuery<PatientPrompt[]>({
     queryKey: ["/api/patient-prompts", effectiveBatchId],
     queryFn: async () => {
+      if (!effectiveBatchId) {
+        return [];
+      }
+      
       try {
-        if (!effectiveBatchId) {
-          return [];
-        }
-        // Use the correct API endpoint that returns an array of prompts
         const res = await apiRequest("GET", `/api/patient-prompts/${effectiveBatchId}`);
         const data = await res.json();
 
         // Handle standardized API response format
-        if (data.success && data.data) {
-          if (Array.isArray(data.data)) {
-            return data.data;
-          }
+        if (data.success && data.data && Array.isArray(data.data)) {
+          return data.data;
         }
 
         // If the data doesn't match the expected format, log error and show toast
@@ -214,25 +249,39 @@ export default function AIPoweredTriage() {
         return [];
       } catch (error) {
         console.error("Failed to fetch prompts:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load patient prompts",
-          variant: "destructive"
-        });
-        return [];
+        throw error; // Let React Query handle the error
       }
     },
     enabled: !!effectiveBatchId,
-    retry: 1
+    retry: 2,
+    staleTime: 10000 // Cache for 10 seconds
   });
+
+  // Handle error state with useEffect
+  useEffect(() => {
+    if (promptsError) {
+      toast({
+        title: "Error",
+        description: "Failed to load patient prompts",
+        variant: "destructive"
+      });
+    }
+  }, [promptsError, toast]);
+
+  // Calculate loading state more accurately
+  const isLoading = isBatchLoading || 
+                   isBatchesLoading || 
+                   isCheckingLatestBatch || 
+                   isFindingBatchWithPrompts || 
+                   isPromptsLoading;
 
   // Process prompts to extract reasoning when they change
   useEffect(() => {
-    if (prompts) {
-      const processed = prompts.map(prompt => {
+    if (prompts && Array.isArray(prompts)) {
+      const processed = prompts.map((prompt: any) => {
         // The API returns 'prompt' but our component expects 'promptText'
         // Handle both possible field names
-        const promptContent = (prompt as any).promptText || (prompt as any).prompt;
+        const promptContent = prompt.promptText || prompt.prompt;
 
         if (!promptContent) {
           console.error("Prompt content is missing:", prompt);
@@ -249,19 +298,19 @@ export default function AIPoweredTriage() {
 
         // Map the status field - database has healthStatus but frontend expects status
         let status: 'healthy' | 'alert' = 'alert'; // Default to alert
-        if ((prompt as any).status) {
-          status = (prompt as any).status;
-        } else if ((prompt as any).healthStatus === 'healthy') {
+        if (prompt.status) {
+          status = prompt.status;
+        } else if (prompt.healthStatus === 'healthy') {
           status = 'healthy';
-        } else if ((prompt as any).isAlert === 'false') {
+        } else if (prompt.isAlert === 'false') {
           status = 'healthy';
         }
 
         return {
           ...prompt,
-          patientName: ((prompt as any).patientName || (prompt as any).name).replace(/\s*\([^)]*\)\s*/g, ''), // Remove parentheses from name
+          patientName: (prompt.patientName || prompt.name).replace(/\s*\([^)]*\)\s*/g, ''), // Remove parentheses from name
           promptText: displayPrompt, // Only the prompt part without reasoning
-          reasoning: reasoning || (prompt as any).reasoning, // Store the reasoning separately
+          reasoning: reasoning || prompt.reasoning, // Store the reasoning separately
           status: status, // Map the status field
           isAlert: status === 'alert' // Set isAlert based on status
         };
@@ -551,8 +600,13 @@ export default function AIPoweredTriage() {
           <h1 className="text-3xl font-bold">Generated Patient Prompts</h1>
           <p className="text-gray-600 mt-2">
             Total patients: {uniquePatientPrompts.length || 0}
+            {effectiveBatchId && (
+              <span className="ml-4 text-sm text-gray-500">
+                Batch: {effectiveBatchId}
+              </span>
+            )}
           </p>
-              </div>
+        </div>
         <div className="flex gap-4">
           <Button
             variant="outline"
@@ -596,24 +650,40 @@ export default function AIPoweredTriage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isPromptsLoading || isBatchLoading ? (
+              {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
-                    <div className="flex justify-center items-center">
+                    <div className="flex justify-center items-center gap-2">
                       <RotateCw className="w-6 h-6 animate-spin text-gray-400" />
-            </div>
+                      <span className="text-gray-500">Loading patient prompts...</span>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ) : !latestBatch?.batchId ? (
+              ) : batchError || promptsError ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-red-500">
+                    Error loading data. Please try refreshing the page.
+                  </TableCell>
+                </TableRow>
+              ) : !effectiveBatchId ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No batch found. Please upload a patient data file first.
                   </TableCell>
                 </TableRow>
+              ) : !processedPrompts || processedPrompts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    {effectiveBatchId ? 
+                      "No prompts found in the current batch. Try uploading patient data or generating prompts." :
+                      "No prompts available."
+                    }
+                  </TableCell>
+                </TableRow>
               ) : filteredPrompts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No prompts found in the current batch.
+                    No prompts match your search criteria.
                   </TableCell>
                 </TableRow>
               ) : (

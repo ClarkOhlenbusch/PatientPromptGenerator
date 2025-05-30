@@ -14,6 +14,7 @@
 - **Template-Based System**: Uses Voice Agent templates with variable replacement
 - **Legacy Support**: Maintained `/api/vapi/triage-call` for backward compatibility
 - **Improved Error Handling**: Better user feedback and graceful failure handling
+- **Test Call Endpoint**: Added `/api/vapi/test-call` for testing Voice Agent templates with mock patient data
 
 #### Frontend Changes ✅  
 - **Simplified Interface**: Removed duplicate companion/triage call sections
@@ -28,6 +29,7 @@
 - **Call History Integration**: Previous call summaries automatically added to context
 - **Template Variables**: Standardized system for patient data injection
 - **Real-time Updates**: Voice Agent template changes affect all new calls immediately
+- **Test Call Functionality**: Users can test Voice Agent templates without making actual calls
 
 ### Testing & Validation ✅
 - **API Endpoint Testing**: Verified unified `/api/vapi/call` endpoint functionality
@@ -35,6 +37,7 @@
 - **UI Flow Testing**: Validated simplified interface and user experience
 - **Error Scenarios**: Tested missing patient data, invalid inputs, API limits
 - **Prompt Editing Integration**: Verified template changes affect call behavior
+- **Test Call Validation**: Confirmed `/api/vapi/test-call` works as expected with mock data
 
 ### Documentation Updates ✅
 - **Memory Bank**: Updated activeContext.md with new unified architecture
@@ -92,6 +95,22 @@ Webhook Receives End-of-Call Report
 AI Analysis (GPT-4o-mini) + Database Storage
     ↓
 Call History Updated with Analytics
+
+Test Call Flow
+    ↓
+User Interface (Test Call Button)
+    ↓
+POST /api/vapi/test-call (Test Endpoint)
+    ↓
+Load Voice Agent Template from Storage
+    ↓
+Inject Mock Patient Data
+    ↓
+Send Enhanced Prompt to VAPI API
+    ↓
+VAPI Conducts Test Call
+    ↓
+Return Test Results to User
 ```
 
 ### Prompt Management System
@@ -121,6 +140,7 @@ Variable Replacement:
 - **Real-time Call Initiation**: Direct VAPI integration with enhanced prompts
 - **Comprehensive Analytics**: AI-powered health insights and conversation analysis
 - **Error Handling**: Graceful failures with user-friendly error messages
+- **Test Call Support**: Users can test Voice Agent templates without making actual calls
 
 ### Data Management ✅
 - **Patient Data Storage**: PostgreSQL with structured triage assessments
