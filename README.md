@@ -112,7 +112,7 @@ The Caretaker Prompt Generator is a specialized healthcare monitoring tool desig
    ```
 
 2. **Access the application**:
-   - Open your browser and navigate to `http://localhost:3000`
+   - Open your browser and navigate to `http://localhost:5000`
    - The application should be running and ready for use
 
 ## Usage Guide
