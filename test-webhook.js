@@ -4,7 +4,7 @@ async function testWebhook() {
   try {
     console.log("🧪 Testing webhook endpoint...");
     
-    const response = await fetch("http://localhost:4000/api/vapi/webhook/test", {
+    const response = await fetch("http://localhost:5000/api/vapi/webhook/test", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -18,7 +18,7 @@ async function testWebhook() {
       
       // Now check if the call was stored
       console.log("\n🔍 Checking call history...");
-      const callHistoryResponse = await fetch("http://localhost:4000/api/call-history");
+      const callHistoryResponse = await fetch("http://localhost:5000/api/call-history");
       
       if (callHistoryResponse.ok) {
         const callHistoryData = await callHistoryResponse.json();
