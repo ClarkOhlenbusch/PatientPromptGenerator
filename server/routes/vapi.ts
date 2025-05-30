@@ -1250,6 +1250,167 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
     }
   });
 
+  // Test call endpoint for Voice Agent prompt testing
+  app.post("/api/vapi/test-call", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required"
+        });
+      }
+
+      const { phoneNumber, firstMessage, systemPrompt, voiceProvider, voiceId, model } = req.body;
+
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required"
+        });
+      }
+
+      console.log("🧪 Initiating test call:", {
+        phoneNumber,
+        model: model || "gpt-4o-mini",
+        voiceId: voiceId || "Kylie",
+        hasSystemPrompt: !!systemPrompt
+      });
+
+      // Check for VAPI keys
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
+
+      if (!vapiPrivateKey && !vapiPublicKey) {
+        return res.status(500).json({
+          success: false,
+          message: "VAPI API key not configured (need either VAPI_PRIVATE_KEY or VAPI_PUBLIC_KEY)"
+        });
+      }
+
+      // Try private key first, then public key
+      const apiKey = vapiPrivateKey || vapiPublicKey;
+      const keyType = vapiPrivateKey ? "private" : "public";
+
+      console.log(`🔑 Using VAPI ${keyType} key for test call`);
+
+      // Get the current Voice Agent template if no custom system prompt provided
+      let enhancedSystemPrompt = systemPrompt;
+      if (!enhancedSystemPrompt) {
+        const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
+        
+        // Create mock test patient data for template testing
+        enhancedSystemPrompt = voiceAgentTemplate
+          .replace(/PATIENT_NAME/g, "Test Patient")
+          .replace(/PATIENT_AGE/g, "65")
+          .replace(/PATIENT_CONDITION/g, "routine health check")
+          .replace(/PATIENT_PROMPT/g, "This is a test call to verify your Voice Agent configuration. All patient data in this call is simulated for testing purposes.")
+          .replace(/CONVERSATION_HISTORY/g, "This is your first test conversation to validate prompt settings.");
+      }
+
+      // Format phone number to E.164 format
+      function formatPhoneNumberE164(phoneNumber: string): string {
+        // Remove all non-digit characters except +
+        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+        // If it doesn't start with +, assume US number  
+        if (!cleaned.startsWith('+')) {
+          // Remove any leading 1 if present, then add +1
+          cleaned = cleaned.replace(/^1/, '');
+          cleaned = '+1' + cleaned;
+        }
+
+        return cleaned;
+      }
+
+      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
+      console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
+
+      // Prepare test call request
+      const testCallRequest = {
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "f412bd32-9764-4d70-94e7-90f87f84ef08",
+        customer: {
+          number: formattedPhoneNumber
+        },
+        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Using the same assistant ID
+        assistantOverrides: {
+          firstMessage: firstMessage || "Hello, this is a test call from your healthcare AI assistant to verify the Voice Agent configuration. Do you have a moment to speak?",
+          model: {
+            provider: "openai",
+            model: model || "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: enhancedSystemPrompt
+              }
+            ]
+          },
+          voice: {
+            provider: voiceProvider || "vapi",
+            voiceId: voiceId || "Kylie"
+          }
+        },
+        metadata: {
+          callType: "test",
+          testCall: true,
+          initiatedBy: "prompt-editing-sandbox"
+        }
+      };
+
+      console.log("🚀 Test call request prepared:", {
+        phoneNumber: formattedPhoneNumber,
+        assistantId: testCallRequest.assistantId,
+        firstMessage: testCallRequest.assistantOverrides.firstMessage,
+        model: testCallRequest.assistantOverrides.model.model,
+        voice: testCallRequest.assistantOverrides.voice,
+        systemPromptLength: enhancedSystemPrompt.length
+      });
+
+      // Make test call to VAPI
+      const vapiResponse = await fetch("https://api.vapi.ai/call", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(testCallRequest)
+      });
+
+      if (!vapiResponse.ok) {
+        const errorData = await vapiResponse.json();
+        console.error(`❌ VAPI test call error:`, {
+          status: vapiResponse.status,
+          statusText: vapiResponse.statusText,
+          error: errorData,
+          keyType
+        });
+        
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: errorData.message || "Failed to initiate test call",
+          vapiError: errorData
+        });
+      }
+
+      const callData = await vapiResponse.json();
+      console.log("🧪 ✅ Test call initiated successfully:", callData.id);
+
+      return res.status(200).json({
+        success: true,
+        message: "Test call initiated successfully",
+        callId: callData.id,
+        phoneNumber: formattedPhoneNumber,
+        testCall: true
+      });
+
+    } catch (error) {
+      console.error("❌ Error initiating test call:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to initiate test call"
+      });
+    }
+  });
+
   // Force update VAPI assistant configuration to ensure proper webhook setup
   app.post("/api/vapi/fix-assistant", async (req: Request, res: Response) => {
     try {
