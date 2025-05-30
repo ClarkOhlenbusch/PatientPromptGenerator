@@ -713,6 +713,8 @@ IMPORTANT: You have access to their latest health data and personalized care rec
             </div>
             <p className="text-sm text-gray-500 mt-2">
               Enter your phone number to receive a test call with your current agent configuration.
+              <br />
+              <span className="text-amber-600 font-medium">⚠️ Note:</span> Any dynamic patient context placeholders (PATIENT_NAME, PATIENT_AGE, etc.) will be spoken literally since no patient batch is attached to test calls.
             </p>
           </div>
 
