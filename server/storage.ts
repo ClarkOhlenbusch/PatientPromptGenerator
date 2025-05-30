@@ -78,7 +78,7 @@ export interface IStorage {
 
   // Call history methods
   createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
-  getCallHistoryByPatient(patientId: string): Promise<CallHistory[]>;
+  getCallHistoryByPatient(patientId: string, limit?: number, offset?: number): Promise<CallHistory[]>;
   getLatestCallForPatient(patientId: string): Promise<CallHistory | null>;
   updateCallHistory(callId: string, updates: Partial<InsertCallHistory>): Promise<CallHistory>;
   getAllCallHistory(): Promise<CallHistory[]>;
@@ -1136,12 +1136,22 @@ Your Healthcare Provider`;
     return callRecord;
   }
 
-  async getCallHistoryByPatient(patientId: string): Promise<CallHistory[]> {
-    return await db
+  async getCallHistoryByPatient(patientId: string, limit?: number, offset?: number): Promise<CallHistory[]> {
+    const baseQuery = db
       .select()
       .from(callHistory)
       .where(eq(callHistory.patientId, patientId))
       .orderBy(desc(callHistory.callDate));
+
+    if (limit && offset) {
+      return await baseQuery.limit(limit).offset(offset);
+    } else if (limit) {
+      return await baseQuery.limit(limit);
+    } else if (offset) {
+      return await baseQuery.offset(offset);
+    } else {
+      return await baseQuery;
+    }
   }
 
   async getLatestCallForPatient(patientId: string): Promise<CallHistory | null> {
@@ -1218,6 +1228,106 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       console.error("Error updating voice agent template:", error);
       throw error;
     }
+  }
+
+  // Add missing methods for call history management
+  async getCallHistoryById(callId: string): Promise<CallHistory | null> {
+    const [call] = await db
+      .select()
+      .from(callHistory)
+      .where(eq(callHistory.callId, callId))
+      .limit(1);
+    return call || null;
+  }
+
+  async deleteCallHistory(callId: string): Promise<boolean> {
+    const result = await db
+      .delete(callHistory)
+      .where(eq(callHistory.callId, callId));
+    return result.rowCount > 0;
+  }
+
+  async getCallStatistics(filters: {
+    startDate?: string;
+    endDate?: string;
+    patientId?: string;
+  }): Promise<any> {
+    let query = db.select({
+      total: sql<number>`count(*)`,
+      completed: sql<number>`sum(case when status = 'completed' then 1 else 0 end)`,
+      failed: sql<number>`sum(case when status = 'failed' then 1 else 0 end)`,
+      noAnswer: sql<number>`sum(case when status = 'no-answer' then 1 else 0 end)`,
+      avgDuration: sql<number>`avg(duration)`,
+    }).from(callHistory);
+
+    // Apply filters
+    const conditions = [];
+    if (filters.startDate) {
+      conditions.push(sql`${callHistory.callDate} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${callHistory.callDate} <= ${filters.endDate}`);
+    }
+    if (filters.patientId) {
+      conditions.push(eq(callHistory.patientId, filters.patientId));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    const [stats] = await query;
+    return {
+      totalCalls: stats?.total || 0,
+      completedCalls: stats?.completed || 0,
+      failedCalls: stats?.failed || 0,
+      noAnswerCalls: stats?.noAnswer || 0,
+      averageDuration: Math.round(stats?.avgDuration || 0),
+      successRate: stats?.total ? Math.round((stats.completed / stats.total) * 100) : 0
+    };
+  }
+
+  async getCallHistoryForExport(filters: {
+    startDate?: string;
+    endDate?: string;
+    patientId?: string;
+  }): Promise<CallHistory[]> {
+    let query = db.select().from(callHistory);
+
+    // Apply filters
+    const conditions = [];
+    if (filters.startDate) {
+      conditions.push(sql`${callHistory.callDate} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${callHistory.callDate} <= ${filters.endDate}`);
+    }
+    if (filters.patientId) {
+      conditions.push(eq(callHistory.patientId, filters.patientId));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    return await query.orderBy(desc(callHistory.callDate));
+  }
+
+  // Need to import the and function at the top
+  async getAllCallHistory(limit?: number, offset?: number): Promise<CallHistory[]> {
+    let query = db
+      .select()
+      .from(callHistory)
+      .orderBy(desc(callHistory.callDate));
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+    if (offset) {
+      query = query.offset(offset);
+    }
+
+    return await query;
   }
 }
 

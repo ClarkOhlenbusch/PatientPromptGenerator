@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Phone, MessageSquare, Heart, Clock, Users, Settings } from "lucide-react";
+import { Phone, MessageSquare, Heart, Clock, Users, Settings, Eye } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Patient {
   id: string;
@@ -19,25 +20,14 @@ interface Patient {
   personalInfo?: string;
 }
 
-interface CompanionCallConfig {
-  maxDuration: number;
-  conversationStyle: string;
-  topics: string[];
-  personalizedPrompt: string;
-}
-
 export default function AICompanionCalls() {
   const { toast } = useToast();
   const [selectedPatient, setSelectedPatient] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [personalInfo, setPersonalInfo] = useState("");
-  const [callConfig, setCallConfig] = useState<CompanionCallConfig>({
-    maxDuration: 15,
-    conversationStyle: "friendly",
-    topics: ["health", "daily-life", "family"],
-    personalizedPrompt: ""
-  });
+  const [batchId, setBatchId] = useState("");
   const [isInitiatingCall, setIsInitiatingCall] = useState(false);
+  const [contextPreviewOpen, setContextPreviewOpen] = useState(false);
+  const [contextPreviewData, setContextPreviewData] = useState<any>(null);
 
   // Query to fetch patients
   const { data: patientsData, isLoading: patientsLoading } = useQuery({
@@ -49,35 +39,35 @@ export default function AICompanionCalls() {
     }
   });
 
-  // Query to fetch recent companion calls
+  // Query to fetch recent calls (all context-aware calls now)
   const { data: recentCallsData } = useQuery({
-    queryKey: ["/api/call-history", "companion"],
+    queryKey: ["/api/call-history"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/call-history?type=companion");
+      const response = await apiRequest("GET", "/api/call-history");
       if (!response.ok) throw new Error("Failed to fetch call history");
       return response.json();
     }
   });
 
   const patients: Patient[] = patientsData?.patients || [];
-  const recentCalls = recentCallsData?.callHistory || [];
+  const recentCalls = recentCallsData?.data || [];
 
-  // Initiate companion call mutation
+  // Unified call mutation - uses the new /api/vapi/call endpoint
   const initiateCallMutation = useMutation({
     mutationFn: async (callData: any) => {
-      const response = await apiRequest("POST", "/api/vapi/companion-call", callData);
+      const response = await apiRequest("POST", "/api/vapi/call", callData);
       if (!response.ok) throw new Error("Failed to initiate call");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
-        title: "Companion Call Initiated",
-        description: "The AI companion call has been started successfully.",
+        title: "Call Initiated Successfully",
+        description: `AI voice call started for ${data.patientName} with full patient context.`,
       });
       // Reset form
       setSelectedPatient("");
       setPhoneNumber("");
-      setPersonalInfo("");
+      setBatchId("");
       queryClient.invalidateQueries({ queryKey: ["/api/call-history"] });
     },
     onError: (error) => {
@@ -103,7 +93,6 @@ export default function AICompanionCalls() {
     const patient = patients.find(p => p.id === patientId);
     if (patient) {
       setPhoneNumber(patient.phoneNumber || "");
-      setPersonalInfo(patient.personalInfo || "");
     }
   };
 
@@ -117,7 +106,7 @@ export default function AICompanionCalls() {
       return;
     }
 
-    // Basic phone number validation (same as triage section)
+    // Basic phone number validation
     const cleanPhone = phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length < 10 || cleanPhone.length > 15) {
       toast({
@@ -128,7 +117,7 @@ export default function AICompanionCalls() {
       return;
     }
 
-    // Format phone number to E.164 format (same as triage section)
+    // Format phone number to E.164 format
     const formattedPhone = cleanPhone.startsWith('1') ? `+${cleanPhone}` : `+1${cleanPhone}`;
 
     const patient = patients.find(p => p.id === selectedPatient);
@@ -138,14 +127,42 @@ export default function AICompanionCalls() {
     try {
       await initiateCallMutation.mutateAsync({
         patientId: patient.id,
-        patientName: patient.name,
-        phoneNumber: formattedPhone, // ✅ Now properly formatted
-        personalInfo,
-        callConfig,
-        callType: "companion"
+        phoneNumber: formattedPhone,
+        batchId: batchId || undefined,
+        callType: "voice-agent" // This identifies it as a voice agent call (vs triage)
       });
     } finally {
       setIsInitiatingCall(false);
+    }
+  };
+
+  const previewPatientContext = async () => {
+    if (!selectedPatient) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a patient.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const patient = patients.find(p => p.id === selectedPatient);
+    if (!patient) return;
+
+    try {
+      const response = await apiRequest("GET", `/api/vapi/triage-context?patientId=${patient.id}${batchId ? `&batchId=${batchId}` : ''}`);
+      if (!response.ok) throw new Error("Failed to fetch patient context");
+      
+      const result = await response.json();
+      setContextPreviewData(result.data);
+      setContextPreviewOpen(true);
+      
+    } catch (error) {
+      toast({
+        title: "Context Preview Failed",
+        description: error instanceof Error ? error.message : "Failed to fetch patient context",
+        variant: "destructive",
+      });
     }
   };
 
@@ -155,10 +172,10 @@ export default function AICompanionCalls() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Heart className="w-8 h-8 text-red-500" />
-            AI Companion Calls
+            AI Voice Calls
           </h1>
           <p className="text-gray-600 mt-2">
-            Initiate caring, personalized conversations with patients
+            Initiate intelligent, context-aware voice conversations with patients using their complete triage assessment data
           </p>
         </div>
       </div>
@@ -169,10 +186,10 @@ export default function AICompanionCalls() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Phone className="w-5 h-5" />
-              Initiate Companion Call
+              Initiate AI Voice Call
             </CardTitle>
             <CardDescription>
-              Uses your Voice Agent configuration from Prompt Editing. Personalize with patient-specific information below.
+              All calls now include full patient context from triage data. Uses your Voice Agent configuration from Prompt Editing with dynamic patient data injection.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -205,74 +222,65 @@ export default function AICompanionCalls() {
               />
             </div>
 
-            {/* Personal Information */}
+            {/* Batch ID for specific triage data */}
             <div>
-              <Label htmlFor="personal-info">Personal Information</Label>
-              <Textarea
-                id="personal-info"
-                value={personalInfo}
-                onChange={(e) => setPersonalInfo(e.target.value)}
-                placeholder="e.g., John loves to talk about travelling, his wife Betty who passed away recently, his children Clark and Tomas..."
-                rows={3}
+              <Label htmlFor="batch-id">Batch ID (Optional)</Label>
+              <Input
+                id="batch-id"
+                placeholder="Leave empty for latest patient data"
+                value={batchId}
+                onChange={(e) => setBatchId(e.target.value)}
               />
+              <p className="text-sm text-gray-500 mt-1">
+                Specify a batch ID to use specific triage data, or leave empty to use the most recent data for this patient.
+              </p>
             </div>
 
-            {/* Call Duration */}
-            <div>
-              <Label htmlFor="duration">Max Call Duration (minutes)</Label>
-              <Select
-                value={callConfig.maxDuration.toString()}
-                onValueChange={(value) => setCallConfig({...callConfig, maxDuration: parseInt(value)})}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                onClick={handleInitiateCall}
+                disabled={isInitiatingCall || !selectedPatient || !phoneNumber}
+                className="flex-1"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5 minutes</SelectItem>
-                  <SelectItem value="10">10 minutes</SelectItem>
-                  <SelectItem value="15">15 minutes</SelectItem>
-                  <SelectItem value="20">20 minutes</SelectItem>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Conversation Style */}
-            <div>
-              <Label htmlFor="style">Conversation Style</Label>
-              <Select
-                value={callConfig.conversationStyle}
-                onValueChange={(value) => setCallConfig({...callConfig, conversationStyle: value})}
+                {isInitiatingCall ? (
+                  <>
+                    <Phone className="w-4 h-4 mr-2 animate-pulse" />
+                    Initiating Call...
+                  </>
+                ) : (
+                  <>
+                    <Phone className="w-4 h-4 mr-2" />
+                    Start AI Voice Call
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={previewPatientContext}
+                disabled={!selectedPatient}
+                className="flex-shrink-0"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="friendly">Friendly & Casual</SelectItem>
-                  <SelectItem value="professional">Professional & Caring</SelectItem>
-                  <SelectItem value="warm">Warm & Empathetic</SelectItem>
-                  <SelectItem value="cheerful">Cheerful & Upbeat</SelectItem>
-                </SelectContent>
-              </Select>
+                <Eye className="w-4 h-4 mr-2" />
+                Preview Context
+              </Button>
             </div>
 
-            <Button
-              onClick={handleInitiateCall}
-              disabled={isInitiatingCall || !selectedPatient || !phoneNumber}
-              className="w-full"
-            >
-              {isInitiatingCall ? (
-                <>
-                  <Phone className="w-4 h-4 mr-2 animate-pulse" />
-                  Initiating Call...
-                </>
-              ) : (
-                <>
-                  <Phone className="w-4 h-4 mr-2" />
-                  Start Companion Call
-                </>
-              )}
-            </Button>
+            {selectedPatient && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">Selected Patient Info:</h4>
+                {(() => {
+                  const patient = patients.find(p => p.id === selectedPatient);
+                  return patient ? (
+                    <div className="text-sm text-blue-800 space-y-1">
+                      <p><span className="font-medium">Name:</span> {patient.name}</p>
+                      <p><span className="font-medium">Age:</span> {patient.age}</p>
+                      <p><span className="font-medium">Condition:</span> {patient.condition}</p>
+                      <p><span className="font-medium">Context:</span> Full patient triage assessment will be included in the call. Click "Preview Context" to see details.</p>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -287,15 +295,16 @@ export default function AICompanionCalls() {
           <CardContent className="space-y-4">
             <div className="text-sm space-y-2">
               <p className="text-gray-600">
-                Companion calls use your configured Voice Agent settings from the Prompt Editing section.
+                All calls use your configured Voice Agent settings from the Prompt Editing section with dynamic patient context injection.
               </p>
               <div className="bg-gray-50 p-3 rounded-lg space-y-1">
                 <p><strong>Voice:</strong> Uses your saved voice configuration</p>
                 <p><strong>Model:</strong> Uses your saved AI model</p>
-                <p><strong>Prompt:</strong> Uses your saved system prompt</p>
+                <p><strong>Prompt:</strong> Uses your saved system prompt + patient data</p>
+                <p><strong>Context:</strong> Full patient triage assessment included</p>
               </div>
               <p className="text-xs text-gray-500">
-                To modify voice settings, go to Prompt Editing → Voice Agent tab.
+                To modify voice settings or prompts, go to Prompt Editing → Voice Agent tab.
               </p>
             </div>
 
@@ -311,19 +320,19 @@ export default function AICompanionCalls() {
         </Card>
       </div>
 
-      {/* Recent Companion Calls */}
+      {/* Recent AI Voice Calls */}
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
-            Recent Companion Calls
+            Recent AI Voice Calls
           </CardTitle>
         </CardHeader>
         <CardContent>
           {recentCalls.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No companion calls yet. Start your first call above!</p>
+              <p>No voice calls yet. Start your first call above!</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -334,6 +343,9 @@ export default function AICompanionCalls() {
                     <p className="text-sm text-gray-600">
                       {new Date(call.callDate).toLocaleDateString()} • {Math.floor(call.duration / 60)}m {call.duration % 60}s
                     </p>
+                    {call.summary && (
+                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">{call.summary}</p>
+                    )}
                   </div>
                   <div className="text-right">
                     <span className={`px-2 py-1 rounded-full text-xs ${
@@ -341,6 +353,9 @@ export default function AICompanionCalls() {
                     }`}>
                       {call.status}
                     </span>
+                    {call.hasContext && (
+                      <p className="text-xs text-blue-600 mt-1">With Context</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -348,6 +363,76 @@ export default function AICompanionCalls() {
           )}
         </CardContent>
       </Card>
+
+      {/* Patient Context Preview Dialog */}
+      <Dialog open={contextPreviewOpen} onOpenChange={setContextPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Patient Context Preview</DialogTitle>
+            <DialogDescription>
+              This is the context that will be injected into the Vapi call
+            </DialogDescription>
+          </DialogHeader>
+          {contextPreviewData && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Patient Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    <p><span className="font-medium">Name:</span> {contextPreviewData.name}</p>
+                    <p><span className="font-medium">Age:</span> {contextPreviewData.age}</p>
+                    <p><span className="font-medium">Condition:</span> {contextPreviewData.condition}</p>
+                    <p><span className="font-medium">Batch ID:</span> {contextPreviewData.batchId}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Context Stats</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    <p><span className="font-medium">Triage Prompt Length:</span> {contextPreviewData.triagePromptLength} chars</p>
+                    <p><span className="font-medium">Has Recent Call:</span> {contextPreviewData.hasRecentCall ? "Yes" : "No"}</p>
+                    <p><span className="font-medium">Data Source:</span> Database</p>
+                    <p><span className="font-medium">Context Type:</span> Full Assessment</p>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Triage Assessment Content</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto">
+                    <pre className="text-sm whitespace-pre-wrap text-gray-700 font-mono">
+                      {contextPreviewData.triagePrompt || "No triage prompt available"}
+                    </pre>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {contextPreviewData.enhancedSystemPrompt && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Enhanced System Prompt Preview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-green-50 p-4 rounded-lg max-h-60 overflow-y-auto">
+                      <pre className="text-sm whitespace-pre-wrap text-gray-700 font-mono">
+                        {contextPreviewData.enhancedSystemPrompt.substring(0, 1000)}...
+                      </pre>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Call History Section */}
     </div>
   );
 }

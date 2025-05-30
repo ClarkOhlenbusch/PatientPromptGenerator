@@ -356,8 +356,8 @@ export function registerVapiRoutes(app: Express): void {
     }
   });
 
-  // Initiate companion call endpoint
-  app.post("/api/vapi/companion-call", async (req: Request, res: Response) => {
+  // NEW: Enhanced triage call endpoint with patient context injection
+  app.post("/api/vapi/triage-call", async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({
@@ -366,42 +366,85 @@ export function registerVapiRoutes(app: Express): void {
         });
       }
 
-      const { patientId, patientName, phoneNumber, personalInfo, callConfig } = req.body;
+      const { patientId, phoneNumber, batchId, callConfig } = req.body;
 
-      if (!patientId || !patientName || !phoneNumber) {
+      if (!patientId || !phoneNumber) {
         return res.status(400).json({
           success: false,
-          message: "Missing required fields: patientId, patientName, phoneNumber"
+          message: "Missing required fields: patientId, phoneNumber"
         });
       }
 
-      console.log("🤝 Initiating companion call:", {
+      console.log("🏥 Initiating context-aware call:", {
         patientId,
-        patientName,
         phoneNumber,
+        batchId,
         callConfig
       });
 
-      // Build companion-specific prompt content
-      const companionPromptContent = `Personal Information: ${personalInfo || "No specific personal information provided"}
+      // Fetch the latest patient prompt data from the database
+      let patientData;
+      if (batchId) {
+        // Try specific batch first
+        patientData = await storage.getPatientPromptByIds(batchId, patientId);
+      }
+      
+      // If no batch-specific data found, get latest across all batches
+      if (!patientData) {
+        patientData = await storage.getLatestPatientPrompt(patientId);
+      }
 
-This is a companion call focused on general wellbeing and emotional support.
-Conversation Style: ${callConfig?.conversationStyle || "friendly"}
-Max Duration: ${callConfig?.maxDuration || 15} minutes`;
+      if (!patientData) {
+        return res.status(404).json({
+          success: false,
+          message: `Patient not found: ${patientId}. No triage data available for this patient.`
+        });
+      }
 
-      console.log("🤝 Preparing companion call with VAPI variable system:", {
-        patientName: patientName,
-        promptLength: companionPromptContent.length,
-        conversationStyle: callConfig?.conversationStyle || "friendly",
-        maxDuration: callConfig?.maxDuration || 15
+      console.log("🔍 Retrieved patient triage data:", {
+        promptId: patientData.id,
+        patientId: patientData.patientId,
+        batchId: patientData.batchId,
+        promptLength: patientData.prompt?.length || 0,
+        hasRawData: !!patientData.rawData
       });
 
-      // Format phone number to E.164 format (based on VAPI documentation)
+      const { name: patientName, prompt: triagePrompt, condition, age } = patientData;
+
+      // Get voice agent template for proper formatting
+      const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
+
+      // Create enhanced system prompt by replacing template variables with actual patient data
+      let enhancedSystemPrompt = voiceAgentTemplate;
+      
+      enhancedSystemPrompt = enhancedSystemPrompt
+        .replace(/PATIENT_NAME/g, patientName || patientId)
+        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
+        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
+        .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
+        .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
+
+      // Check for recent call history
+      const recentCall = await storage.getLatestCallForPatient(patientId as string);
+      if (recentCall && recentCall.summary) {
+        enhancedSystemPrompt = enhancedSystemPrompt.replace(
+          /CONVERSATION_HISTORY/g, 
+          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
+        );
+      }
+
+      console.log("🎯 Enhanced system prompt prepared:", {
+        templateLength: voiceAgentTemplate.length,
+        finalLength: enhancedSystemPrompt.length,
+        hasRecentCall: !!recentCall
+      });
+
+      // Format phone number to E.164 format
       function formatPhoneNumberE164(phoneNumber: string): string {
         // Remove all non-digit characters except +
         let cleaned = phoneNumber.replace(/[^\d+]/g, '');
 
-        // If it doesn't start with +, assume US number
+        // If it doesn't start with +, assume US number  
         if (!cleaned.startsWith('+')) {
           // Remove any leading 1 if present, then add +1
           cleaned = cleaned.replace(/^1/, '');
@@ -414,7 +457,7 @@ Max Duration: ${callConfig?.maxDuration || 15} minutes`;
       const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
       console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
 
-      // Prepare call request using EXACT format from working triage calls
+      // Prepare call request with enhanced system prompt
       const callRequest = {
         phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "f412bd32-9764-4d70-94e7-90f87f84ef08",
         customer: {
@@ -422,22 +465,45 @@ Max Duration: ${callConfig?.maxDuration || 15} minutes`;
         },
         assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82",
         assistantOverrides: {
+          // Primary method: Complete system prompt override with patient data injected
+          model: {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: enhancedSystemPrompt
+              }
+            ]
+          },
+          // Backup method: Variable values for template replacement
           variableValues: {
-            patientName: patientName,
-            patientAge: 0, // Default age if not available
-            patientCondition: "general wellness check",
-            patientPrompt: companionPromptContent, // Send raw prompt, let VAPI handle replacement
-            conversationHistory: "This is your first conversation with this patient."
+            patientName: patientName || patientId,
+            patientAge: age || 0,
+            patientCondition: condition || "general health assessment",
+            patientPrompt: triagePrompt || "No specific care assessment available",
+            conversationHistory: recentCall?.summary || "This is your first conversation with this patient."
           }
         },
         metadata: {
-          patientId: patientId,
+          patientId: patientData.patientId,
           patientName: patientName,
-          callType: "companion"
+          callType: "context-aware",
+          hasContext: true,
+          batchId: patientData.batchId
         }
       };
 
-      // Check for VAPI keys - try both private and public
+      console.log("🚀 Final call request prepared:", {
+        phoneNumber: formattedPhoneNumber,
+        assistantId: callRequest.assistantId,
+        hasSystemPrompt: !!callRequest.assistantOverrides.model.messages[0].content,
+        systemPromptLength: callRequest.assistantOverrides.model.messages[0].content.length,
+        hasVariableValues: !!callRequest.assistantOverrides.variableValues,
+        metadata: callRequest.metadata
+      });
+
+      // Check for VAPI keys
       const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
       const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
 
@@ -452,9 +518,9 @@ Max Duration: ${callConfig?.maxDuration || 15} minutes`;
       const apiKey = vapiPrivateKey || vapiPublicKey;
       const keyType = vapiPrivateKey ? "private" : "public";
 
-      console.log(`🔑 Using VAPI ${keyType} key for companion call`);
+      console.log(`🔑 Using VAPI ${keyType} key for context-aware call`);
 
-      // Make call to VAPI (corrected endpoint)
+      // Make call to VAPI
       const vapiResponse = await fetch("https://api.vapi.ai/call", {
         method: "POST",
         headers: {
@@ -466,31 +532,248 @@ Max Duration: ${callConfig?.maxDuration || 15} minutes`;
 
       if (!vapiResponse.ok) {
         const errorData = await vapiResponse.json();
-        console.error(`❌ VAPI companion call error (using ${keyType} key):`, {
+        console.error(`❌ VAPI context-aware call error:`, {
           status: vapiResponse.status,
           statusText: vapiResponse.statusText,
           error: errorData,
-          keyType,
-          hasPrivateKey: !!vapiPrivateKey,
-          hasPublicKey: !!vapiPublicKey
+          keyType
         });
-        throw new Error(errorData.message || "Failed to initiate companion call");
+        
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: errorData.message || "Failed to initiate context-aware call",
+          vapiError: errorData
+        });
       }
 
       const callData = await vapiResponse.json();
-      console.log("🤝 ✅ Companion call initiated successfully:", callData.id);
+      console.log("🏥 ✅ Context-aware call initiated successfully:", callData.id);
 
       return res.status(200).json({
         success: true,
-        message: "Companion call initiated successfully",
-        callId: callData.id
+        message: "Call initiated successfully with full patient context",
+        callId: callData.id,
+        patientName: patientName,
+        hasContext: true
       });
 
     } catch (error) {
-      console.error("❌ Error initiating companion call:", error);
+      console.error("❌ Error initiating context-aware call:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to initiate companion call"
+        message: error.message || "Failed to initiate context-aware call"
+      });
+    }
+  });
+
+  // Unified call endpoint - replaces both companion and triage calls  
+  app.post("/api/vapi/call", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required"
+        });
+      }
+
+      const { patientId, phoneNumber, batchId, callConfig, callType = "context-aware" } = req.body;
+
+      if (!patientId || !phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: patientId, phoneNumber"
+        });
+      }
+
+      console.log("📞 Initiating unified call:", {
+        patientId,
+        phoneNumber,
+        batchId,
+        callConfig,
+        callType
+      });
+
+      // Always fetch patient context data (unified approach)
+      let patientData;
+      if (batchId) {
+        // Try specific batch first
+        patientData = await storage.getPatientPromptByIds(batchId, patientId);
+      }
+      
+      // If no batch-specific data found, get latest across all batches
+      if (!patientData) {
+        patientData = await storage.getLatestPatientPrompt(patientId);
+      }
+
+      if (!patientData) {
+        return res.status(404).json({
+          success: false,
+          message: `Patient not found: ${patientId}. No patient data available for this patient.`
+        });
+      }
+
+      console.log("🔍 Retrieved patient data:", {
+        promptId: patientData.id,
+        patientId: patientData.patientId,
+        batchId: patientData.batchId,
+        promptLength: patientData.prompt?.length || 0,
+        hasRawData: !!patientData.rawData
+      });
+
+      const { name: patientName, prompt: triagePrompt, condition, age } = patientData;
+
+      // Get voice agent template for proper formatting
+      const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
+
+      // Create enhanced system prompt by replacing template variables with actual patient data
+      let enhancedSystemPrompt = voiceAgentTemplate;
+      
+      enhancedSystemPrompt = enhancedSystemPrompt
+        .replace(/PATIENT_NAME/g, patientName || patientId)
+        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
+        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
+        .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
+        .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
+
+      // Check for recent call history
+      const recentCall = await storage.getLatestCallForPatient(patientId as string);
+      if (recentCall && recentCall.summary) {
+        enhancedSystemPrompt = enhancedSystemPrompt.replace(
+          /CONVERSATION_HISTORY/g, 
+          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
+        );
+      }
+
+      console.log("🎯 Enhanced system prompt prepared:", {
+        templateLength: voiceAgentTemplate.length,
+        finalLength: enhancedSystemPrompt.length,
+        hasRecentCall: !!recentCall
+      });
+
+      // Format phone number to E.164 format
+      function formatPhoneNumberE164(phoneNumber: string): string {
+        // Remove all non-digit characters except +
+        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+        // If it doesn't start with +, assume US number  
+        if (!cleaned.startsWith('+')) {
+          // Remove any leading 1 if present, then add +1
+          cleaned = cleaned.replace(/^1/, '');
+          cleaned = '+1' + cleaned;
+        }
+
+        return cleaned;
+      }
+
+      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
+      console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
+
+      // Prepare call request with enhanced system prompt
+      const callRequest = {
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "f412bd32-9764-4d70-94e7-90f87f84ef08",
+        customer: {
+          number: formattedPhoneNumber
+        },
+        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82",
+        assistantOverrides: {
+          // Primary method: Complete system prompt override with patient data injected
+          model: {
+            provider: "openai",
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: enhancedSystemPrompt
+              }
+            ]
+          },
+          // Backup method: Variable values for template replacement
+          variableValues: {
+            patientName: patientName || patientId,
+            patientAge: age || 0,
+            patientCondition: condition || "general health assessment",
+            patientPrompt: triagePrompt || "No specific care assessment available",
+            conversationHistory: recentCall?.summary || "This is your first conversation with this patient."
+          }
+        },
+        metadata: {
+          patientId: patientData.patientId,
+          patientName: patientName,
+          callType: callType,
+          hasContext: true,
+          batchId: patientData.batchId
+        }
+      };
+
+      console.log("🚀 Final call request prepared:", {
+        phoneNumber: formattedPhoneNumber,
+        assistantId: callRequest.assistantId,
+        hasSystemPrompt: !!callRequest.assistantOverrides.model.messages[0].content,
+        systemPromptLength: callRequest.assistantOverrides.model.messages[0].content.length,
+        hasVariableValues: !!callRequest.assistantOverrides.variableValues,
+        metadata: callRequest.metadata
+      });
+
+      // Check for VAPI keys
+      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
+      const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
+
+      if (!vapiPrivateKey && !vapiPublicKey) {
+        return res.status(500).json({
+          success: false,
+          message: "VAPI API key not configured (need either VAPI_PRIVATE_KEY or VAPI_PUBLIC_KEY)"
+        });
+      }
+
+      // Try private key first, then public key
+      const apiKey = vapiPrivateKey || vapiPublicKey;
+      const keyType = vapiPrivateKey ? "private" : "public";
+
+      console.log(`🔑 Using VAPI ${keyType} key for unified call`);
+
+      // Make call to VAPI
+      const vapiResponse = await fetch("https://api.vapi.ai/call", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(callRequest)
+      });
+
+      if (!vapiResponse.ok) {
+        const errorData = await vapiResponse.json();
+        console.error(`❌ VAPI unified call error:`, {
+          status: vapiResponse.status,
+          statusText: vapiResponse.statusText,
+          error: errorData,
+          keyType
+        });
+        
+        return res.status(vapiResponse.status).json({
+          success: false,
+          message: errorData.message || "Failed to initiate unified call",
+          vapiError: errorData
+        });
+      }
+
+      const callData = await vapiResponse.json();
+      console.log("📞 ✅ Unified call initiated successfully:", callData.id);
+
+      return res.status(200).json({
+        success: true,
+        message: "Call initiated successfully with full patient context",
+        callId: callData.id,
+        patientName: patientName,
+        hasContext: true,
+        callType: callType
+      });
+
+    } catch (error) {
+      console.error("❌ Error initiating unified call:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to initiate unified call"
       });
     }
   });
@@ -513,7 +796,7 @@ Max Duration: ${callConfig?.maxDuration || 15} minutes`;
         if (!uniquePatients.has(patient.patientId)) {
           uniquePatients.set(patient.patientId, {
             id: patient.patientId,
-            name: patient.name || patient.patientId.split(' (')[0], // Use name field or extract from ID
+            name: patient.patientName || patient.name || patient.patientId, // Use patientName field first
             age: patient.age || "Unknown",
             condition: patient.condition || "Unknown",
             phoneNumber: "", // TODO: Add phone number storage
@@ -778,8 +1061,8 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
     }
   });
 
-  // Initiate triage call endpoint
-  app.post("/api/vapi/triage-call", async (req: Request, res: Response) => {
+  // Get triage context preview for a patient
+  app.get("/api/vapi/triage-context", async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({
@@ -788,7 +1071,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      const { patientId, batchId } = req.body;
+      const { patientId, batchId } = req.query;
 
       if (!patientId) {
         return res.status(400).json({
@@ -797,146 +1080,67 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      console.log("📞 Initiating triage call for patient:", patientId);
+      // Fetch the patient data (same logic as triage-call endpoint)
+      let patientData;
+      if (batchId) {
+        patientData = await storage.getPatientPromptByIds(batchId as string, patientId as string);
+      }
+      
+      if (!patientData) {
+        patientData = await storage.getLatestPatientPrompt(patientId as string);
+      }
 
-      // Get patient data from the database
-      const patientPrompt = await storage.getPatientPromptByIds(batchId, patientId);
-
-      if (!patientPrompt) {
+      if (!patientData) {
         return res.status(404).json({
           success: false,
-          message: "Patient not found"
+          message: `Patient not found: ${patientId}. No triage data available for this patient.`
         });
       }
 
-      // Get the phone number from the patient data
-      let phoneNumber = "";
-      if (patientPrompt.rawData) {
-        try {
-          const rawData = typeof patientPrompt.rawData === "string"
-            ? JSON.parse(patientPrompt.rawData)
-            : patientPrompt.rawData;
-          phoneNumber = rawData.phoneNumber || rawData.phone || "";
-        } catch (e) {
-          console.warn("Error parsing raw data for phone number:", e);
-        }
+      const { name: patientName, prompt: triagePrompt, condition, age } = patientData;
+
+      // Get voice agent template and create enhanced system prompt (same as triage-call)
+      const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
+      let enhancedSystemPrompt = voiceAgentTemplate;
+      
+      enhancedSystemPrompt = enhancedSystemPrompt
+        .replace(/PATIENT_NAME/g, patientName || patientId)
+        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
+        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
+        .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
+        .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
+
+      // Check for recent call history
+      const recentCall = await storage.getLatestCallForPatient(patientId as string);
+      if (recentCall && recentCall.summary) {
+        enhancedSystemPrompt = enhancedSystemPrompt.replace(
+          /CONVERSATION_HISTORY/g, 
+          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
+        );
       }
-
-      if (!phoneNumber) {
-        return res.status(400).json({
-          success: false,
-          message: "No phone number found for this patient"
-        });
-      }
-
-      // Format phone number for VAPI (E.164 format)
-      function formatPhoneNumberE164(phoneNumber: string): string {
-        // Remove all non-digit characters except +
-        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
-
-        // If it doesn't start with +, assume US number
-        if (!cleaned.startsWith('+')) {
-          // Remove any leading 1 if present, then add +1
-          cleaned = cleaned.replace(/^1/, '');
-          cleaned = '+1' + cleaned;
-        }
-
-        return cleaned;
-      }
-
-      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
-      console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
-
-      // Get conversation history for this patient
-      const callHistory = await storage.getCallHistoryByPatient(patientId);
-      const conversationHistory = callHistory.length > 0
-        ? `Previous conversations:\n${callHistory.slice(0, 3).map((call: any) =>
-            `${call.callDate}: ${call.summary}`
-          ).join('\n')}`
-        : "This is your first conversation with this patient.";
-
-      console.log("📞 Preparing triage call with VAPI variable system:", {
-        patientName: patientPrompt.name,
-        patientAge: patientPrompt.age,
-        promptLength: patientPrompt.prompt?.length || 0,
-        conversationHistoryLength: conversationHistory.length
-      });
-
-      // Prepare call request using VAPI's variable system (no local replacement)
-      const callRequest = {
-        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || "f412bd32-9764-4d70-94e7-90f87f84ef08",
-        customer: {
-          number: formattedPhoneNumber
-        },
-        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82",
-        assistantOverrides: {
-          variableValues: {
-            patientName: patientPrompt.name,
-            patientAge: patientPrompt.age || 0,
-            patientCondition: "healthcare triage",
-            patientPrompt: patientPrompt.prompt, // Send raw prompt, let VAPI handle replacement
-            conversationHistory: conversationHistory
-          }
-        },
-        metadata: {
-          patientId: patientPrompt.patientId,
-          patientName: patientPrompt.name,
-          batchId: batchId,
-          callType: "triage"
-        }
-      };
-
-      // Check for VAPI keys
-      const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
-      const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
-
-      if (!vapiPrivateKey && !vapiPublicKey) {
-        return res.status(500).json({
-          success: false,
-          message: "VAPI API key not configured"
-        });
-      }
-
-      const apiKey = vapiPrivateKey || vapiPublicKey;
-      const keyType = vapiPrivateKey ? "private" : "public";
-
-      console.log(`🔑 Using VAPI ${keyType} key for triage call`);
-
-      // Make call to VAPI (corrected endpoint)
-      const vapiResponse = await fetch("https://api.vapi.ai/call", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(callRequest)
-      });
-
-      if (!vapiResponse.ok) {
-        const errorData = await vapiResponse.json();
-        console.error(`❌ VAPI triage call error:`, {
-          status: vapiResponse.status,
-          statusText: vapiResponse.statusText,
-          error: errorData
-        });
-        throw new Error(errorData.message || "Failed to initiate triage call");
-      }
-
-      const callData = await vapiResponse.json();
-      console.log("📞 ✅ Triage call initiated successfully:", callData.id);
 
       return res.status(200).json({
         success: true,
-        message: "Triage call initiated successfully",
-        callId: callData.id,
-        patientName: patientPrompt.name
+        data: {
+          patientId: patientData.patientId,
+          name: patientName,
+          age: age,
+          condition: condition,
+          batchId: patientData.batchId,
+          triagePrompt: triagePrompt,
+          triagePromptLength: triagePrompt?.length || 0,
+          hasRecentCall: !!recentCall,
+          recentCallSummary: recentCall?.summary || null,
+          enhancedSystemPrompt: enhancedSystemPrompt,
+          systemPromptLength: enhancedSystemPrompt.length
+        }
       });
 
     } catch (error) {
-      console.error("❌ Error initiating triage call:", error);
+      console.error("❌ Error fetching triage context:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to initiate triage call"
+        message: error.message || "Failed to fetch triage context"
       });
     }
   });
@@ -1170,6 +1374,81 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       return res.status(500).json({
         success: false,
         message: error.message || "Failed to fix VAPI assistant configuration"
+      });
+    }
+  });
+
+  // Test endpoint for triage context (no auth required for testing)
+  app.get("/api/vapi/test-triage-context/:patientId", async (req: Request, res: Response) => {
+    try {
+      const { patientId } = req.params;
+      const { batchId } = req.query;
+
+      console.log("🧪 Testing triage context for patient:", patientId);
+
+      // Fetch the patient data (same logic as triage-call endpoint)
+      let patientData;
+      if (batchId) {
+        patientData = await storage.getPatientPromptByIds(batchId as string, patientId as string);
+      }
+      
+      if (!patientData) {
+        patientData = await storage.getLatestPatientPrompt(patientId as string);
+      }
+
+      if (!patientData) {
+        return res.status(404).json({
+          success: false,
+          message: `Patient not found: ${patientId}. No triage data available for this patient.`
+        });
+      }
+
+      const { name: patientName, prompt: triagePrompt, condition, age } = patientData;
+
+      // Get voice agent template and create enhanced system prompt
+      const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
+      let enhancedSystemPrompt = voiceAgentTemplate;
+      
+      enhancedSystemPrompt = enhancedSystemPrompt
+        .replace(/PATIENT_NAME/g, patientName || patientId)
+        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
+        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
+        .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
+        .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
+
+      // Check for recent call history
+      const recentCall = await storage.getLatestCallForPatient(patientId as string);
+      if (recentCall && recentCall.summary) {
+        enhancedSystemPrompt = enhancedSystemPrompt.replace(
+          /CONVERSATION_HISTORY/g, 
+          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
+        );
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Triage context test successful",
+        data: {
+          patientId: patientData.patientId,
+          name: patientName,
+          age: age,
+          condition: condition,
+          batchId: patientData.batchId,
+          triagePrompt: triagePrompt,
+          triagePromptLength: triagePrompt?.length || 0,
+          hasRecentCall: !!recentCall,
+          recentCallSummary: recentCall?.summary || null,
+          enhancedSystemPrompt: enhancedSystemPrompt,
+          systemPromptLength: enhancedSystemPrompt.length,
+          contextInjectionWorking: true
+        }
+      });
+
+    } catch (error) {
+      console.error("❌ Error testing triage context:", error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to test triage context"
       });
     }
   });

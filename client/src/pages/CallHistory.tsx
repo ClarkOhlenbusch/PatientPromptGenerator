@@ -66,7 +66,7 @@ export default function CallHistory() {
     }
   });
 
-  const callHistory: CallHistory[] = callHistoryData?.callHistory || [];
+  const callHistory: CallHistory[] = callHistoryData?.data || [];
 
   // Test webhook function
   const testWebhook = async () => {
@@ -95,7 +95,7 @@ export default function CallHistory() {
       console.error("🧪 Frontend: Catch block error:", error);
       toast({
         title: "Test Webhook Failed",
-        description: error.message || "Could not create test call record",
+        description: (error as Error)?.message || "Could not create test call record",
         variant: "destructive",
       });
     } finally {
