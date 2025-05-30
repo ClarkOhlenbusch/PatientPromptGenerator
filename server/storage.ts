@@ -1306,7 +1306,6 @@ IMPORTANT: You have access to their latest health data and personalized care rec
     return await query.orderBy(desc(callHistory.callDate));
   }
 
-  // Need to import the and function at the top
   async getAllCallHistory(limit?: number, offset?: number): Promise<CallHistory[]> {
     let query = db
       .select()
