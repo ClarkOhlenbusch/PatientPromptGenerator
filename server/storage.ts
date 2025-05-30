@@ -81,7 +81,7 @@ export interface IStorage {
   getCallHistoryByPatient(patientId: string, limit?: number, offset?: number): Promise<CallHistory[]>;
   getLatestCallForPatient(patientId: string): Promise<CallHistory | null>;
   updateCallHistory(callId: string, updates: Partial<InsertCallHistory>): Promise<CallHistory>;
-  getAllCallHistory(): Promise<CallHistory[]>;
+  getAllCallHistory(limit?: number, offset?: number): Promise<CallHistory[]>;
 
   // Voice agent template methods
   getVoiceAgentTemplate(): Promise<string>;
@@ -1171,13 +1171,6 @@ Your Healthcare Provider`;
       .where(eq(callHistory.callId, callId))
       .returning();
     return updatedCall;
-  }
-
-  async getAllCallHistory(): Promise<CallHistory[]> {
-    return await db
-      .select()
-      .from(callHistory)
-      .orderBy(desc(callHistory.callDate));
   }
 
   // Voice agent template methods
