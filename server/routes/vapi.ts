@@ -1,6 +1,7 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import OpenAI from "openai";
+import { ParsedQs } from "qs";
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -69,6 +70,96 @@ ${vapiSummary ? `Vapi Summary: ${vapiSummary}` : ''}
   }
 }
 
+// Helper function to format phone number to E.164 format
+function formatPhoneNumberE164(phoneNumber: string): string {
+  // Remove all non-digit characters except +
+  let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+  // If it doesn't start with +, assume US number  
+  if (!cleaned.startsWith('+')) {
+    // Remove any leading 1 if present, then add +1
+    cleaned = cleaned.replace(/^1/, '');
+    cleaned = '+1' + cleaned;
+  }
+
+  return cleaned;
+}
+
+// Helper function to store call history, to be used by both direct and delayed paths
+async function storeCallHistoryWithDetails(
+  callId: string,
+  patientId: string,
+  patientName: string,
+  phoneNumber: string,
+  durationSeconds: number,
+  callStatusReason: string,
+  transcript: string | null,
+  vapiSummary: string | null,
+  callEndTimeISO: string,
+  callMetadata?: any,
+  source?: string // Added for debugging which path stored it
+) {
+  try {
+    console.log(`💾 Storing call history for ${callId} from source: ${source || 'unknown'}. Duration: ${durationSeconds}s`);
+    // Generate AI-powered conversation summary from transcript
+    const aiSummary = await generateConversationSummary(transcript || "", vapiSummary || undefined);
+
+    // Determine call status based on end reason
+    let finalCallStatus = "completed";
+    if (callStatusReason) {
+      switch (callStatusReason.toLowerCase()) {
+        case "customer-hangup":
+        case "assistant-hangup":
+        case "customer-ended-call": // Added this one from Vapi API
+        case "ended": // Generic ended status
+          finalCallStatus = "completed";
+          break;
+        case "customer-did-not-answer":
+        case "no-answer-machine-detected":
+        case "no-answer-human-detected":
+          finalCallStatus = "no-answer";
+          break;
+        case "customer-busy":
+          finalCallStatus = "busy";
+          break;
+        case "error":
+        case "failed": // Generic failed
+          finalCallStatus = "failed";
+          break;
+        default:
+          // Use the reason directly if it's not one of the common ones
+          // but try to keep it reasonably short if it's a long description
+          finalCallStatus = callStatusReason.substring(0, 50); 
+      }
+    }
+    
+    const patientInfoFromMeta = callMetadata?.patientId ? {
+        patientId: callMetadata.patientId,
+        patientName: callMetadata.patientName || patientName,
+    } : { patientId, patientName};
+
+
+    await storage.createCallHistory({
+      callId,
+      patientId: patientInfoFromMeta.patientId,
+      patientName: patientInfoFromMeta.patientName,
+      phoneNumber,
+      duration: durationSeconds,
+      status: finalCallStatus,
+      transcript: transcript || "",
+      summary: aiSummary.summary,
+      keyPoints: aiSummary.keyPoints,
+      healthConcerns: aiSummary.healthConcerns,
+      followUpItems: aiSummary.followUpItems,
+      callDate: new Date(callEndTimeISO) // Use the provided end time
+    });
+
+    console.log(`✅ Stored call history for patient ${patientInfoFromMeta.patientName} (${callId}), Duration: ${durationSeconds}s, Status: ${finalCallStatus}`);
+  } catch (storageError) {
+    console.error(`❌ Call ${callId}: Error storing call history:`, storageError);
+  }
+}
+
 export function registerVapiRoutes(app: Express): void {
   // === VAPI VOICE CALLING ENDPOINTS ===
 
@@ -133,7 +224,7 @@ export function registerVapiRoutes(app: Express): void {
     try {
       console.log("🎯 WEBHOOK RECEIVED! Timestamp:", new Date().toISOString());
       console.log("🎯 Webhook message type:", req.body?.message?.type);
-      console.log("🎯 Webhook body:", JSON.stringify(req.body, null, 2));
+      // console.log("🎯 Webhook body:", JSON.stringify(req.body, null, 2)); // Keep this commented unless deep debugging body
 
       const webhookData = req.body;
 
@@ -157,75 +248,131 @@ export function registerVapiRoutes(app: Express): void {
         }
       }
 
+      // Handle end-of-call-report event
       if (webhookData.message?.type === "end-of-call-report") {
         const { message } = webhookData;
         const call = message.call;
         const transcript = message.transcript;
-        const summary = message.summary;
+        const summary = message.summary; // Vapi's own summary, if provided
 
-        console.log("Processing end-of-call-report:", {
+        console.log("🔎 VAPI Call Object (from webhook):", {
           callId: call?.id,
-          hasTranscript: !!transcript,
-          hasSummary: !!summary,
+          startedAt: call?.startedAt,
+          endedAt: call?.endedAt,
+          createdAt: call?.createdAt, // Log if present in webhook
+          updatedAt: call?.updatedAt, // Log if present in webhook
+          type: call?.type,
+          status: call?.status,
+          endedReason: message?.endedReason,
           metadata: call?.metadata
         });
 
         if (call?.id) {
-          // Generate AI-powered conversation summary from transcript
-          const aiSummary = await generateConversationSummary(transcript || "", summary);
-
-          // Extract patient info from call metadata
+          const callId = call.id;
           const patientId = call.metadata?.patientId || "unknown";
           const patientName = call.metadata?.patientName || "Unknown Patient";
           const phoneNumber = call.customer?.number || "";
+          const callEndedReason = message?.endedReason || call?.status || "unknown";
 
-          // Calculate call duration
-          const duration = call.endedAt && call.startedAt ?
-            Math.floor((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000) : 0;
+          // Attempt to calculate duration from webhook payload directly
+          const callStartedAtEpoch = call.startedAt ? new Date(call.startedAt).getTime() : 0;
+          const callEndedAtEpoch = call.endedAt ? new Date(call.endedAt).getTime() : 0;
+          let calculatedDurationSeconds = 0;
+          let usedDirectTimestamps = false;
 
-          // Determine call status based on end reason
-          let callStatus = "completed";
-          if (message.endedReason) {
-            switch (message.endedReason.toLowerCase()) {
-              case "customer-hangup":
-              case "assistant-hangup":
-                callStatus = "completed";
-                break;
-              case "customer-did-not-answer":
-                callStatus = "no-answer";
-                break;
-              case "customer-busy":
-                callStatus = "busy";
-                break;
-              case "error":
-                callStatus = "failed";
-                break;
-              default:
-                callStatus = message.endedReason;
-            }
+          if (callEndedAtEpoch > 0 && callStartedAtEpoch > 0 && callEndedAtEpoch > callStartedAtEpoch) {
+            calculatedDurationSeconds = Math.floor((callEndedAtEpoch - callStartedAtEpoch) / 1000);
+            usedDirectTimestamps = true;
+            console.log(`⏱️ Duration from webhook: ${calculatedDurationSeconds}s (startedAt: ${call.startedAt}, endedAt: ${call.endedAt})`);
+          } else {
+            console.warn(`⚠️ Call ${callId}: Webhook timestamps unusable (status: ${call?.status}). Deferred fetch initiated.`);
           }
 
-          // Store call history in database
-          await storage.createCallHistory({
-            callId: call.id,
-            patientId,
-            patientName,
-            phoneNumber,
-            duration,
-            status: callStatus,
-            transcript: transcript || "",
-            summary: aiSummary.summary,
-            keyPoints: aiSummary.keyPoints,
-            healthConcerns: aiSummary.healthConcerns,
-            followUpItems: aiSummary.followUpItems,
-            callDate: call.endedAt ? new Date(call.endedAt) : new Date()
-          });
+          // If direct timestamps were NOT usable, schedule a delayed fetch and return early.
+          if (!usedDirectTimestamps) {
+            // Non-blocking: Acknowledge webhook quickly, process storage in background.
+            res.status(200).json({ success: true, message: "Webhook acknowledged, processing call details via deferred fetch." });
 
-          console.log(`✅ Stored call history for patient ${patientName} (${call.id})`);
+            // Start delayed processing.
+            setTimeout(async () => {
+              try {
+                console.log(`⏳ Call ${callId}: Starting delayed fetch for complete call details (10s delay).`);
+                const vapiToken = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || "19ae21bd-8010-47ab-bd79-2a3c1e71e447";
+                const vapiCallDetailsResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+                  method: "GET",
+                  headers: {
+                    "Authorization": `Bearer ${vapiToken}`,
+                    "Content-Type": "application/json"
+                  }
+                });
+
+                if (!vapiCallDetailsResponse.ok) {
+                  const errorText = await vapiCallDetailsResponse.text();
+                  console.error(`❌ Call ${callId} (deferred fetch): Error fetching call details from Vapi API: ${vapiCallDetailsResponse.status} - ${errorText}`);
+                  await storeCallHistoryWithDetails(callId, patientId, patientName, phoneNumber, 0, callEndedReason, transcript, summary, call.endedAt || new Date().toISOString(), call.metadata, "deferred_fetch_api_error");
+                  return;
+                }
+
+                const callDetails = await vapiCallDetailsResponse.json();
+                console.log(`📊 Call ${callId} (deferred fetch): Fetched call details from Vapi API:`, {
+                  id: callDetails.id, createdAt: callDetails.createdAt, updatedAt: callDetails.updatedAt,
+                  status: callDetails.status, endedReason: callDetails.endedReason,
+                  startedAt: callDetails.startedAt, endedAt: callDetails.endedAt
+                });
+                
+                let finalDurationSeconds = 0;
+                const fetchedStartedAt = callDetails.startedAt ? new Date(callDetails.startedAt).getTime() : 0;
+                const fetchedEndedAt = callDetails.endedAt ? new Date(callDetails.endedAt).getTime() : 0;
+
+                if (fetchedEndedAt > 0 && fetchedStartedAt > 0 && fetchedEndedAt > fetchedStartedAt) {
+                  finalDurationSeconds = Math.floor((fetchedEndedAt - fetchedStartedAt) / 1000);
+                  console.log(`⏱️ Call ${callId} (deferred fetch): Duration from Vapi API (startedAt/endedAt): ${finalDurationSeconds}s`);
+                } else if (callDetails.createdAt && callDetails.updatedAt) {
+                  const createdAtEpoch = new Date(callDetails.createdAt).getTime();
+                  const updatedAtEpoch = new Date(callDetails.updatedAt).getTime();
+                  if (updatedAtEpoch > createdAtEpoch) {
+                    finalDurationSeconds = Math.floor((updatedAtEpoch - createdAtEpoch) / 1000);
+                    console.log(`⏱️ Call ${callId} (deferred fetch): Duration from Vapi API (createdAt/updatedAt): ${finalDurationSeconds}s`);
+                  } else {
+                     console.warn(`⚠️ Call ${callId} (deferred fetch): Vapi API updatedAt (${callDetails.updatedAt}) not after createdAt (${callDetails.createdAt}). Using 0 duration.`);
+                  }
+                } else {
+                  console.warn(`⚠️ Call ${callId} (deferred fetch): Vapi API also missing sufficient timestamps. Using 0 duration.`);
+                }
+                
+                await storeCallHistoryWithDetails(callId, patientId, patientName, phoneNumber, finalDurationSeconds, callDetails.endedReason || callEndedReason, transcript, summary, callDetails.endedAt || callDetails.updatedAt || new Date().toISOString(), callDetails.metadata, "deferred_fetch_success");
+
+              } catch (fetchError) {
+                console.error(`❌ Call ${callId} (deferred fetch): Exception during delayed fetch/store:`, fetchError);
+                 await storeCallHistoryWithDetails(callId, patientId, patientName, phoneNumber, 0, callEndedReason, transcript, summary, call.endedAt || new Date().toISOString(), call.metadata, "deferred_fetch_exception");
+              }
+            }, 10000); // 10-second delay.
+
+            return; // CRITICAL: Ensures no further code in this handler runs for this request.
+          } else {
+            // This block is for when webhook timestamps ARE usable.
+            console.log(`✅ Call ${callId}: Using direct webhook timestamps for duration calculation.`);
+            await storeCallHistoryWithDetails(callId, patientId, patientName, phoneNumber, calculatedDurationSeconds, callEndedReason, transcript, summary, call.endedAt!, call.metadata, "direct_webhook_timestamps");
+            return res.status(200).json({ success: true });
+          }
+        } else {
+           console.warn("⚠️ Webhook end-of-call-report missing call.id");
+           return res.status(400).json({ success: false, message: "Missing call ID in webhook" });
         }
+      } else if (webhookData.message?.type) {
+        // For other message types, just acknowledge
+        // console.log(`✅ Other webhook type ${webhookData.message.type} acknowledged.`);
+        return res.status(200).json({ success: true, message: "Webhook acknowledged" });
+      } else {
+        console.warn("⚠️ Unknown or malformed webhook structure received.");
+        return res.status(400).json({ success: false, message: "Malformed webhook" });
       }
 
-      return res.status(200).json({ success: true });
+      // Fallthrough for any case not handled above (e.g. no message type)
+      // This line should ideally not be reached if all webhook types are handled or acknowledged.
+      // console.log("✅ Webhook processed (default acknowledgement)");
+      // return res.status(200).json({ success: true }); // This was causing issues, removed in favor of specific returns.
+
     } catch (error) {
       console.error("❌ Error processing Vapi webhook:", error);
       return res.status(500).json({
@@ -333,7 +480,6 @@ export function registerVapiRoutes(app: Express): void {
           });
 
           console.log(`🧪 ✅ Step 3 Complete: Stored test call history for patient ${patientName} (${call.id})`);
-          console.log("🧪 Stored call record:", storedCall);
         } else {
           console.log("🧪 ❌ No call ID found in webhook data");
         }
@@ -347,11 +493,18 @@ export function registerVapiRoutes(app: Express): void {
       });
     } catch (error) {
       console.error("🧪 ❌ WEBHOOK TEST FAILED - Error processing test webhook:", error);
-      console.error("🧪 Error stack:", error.stack);
+      if (error instanceof Error) {
+        console.error("🧪 Error stack:", error.stack);
+        return res.status(500).json({
+          success: false,
+          message: "Error processing test webhook",
+          error: error.message
+        });
+      }
       return res.status(500).json({
         success: false,
         message: "Error processing test webhook",
-        error: error.message
+        error: "Unknown error"
       });
     }
   });
@@ -438,21 +591,6 @@ export function registerVapiRoutes(app: Express): void {
         finalLength: enhancedSystemPrompt.length,
         hasRecentCall: !!recentCall
       });
-
-      // Format phone number to E.164 format
-      function formatPhoneNumberE164(phoneNumber: string): string {
-        // Remove all non-digit characters except +
-        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
-
-        // If it doesn't start with +, assume US number  
-        if (!cleaned.startsWith('+')) {
-          // Remove any leading 1 if present, then add +1
-          cleaned = cleaned.replace(/^1/, '');
-          cleaned = '+1' + cleaned;
-        }
-
-        return cleaned;
-      }
 
       const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
       console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
@@ -561,7 +699,7 @@ export function registerVapiRoutes(app: Express): void {
       console.error("❌ Error initiating context-aware call:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to initiate context-aware call"
+        message: error instanceof Error ? error.message : "Failed to initiate context-aware call"
       });
     }
   });
@@ -649,21 +787,6 @@ export function registerVapiRoutes(app: Express): void {
         finalLength: enhancedSystemPrompt.length,
         hasRecentCall: !!recentCall
       });
-
-      // Format phone number to E.164 format
-      function formatPhoneNumberE164(phoneNumber: string): string {
-        // Remove all non-digit characters except +
-        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
-
-        // If it doesn't start with +, assume US number  
-        if (!cleaned.startsWith('+')) {
-          // Remove any leading 1 if present, then add +1
-          cleaned = cleaned.replace(/^1/, '');
-          cleaned = '+1' + cleaned;
-        }
-
-        return cleaned;
-      }
 
       const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
       console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
@@ -773,7 +896,7 @@ export function registerVapiRoutes(app: Express): void {
       console.error("❌ Error initiating unified call:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to initiate unified call"
+        message: error instanceof Error ? error.message : "Failed to initiate unified call"
       });
     }
   });
@@ -1083,11 +1206,11 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       // Fetch the patient data (same logic as triage-call endpoint)
       let patientData;
       if (batchId) {
-        patientData = await storage.getPatientPromptByIds(batchId as string, patientId as string);
+        patientData = await storage.getPatientPromptByIds(batchId as string, String(patientId));
       }
       
       if (!patientData) {
-        patientData = await storage.getLatestPatientPrompt(patientId as string);
+        patientData = await storage.getLatestPatientPrompt(String(patientId));
       }
 
       if (!patientData) {
@@ -1104,14 +1227,14 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       let enhancedSystemPrompt = voiceAgentTemplate;
       
       enhancedSystemPrompt = enhancedSystemPrompt
-        .replace(/PATIENT_NAME/g, patientName || patientId)
+        .replace(/PATIENT_NAME/g, patientName || String(patientId))
         .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
         .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
         .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
         .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
 
       // Check for recent call history
-      const recentCall = await storage.getLatestCallForPatient(patientId as string);
+      const recentCall = await storage.getLatestCallForPatient(String(patientId));
       if (recentCall && recentCall.summary) {
         enhancedSystemPrompt = enhancedSystemPrompt.replace(
           /CONVERSATION_HISTORY/g, 
@@ -1140,7 +1263,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       console.error("❌ Error fetching triage context:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to fetch triage context"
+        message: error instanceof Error ? error.message : "Failed to fetch triage context"
       });
     }
   });
@@ -1245,7 +1368,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       console.error("🧪 ❌ Error testing call history:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to test call history"
+        message: error instanceof Error ? error.message : "Failed to test call history"
       });
     }
   });
@@ -1308,20 +1431,6 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       }
 
       // Format phone number to E.164 format
-      function formatPhoneNumberE164(phoneNumber: string): string {
-        // Remove all non-digit characters except +
-        let cleaned = phoneNumber.replace(/[^\d+]/g, '');
-
-        // If it doesn't start with +, assume US number  
-        if (!cleaned.startsWith('+')) {
-          // Remove any leading 1 if present, then add +1
-          cleaned = cleaned.replace(/^1/, '');
-          cleaned = '+1' + cleaned;
-        }
-
-        return cleaned;
-      }
-
       const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
       console.log(`📞 Phone number formatting: ${phoneNumber} → ${formattedPhoneNumber}`);
 
@@ -1406,7 +1515,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
       console.error("❌ Error initiating test call:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to initiate test call"
+        message: error instanceof Error ? error.message : "Failed to initiate test call"
       });
     }
   });
@@ -1534,7 +1643,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       console.error("🔧 ❌ Error fixing VAPI assistant:", error);
       return res.status(500).json({
         success: false,
-        message: error.message || "Failed to fix VAPI assistant configuration"
+        message: error instanceof Error ? error.message : "Failed to fix VAPI assistant configuration"
       });
     }
   });
@@ -1550,11 +1659,11 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       // Fetch the patient data (same logic as triage-call endpoint)
       let patientData;
       if (batchId) {
-        patientData = await storage.getPatientPromptByIds(batchId as string, patientId as string);
+        patientData = await storage.getPatientPromptByIds(batchId as string, patientId);
       }
       
       if (!patientData) {
-        patientData = await storage.getLatestPatientPrompt(patientId as string);
+        patientData = await storage.getLatestPatientPrompt(patientId);
       }
 
       if (!patientData) {
@@ -1578,7 +1687,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
         .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
 
       // Check for recent call history
-      const recentCall = await storage.getLatestCallForPatient(patientId as string);
+      const recentCall = await storage.getLatestCallForPatient(patientId);
       if (recentCall && recentCall.summary) {
         enhancedSystemPrompt = enhancedSystemPrompt.replace(
           /CONVERSATION_HISTORY/g, 

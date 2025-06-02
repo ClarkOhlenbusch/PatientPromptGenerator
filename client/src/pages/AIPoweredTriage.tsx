@@ -254,7 +254,7 @@ export default function AIPoweredTriage() {
     },
     enabled: !!effectiveBatchId,
     retry: 2,
-    staleTime: 10000 // Cache for 10 seconds
+    staleTime: 0 // Cache for 0 seconds (immediately stale)
   });
 
   // Handle error state with useEffect

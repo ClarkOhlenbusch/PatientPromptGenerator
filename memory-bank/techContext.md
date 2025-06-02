@@ -1,5 +1,18 @@
 # Technical Context: AI Companion Call System
-
+## Env varibles and context
+- **this application is being hosted on Replit and we are connected to replit for coding.**
+-- this means that we always have a Dev Preview running.
+- **Our env varibles are also being hosted on replit and contatin the following.**
+-- SESSION_SECRET
+-- DATABASE_URL
+-- PGDATABASE
+-- PGHOST
+-- PGPORT
+-- PGUSER
+-- PGPASSWORD
+-- VAPI_PUBLIC_KEY
+-- VAPI_PRIVATE_KEY
+-- OPENAI_API_KEY
 ## Technology Stack
 
 ### Frontend Technologies
