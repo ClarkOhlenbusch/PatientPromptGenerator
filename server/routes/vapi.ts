@@ -577,19 +577,19 @@ export function registerVapiRoutes(app: Express): void {
         .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
         .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
 
-      // Check for recent call history
-      const recentCall = await storage.getLatestCallForPatient(patientId as string);
-      if (recentCall && recentCall.summary) {
-        enhancedSystemPrompt = enhancedSystemPrompt.replace(
-          /CONVERSATION_HISTORY/g, 
-          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
-        );
-      }
+      // Get comprehensive call history context for enhanced patient continuity
+      const callHistoryContext = await storage.getCallHistoryContext(patientId as string, 5);
+      enhancedSystemPrompt = enhancedSystemPrompt.replace(
+        /CONVERSATION_HISTORY/g, 
+        callHistoryContext.contextText
+      );
 
       console.log("🎯 Enhanced system prompt prepared:", {
         templateLength: voiceAgentTemplate.length,
         finalLength: enhancedSystemPrompt.length,
-        hasRecentCall: !!recentCall
+        hasCallHistory: callHistoryContext.hasHistory,
+        recentCallsCount: callHistoryContext.recentCalls,
+        contextLength: callHistoryContext.contextText.length
       });
 
       const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
@@ -620,7 +620,7 @@ export function registerVapiRoutes(app: Express): void {
             patientAge: age || 0,
             patientCondition: condition || "general health assessment",
             patientPrompt: triagePrompt || "No specific care assessment available",
-            conversationHistory: recentCall?.summary || "This is your first conversation with this patient."
+            conversationHistory: callHistoryContext.contextText
           }
         },
         metadata: {
@@ -773,19 +773,19 @@ export function registerVapiRoutes(app: Express): void {
         .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
         .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
 
-      // Check for recent call history
-      const recentCall = await storage.getLatestCallForPatient(patientId as string);
-      if (recentCall && recentCall.summary) {
-        enhancedSystemPrompt = enhancedSystemPrompt.replace(
-          /CONVERSATION_HISTORY/g, 
-          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
-        );
-      }
+      // Get comprehensive call history context for enhanced patient continuity
+      const callHistoryContext = await storage.getCallHistoryContext(patientId as string, 5);
+      enhancedSystemPrompt = enhancedSystemPrompt.replace(
+        /CONVERSATION_HISTORY/g, 
+        callHistoryContext.contextText
+      );
 
       console.log("🎯 Enhanced system prompt prepared:", {
         templateLength: voiceAgentTemplate.length,
         finalLength: enhancedSystemPrompt.length,
-        hasRecentCall: !!recentCall
+        hasCallHistory: callHistoryContext.hasHistory,
+        recentCallsCount: callHistoryContext.recentCalls,
+        contextLength: callHistoryContext.contextText.length
       });
 
       const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
@@ -816,7 +816,7 @@ export function registerVapiRoutes(app: Express): void {
             patientAge: age || 0,
             patientCondition: condition || "general health assessment",
             patientPrompt: triagePrompt || "No specific care assessment available",
-            conversationHistory: recentCall?.summary || "This is your first conversation with this patient."
+            conversationHistory: callHistoryContext.contextText
           }
         },
         metadata: {
@@ -1233,14 +1233,12 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
         .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
 
-      // Check for recent call history
-      const recentCall = await storage.getLatestCallForPatient(String(patientId));
-      if (recentCall && recentCall.summary) {
-        enhancedSystemPrompt = enhancedSystemPrompt.replace(
-          /CONVERSATION_HISTORY/g, 
-          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
-        );
-      }
+      // Get comprehensive call history context for enhanced patient continuity
+      const callHistoryContext = await storage.getCallHistoryContext(String(patientId), 5);
+      enhancedSystemPrompt = enhancedSystemPrompt.replace(
+        /CONVERSATION_HISTORY/g, 
+        callHistoryContext.contextText
+      );
 
       return res.status(200).json({
         success: true,
@@ -1252,8 +1250,8 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
           batchId: patientData.batchId,
           triagePrompt: triagePrompt,
           triagePromptLength: triagePrompt?.length || 0,
-          hasRecentCall: !!recentCall,
-          recentCallSummary: recentCall?.summary || null,
+          hasRecentCall: !!callHistoryContext,
+          recentCallSummary: callHistoryContext.contextText,
           enhancedSystemPrompt: enhancedSystemPrompt,
           systemPromptLength: enhancedSystemPrompt.length
         }
@@ -1686,14 +1684,12 @@ IMPORTANT: You have access to their latest health data and personalized care rec
         .replace(/PATIENT_PROMPT/g, triagePrompt || "No specific care assessment available")
         .replace(/CONVERSATION_HISTORY/g, "This is your first conversation with this patient.");
 
-      // Check for recent call history
-      const recentCall = await storage.getLatestCallForPatient(patientId);
-      if (recentCall && recentCall.summary) {
-        enhancedSystemPrompt = enhancedSystemPrompt.replace(
-          /CONVERSATION_HISTORY/g, 
-          `Previous call: ${recentCall.summary}. Follow up on any concerns mentioned.`
-        );
-      }
+      // Get comprehensive call history context for enhanced patient continuity
+      const callHistoryContext = await storage.getCallHistoryContext(patientId, 5);
+      enhancedSystemPrompt = enhancedSystemPrompt.replace(
+        /CONVERSATION_HISTORY/g, 
+        callHistoryContext.contextText
+      );
 
       return res.status(200).json({
         success: true,
@@ -1706,8 +1702,8 @@ IMPORTANT: You have access to their latest health data and personalized care rec
           batchId: patientData.batchId,
           triagePrompt: triagePrompt,
           triagePromptLength: triagePrompt?.length || 0,
-          hasRecentCall: !!recentCall,
-          recentCallSummary: recentCall?.summary || null,
+          hasRecentCall: !!callHistoryContext,
+          recentCallSummary: callHistoryContext.contextText,
           enhancedSystemPrompt: enhancedSystemPrompt,
           systemPromptLength: enhancedSystemPrompt.length,
           contextInjectionWorking: true

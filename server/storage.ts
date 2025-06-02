@@ -82,6 +82,15 @@ export interface IStorage {
   getLatestCallForPatient(patientId: string): Promise<CallHistory | null>;
   updateCallHistory(callId: string, updates: Partial<InsertCallHistory>): Promise<CallHistory>;
   getAllCallHistory(limit?: number, offset?: number): Promise<CallHistory[]>;
+  getCallHistoryContext(patientId: string, limit?: number): Promise<{
+    hasHistory: boolean;
+    contextText: string;
+    recentCalls: number;
+    allSummaries: string[];
+    allKeyPoints: string[];
+    allHealthConcerns: string[];
+    allFollowUpItems: string[];
+  }>;
 
   // Voice agent template methods
   getVoiceAgentTemplate(): Promise<string>;
@@ -1320,6 +1329,115 @@ IMPORTANT: You have access to their latest health data and personalized care rec
     }
 
     return await query;
+  }
+
+  // New method to get comprehensive call history context for system prompts
+  async getCallHistoryContext(patientId: string, limit: number = 5): Promise<{
+    hasHistory: boolean;
+    contextText: string;
+    recentCalls: number;
+    allSummaries: string[];
+    allKeyPoints: string[];
+    allHealthConcerns: string[];
+    allFollowUpItems: string[];
+  }> {
+    try {
+      const callHistories = await this.getCallHistoryByPatient(patientId, limit);
+      
+      if (!callHistories || callHistories.length === 0) {
+        return {
+          hasHistory: false,
+          contextText: "This is your first conversation with this patient.",
+          recentCalls: 0,
+          allSummaries: [],
+          allKeyPoints: [],
+          allHealthConcerns: [],
+          allFollowUpItems: []
+        };
+      }
+
+      // Extract all the data from call histories
+      const allSummaries = callHistories
+        .map(call => call.summary)
+        .filter(summary => summary && summary.trim().length > 0);
+      
+      const allKeyPoints = callHistories
+        .flatMap(call => call.keyPoints || [])
+        .filter(point => point && point.trim().length > 0);
+      
+      const allHealthConcerns = callHistories
+        .flatMap(call => call.healthConcerns || [])
+        .filter(concern => concern && concern.trim().length > 0);
+      
+      const allFollowUpItems = callHistories
+        .flatMap(call => call.followUpItems || [])
+        .filter(item => item && item.trim().length > 0);
+
+      // Create a comprehensive context text
+      let contextText = `PREVIOUS CALL HISTORY (${callHistories.length} recent calls):\n`;
+      
+      // Add summaries from recent calls
+      if (allSummaries.length > 0) {
+        contextText += "\nCALL SUMMARIES:\n";
+        allSummaries.forEach((summary, index) => {
+          const callDate = callHistories[index]?.callDate;
+          const dateStr = callDate ? new Date(callDate).toLocaleDateString() : 'Recent';
+          contextText += `- ${dateStr}: ${summary}\n`;
+        });
+      }
+
+      // Add key points
+      if (allKeyPoints.length > 0) {
+        contextText += "\nKEY DISCUSSION POINTS:\n";
+        // Remove duplicates and limit to most relevant
+        const uniqueKeyPoints = [...new Set(allKeyPoints)].slice(0, 10);
+        uniqueKeyPoints.forEach(point => {
+          contextText += `- ${point}\n`;
+        });
+      }
+
+      // Add health concerns
+      if (allHealthConcerns.length > 0) {
+        contextText += "\nHEALTH CONCERNS MENTIONED:\n";
+        const uniqueHealthConcerns = [...new Set(allHealthConcerns)].slice(0, 8);
+        uniqueHealthConcerns.forEach(concern => {
+          contextText += `- ${concern}\n`;
+        });
+      }
+
+      // Add follow-up items
+      if (allFollowUpItems.length > 0) {
+        contextText += "\nFOLLOW-UP ITEMS:\n";
+        const uniqueFollowUpItems = [...new Set(allFollowUpItems)].slice(0, 8);
+        uniqueFollowUpItems.forEach(item => {
+          contextText += `- ${item}\n`;
+        });
+      }
+
+      contextText += "\nIMPORTANT: Reference relevant information from previous calls when appropriate and follow up on any outstanding concerns or action items.";
+
+      return {
+        hasHistory: true,
+        contextText,
+        recentCalls: callHistories.length,
+        allSummaries,
+        allKeyPoints,
+        allHealthConcerns,
+        allFollowUpItems
+      };
+
+    } catch (error) {
+      console.error("Error getting call history context:", error);
+      return {
+        hasHistory: false,
+        contextText: "This is your first conversation with this patient. (Note: Error retrieving call history)",
+        recentCalls: 0,
+        allSummaries: [],
+        allKeyPoints: [],
+        allHealthConcerns: [],
+        allFollowUpItems: []
+      };
+    }
   }
 }
 
