@@ -990,13 +990,11 @@ export function registerVapiRoutes(app: Express): void {
 
       // Prepare call request with enhanced system prompt
       const callRequest = {
-        phoneNumberId:
-          process.env.VAPI_PHONE_NUMBER_ID ||
-          "f412bd32-9764-4d70-94e7-90f87f84ef08",
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
         customer: {
           number: formattedPhoneNumber,
         },
-        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82",
+        assistantId: process.env.VAPI_ASSISTANT_ID,
         assistantOverrides: {
           // Primary method: Complete system prompt override with patient data injected
           model: {
@@ -1165,7 +1163,7 @@ export function registerVapiRoutes(app: Express): void {
         });
       }
 
-      const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
+      const agentId = process.env.VAPI_ASSISTANT_ID;
 
       // Fetch agent configuration from Vapi
       const vapiResponse = await fetch(
@@ -1222,7 +1220,7 @@ export function registerVapiRoutes(app: Express): void {
         });
       }
 
-      const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
+      const agentId = process.env.VAPI_ASSISTANT_ID;
 
       // First, get the current agent configuration to preserve existing settings
       const currentAgentResponse = await fetch(
@@ -1712,13 +1710,11 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
 
       // Prepare test call request
       const testCallRequest = {
-        phoneNumberId:
-          process.env.VAPI_PHONE_NUMBER_ID ||
-          "f412bd32-9764-4d70-94e7-90f87f84ef08",
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
         customer: {
           number: formattedPhoneNumber,
         },
-        assistantId: "d289d8be-be92-444e-bb94-b4d25b601f82", // Using the same assistant ID
+        assistantId: process.env.VAPI_ASSISTANT_ID, // Using the same assistant ID
         assistantOverrides: {
           firstMessage:
             firstMessage ||
@@ -1820,7 +1816,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
         });
       }
 
-      const agentId = "d289d8be-be92-444e-bb94-b4d25b601f82";
+      const agentId = process.env.VAPI_ASSISTANT_ID;
 
       console.log("🔧 Fixing VAPI assistant configuration...");
 
