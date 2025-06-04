@@ -158,7 +158,7 @@ export default function MonthlyReports() {
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Monthly report generated successfully. If your PDF doesn't open automatically, please check your popup blocker settings.",
+        description: "Trend report generated successfully. If your PDF doesn't open automatically, please check your popup blocker settings.",
       });
     },
     onError: (error: Error) => {
@@ -184,9 +184,9 @@ export default function MonthlyReports() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col items-center mb-8 text-center">
         <Activity className="h-12 w-12 text-primary mb-4" />
-        <h1 className="text-3xl font-bold mb-3">Monthly Health Reports</h1>
+        <h1 className="text-3xl font-bold mb-3">Trend Reports</h1>
         <p className="text-muted-foreground max-w-2xl">
-          Generate comprehensive monthly health reports based on your most recently uploaded patient data. 
+          Generate comprehensive trend reports based on your most recently uploaded patient data. 
           Reports include trend visualizations, health marker progression, and personalized insights.
         </p>
       </div>
@@ -195,10 +195,10 @@ export default function MonthlyReports() {
         <CardHeader className="bg-muted/30">
           <CardTitle className="flex items-center">
             <PlusCircle className="h-5 w-5 mr-2 text-primary" />
-            Generate New Monthly Report
+            Generate New Trend Report
           </CardTitle>
           <CardDescription>
-            Create a health report using your most recently uploaded data
+            Create a trend report using your most recently uploaded data
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">

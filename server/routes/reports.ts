@@ -3,9 +3,9 @@ import { storage } from "../storage";
 import ExcelJS from "exceljs";
 
 export function registerReportRoutes(app: Express): void {
-  // === MONTHLY REPORTS ENDPOINTS ===
+  // === TREND REPORTS ENDPOINTS ===
 
-  // Get monthly report data
+  // Get trend report data
   app.get("/api/monthly-report", async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
@@ -40,10 +40,10 @@ export function registerReportRoutes(app: Express): void {
         data: reportData,
       });
     } catch (err) {
-      console.error("Error generating monthly report:", err);
+      console.error("Error generating trend report:", err);
       return res.status(500).json({
         success: false,
-        message: `Error generating monthly report: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Error generating trend report: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });

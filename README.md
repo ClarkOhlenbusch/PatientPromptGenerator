@@ -142,7 +142,7 @@ The Caretaker Prompt Generator is a specialized healthcare monitoring tool desig
 - Send SMS alerts to caregivers
 - View detailed patient metrics
 
-### 4. Monthly Reports
+### 4. Trend Reports
 
 1. Navigate to the Reports page
 2. Select a month and year
@@ -170,7 +170,7 @@ The application uses several tables:
 - patient_batches (upload history)
 - patient_prompts (generated insights)
 - patient_alerts (triage data)
-- monthly_reports (report history)
+- trend_reports (report history)
 
 ## Testing
 

@@ -388,10 +388,10 @@ export function generatePatientReportDefinition(patientData: any, patientVitals:
       };
     },
     info: {
-      title: `Monthly Patient Report - ${patientData.name}`,
+      title: `Trend Patient Report - ${patientData.name}`,
       author: 'CalicoCare Health System',
-      subject: 'Monthly Health Summary',
-      keywords: 'health, patient, monthly report',
+      subject: 'Health Trend Summary',
+      keywords: 'health, patient, trend report',
     },
     content: [
       // Header section
@@ -400,7 +400,7 @@ export function generatePatientReportDefinition(patientData: any, patientVitals:
           {
             width: '*',
             stack: [
-              { text: 'Monthly Patient Overview Report', style: 'header' },
+              { text: 'Trend Patient Overview Report', style: 'header' },
               { text: `${patientData.name}, ${patientData.condition} (${dateRange})`, style: 'headerSubtitle' }
             ]
           },

@@ -115,12 +115,12 @@ export default function Home() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-purple-600" />
-              Monthly Reports
+              Trend Reports
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600">
-              Generate comprehensive patient care reports
+              Generate comprehensive patient trend reports
             </p>
           </CardContent>
         </Card>
