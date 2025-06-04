@@ -1,3 +1,4 @@
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Link } from "wouter";
 
@@ -10,60 +11,107 @@ export default function FAQ() {
             Frequently Asked Questions
           </h1>
           <p className="mt-4 text-lg text-gray-500">
-            Find answers to common questions about the Caretaker Prompt Generator
+            Find answers to common questions about Calico Care's AI healthcare companion system
           </p>
         </div>
 
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="item-1">
             <AccordionTrigger className="text-left">
-              What is the Caretaker Prompt Generator?
+              What is Calico Care's AI healthcare companion system?
             </AccordionTrigger>
             <AccordionContent>
-              The Caretaker Prompt Generator is a tool designed to process patient data from Excel files and create 
-              customized AI prompts for each patient based on their medical conditions and health indicators.
+              Calico Care is an AI-powered healthcare platform that provides automated patient care through voice conversations, 
+              intelligent triage assessments, and comprehensive health monitoring. Our system uses advanced AI voice agents 
+              to conduct personalized check-ins with patients between appointments.
             </AccordionContent>
           </AccordionItem>
 
           <AccordionItem value="item-2">
             <AccordionTrigger className="text-left">
-              How do I use the Caretaker Prompt Generator?
+              How do AI Companion Calls work?
             </AccordionTrigger>
             <AccordionContent>
-              Simply upload your Excel file containing patient data on the home page. The system will process the
-              data and generate appropriate prompts for each patient. You can then view, copy, or regenerate these
-              prompts as needed.
+              Our AI voice agents make automated calls to patients using their personalized health information. The calls 
+              are tailored to each patient's condition, medical history, and previous conversations. The AI can ask about 
+              symptoms, medication adherence, and general wellbeing, providing natural conversation experiences.
             </AccordionContent>
           </AccordionItem>
 
           <AccordionItem value="item-3">
             <AccordionTrigger className="text-left">
-              What file format is supported?
+              What is AI-Powered Triage?
             </AccordionTrigger>
             <AccordionContent>
-              Currently, we support Excel files (.xlsx) that follow our specific format. For a sample template,
-              please contact our support team.
+              Our triage system analyzes patient data from Excel uploads to automatically assess patient priority levels. 
+              It generates personalized prompts and identifies patients who may need immediate attention based on their 
+              health indicators and alert conditions. This helps healthcare providers focus on the most critical cases first.
             </AccordionContent>
           </AccordionItem>
 
           <AccordionItem value="item-4">
             <AccordionTrigger className="text-left">
-              How is my data processed?
+              How does the Prompt Editing feature work?
             </AccordionTrigger>
             <AccordionContent>
-              Your data goes through our secure automata-style workflow that identifies key health indicators and
-              alert conditions. We then use OpenAI to generate appropriate prompts tailored to each patient's needs.
-              All data is processed securely and not stored permanently.
+              The Prompt Editing sandbox allows healthcare providers to customize AI conversation templates and system prompts. 
+              You can edit voice agent templates, adjust conversation flows, and personalize how the AI interacts with patients 
+              based on your specific care protocols and requirements.
             </AccordionContent>
           </AccordionItem>
 
           <AccordionItem value="item-5">
             <AccordionTrigger className="text-left">
-              Can I regenerate prompts for specific patients?
+              What are Trend Reports?
             </AccordionTrigger>
             <AccordionContent>
-              Yes! On the results page, you can click the "Regenerate" button next to any patient to create a new
-              prompt. You can also regenerate all prompts at once if needed.
+              Trend Reports provide comprehensive analytics on patient health patterns, call completion rates, and care outcomes. 
+              These reports help healthcare teams track patient progress over time, identify health trends, and measure the 
+              effectiveness of AI-assisted care interventions.
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="item-6">
+            <AccordionTrigger className="text-left">
+              Is my patient data secure?
+            </AccordionTrigger>
+            <AccordionContent>
+              Yes, we take data security seriously. All patient data is encrypted in transit and at rest. Our system follows 
+              healthcare data protection standards, and we process data securely without permanent storage of sensitive 
+              information unless required for care continuity.
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="item-7">
+            <AccordionTrigger className="text-left">
+              What file formats does the system support?
+            </AccordionTrigger>
+            <AccordionContent>
+              Currently, we support Excel files (.xlsx) for patient data uploads in our triage system. The files should 
+              contain patient information including demographics, health conditions, and contact details. For a sample 
+              template, please contact our support team.
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="item-8">
+            <AccordionTrigger className="text-left">
+              Can I track call history and patient interactions?
+            </AccordionTrigger>
+            <AccordionContent>
+              Yes, our Call History feature provides detailed records of all AI companion calls, including transcripts, 
+              conversation summaries, and health insights generated by our AI analysis. You can review past interactions 
+              and track patient engagement over time.
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="item-9">
+            <AccordionTrigger className="text-left">
+              How do I get started with the platform?
+            </AccordionTrigger>
+            <AccordionContent>
+              After logging in, you can start by uploading patient data through the AI Triage feature, customize your 
+              conversation templates in Prompt Editing, and then initiate AI Companion Calls. The platform guides you 
+              through each step with intuitive interfaces and helpful documentation.
             </AccordionContent>
           </AccordionItem>
         </Accordion>
@@ -72,10 +120,17 @@ export default function FAQ() {
           <p className="text-gray-600">
             Still have questions? Contact our support team at{" "}
             <a
-              href="mailto:support@calicocare.example.com"
+              href="mailto:info@calico.care"
               className="text-primary hover:underline"
             >
-              support@calicocare.example.com
+              info@calico.care
+            </a>
+            {" "}or call us at{" "}
+            <a
+              href="tel:+18573744144"
+              className="text-primary hover:underline"
+            >
+              (857) 374-4144
             </a>
           </p>
           <div className="mt-4">
