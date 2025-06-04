@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="md:flex md:items-center md:justify-between">
           <div className="mt-8 md:mt-0 md:order-1">
             <p className="text-center md:text-left text-sm text-gray-500">
-              &copy; {new Date().getFullYear()} Caretaker Prompt Generator. All rights reserved.
+              &copy; 2025 by Calico Care Inc., a Delaware corporation
             </p>
             <p className="text-center md:text-left text-sm text-gray-500 mt-1">
               For demo purposes only. Not for clinical use.
@@ -24,22 +24,13 @@ export default function Footer() {
               <HelpCircle className="h-5 w-5" />
               <span className="ml-1 text-sm">Help</span>
             </a>
-            <a href="mailto:support@calicocare.example.com" className="text-gray-400 hover:text-primary flex items-center">
+            <a href="mailto:info@calico.care" className="text-gray-400 hover:text-primary flex items-center">
               <FaEnvelope className="h-5 w-5" />
-              <span className="ml-1 text-sm">Email</span>
+              <span className="ml-1 text-sm">info@calico.care</span>
             </a>
-            <a href="tel:+15551234567" className="text-gray-400 hover:text-primary flex items-center">
+            <a href="tel:+18573744144" className="text-gray-400 hover:text-primary flex items-center">
               <FaPhone className="h-5 w-5" />
-              <span className="ml-1 text-sm">555-123-4567</span>
-            </a>
-            <a 
-              href="https://www.linkedin.com/in/clark-ohlenbusch-bb8b60253" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-gray-400 hover:text-primary flex items-center"
-            >
-              <FaLinkedin className="h-5 w-5" />
-              <span className="ml-1 text-sm">Built by Clark Ohlenbusch</span>
+              <span className="ml-1 text-sm">(857) 374-4144</span>
             </a>
           </div>
         </div>
