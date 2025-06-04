@@ -1,13 +1,32 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RefreshCw, Save, Undo2, Phone, Volume2, BarChart3 } from "lucide-react";
+import {
+  RefreshCw,
+  Save,
+  Undo2,
+  Phone,
+  Volume2,
+  BarChart3,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -33,11 +52,13 @@ The prompt should be detailed but concise, focusing on the most important aspect
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
   const [vapiConfig, setVapiConfig] = useState({
-    firstMessage: "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
-    systemPrompt: "You are a professional healthcare assistant calling a patient. Speak clearly, compassionately, and keep the conversation focused on their health needs. Always be respectful of their time and provide clear, actionable information.",
+    firstMessage:
+      "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
+    systemPrompt:
+      "You are a professional healthcare assistant calling a patient. Speak clearly, compassionately, and keep the conversation focused on their health needs. Always be respectful of their time and provide clear, actionable information.",
     voiceProvider: "vapi",
     voiceId: "Kylie",
-    model: "gpt-4o-mini"
+    model: "gpt-4o-mini",
   });
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const { toast } = useToast();
@@ -56,12 +77,12 @@ export default function PromptEditingSandbox() {
         toast({
           title: "Error",
           description: "Failed to load system prompt, using default.",
-          variant: "destructive"
+          variant: "destructive",
         });
         // Fallback to hardcoded default if fetch fails
         return INITIAL_DEFAULT_SYSTEM_PROMPT;
       }
-    }
+    },
   });
 
   // Query to get current Vapi agent configuration
@@ -75,12 +96,13 @@ export default function PromptEditingSandbox() {
         console.error("Failed to fetch Vapi agent config:", error);
         toast({
           title: "Info",
-          description: "Could not load current agent settings. You can configure them below.",
-          variant: "default"
+          description:
+            "Could not load current agent settings. You can configure them below.",
+          variant: "default",
         });
         return null;
       }
-    }
+    },
   });
 
   // Query to get current voice agent template
@@ -95,7 +117,7 @@ export default function PromptEditingSandbox() {
         console.error("Failed to fetch voice agent template:", error);
         return null;
       }
-    }
+    },
   });
 
   // Update system prompt mutation (still needed for saving)
@@ -107,7 +129,8 @@ export default function PromptEditingSandbox() {
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "System prompt updated successfully! Your changes will be applied to all new patient reports.",
+        description:
+          "System prompt updated successfully! Your changes will be applied to all new patient reports.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/system-prompt"] });
     },
@@ -115,9 +138,9 @@ export default function PromptEditingSandbox() {
       toast({
         title: "Error",
         description: `Failed to update system prompt: ${error.message}`,
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Get the latest batch ID for regeneration (still needed)
@@ -126,7 +149,7 @@ export default function PromptEditingSandbox() {
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/batches/latest");
       return await res.json();
-    }
+    },
   });
 
   // Update Vapi agent configuration mutation
@@ -146,33 +169,40 @@ export default function PromptEditingSandbox() {
       toast({
         title: "Error",
         description: `Failed to update voice agent: ${error.message}`,
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Test call mutation
   const testCallMutation = useMutation({
-    mutationFn: async ({ phoneNumber, config }: { phoneNumber: string; config: typeof vapiConfig }) => {
+    mutationFn: async ({
+      phoneNumber,
+      config,
+    }: {
+      phoneNumber: string;
+      config: typeof vapiConfig;
+    }) => {
       const res = await apiRequest("POST", "/api/vapi/test-call", {
         phoneNumber,
-        ...config
+        ...config,
       });
       return await res.json();
     },
     onSuccess: () => {
       toast({
         title: "Test Call Initiated",
-        description: "Test call started successfully! You should receive a call shortly.",
+        description:
+          "Test call started successfully! You should receive a call shortly.",
       });
     },
     onError: (error: Error) => {
       toast({
         title: "Test Call Failed",
         description: `Failed to initiate test call: ${error.message}`,
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Regenerate all prompts mutation (updated for consistency with other components)
@@ -183,7 +213,10 @@ export default function PromptEditingSandbox() {
       }
 
       console.log(`Regenerating prompts for batch: ${latestBatch.batchId}`);
-      const res = await apiRequest("POST", `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`);
+      const res = await apiRequest(
+        "POST",
+        `/api/prompts/regenerate-all?batchId=${latestBatch.batchId}`,
+      );
 
       // Handle non-2xx status codes
       if (!res.ok) {
@@ -204,8 +237,10 @@ export default function PromptEditingSandbox() {
         if (total === 0) {
           toast({
             title: "No Prompts Found",
-            description: response.message || "No prompts were found to regenerate. Try uploading patient data first.",
-            variant: "default"
+            description:
+              response.message ||
+              "No prompts were found to regenerate. Try uploading patient data first.",
+            variant: "default",
           });
         } else {
           toast({
@@ -219,7 +254,8 @@ export default function PromptEditingSandbox() {
         // Generic success message if no data
         toast({
           title: "Success",
-          description: response.message || "All prompts regenerated successfully",
+          description:
+            response.message || "All prompts regenerated successfully",
         });
       }
 
@@ -228,8 +264,12 @@ export default function PromptEditingSandbox() {
       queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts"] });
 
       if (latestBatch?.batchId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/prompts", latestBatch.batchId] });
-        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", latestBatch.batchId] });
+        queryClient.invalidateQueries({
+          queryKey: ["/api/prompts", latestBatch.batchId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["/api/patient-prompts", latestBatch.batchId],
+        });
       }
     },
     onError: (error: Error) => {
@@ -240,17 +280,19 @@ export default function PromptEditingSandbox() {
 
       // Check for common error patterns
       if (errorMessage.includes("not found")) {
-        errorMessage = "Batch not found. The data may have been deleted. Try uploading new patient data.";
+        errorMessage =
+          "Batch not found. The data may have been deleted. Try uploading new patient data.";
       } else if (errorMessage.includes("No prompts found")) {
-        errorMessage = "No prompts found for this batch. Try uploading new patient data.";
+        errorMessage =
+          "No prompts found for this batch. Try uploading new patient data.";
       }
 
       toast({
         title: "Error",
         description: errorMessage,
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   useEffect(() => {
@@ -266,10 +308,11 @@ export default function PromptEditingSandbox() {
       const agent = vapiAgentConfig.data;
       setVapiConfig({
         firstMessage: agent.firstMessage || "",
-        systemPrompt: voiceAgentTemplate || agent.model?.messages?.[0]?.content || "",
+        systemPrompt:
+          voiceAgentTemplate || agent.model?.messages?.[0]?.content || "",
         voiceProvider: agent.voice?.provider || "playht",
         voiceId: agent.voice?.voiceId || "jennifer",
-        model: agent.model?.model || "gpt-4"
+        model: agent.model?.model || "gpt-4",
       });
     }
   }, [vapiAgentConfig, voiceAgentTemplate]);
@@ -282,8 +325,8 @@ export default function PromptEditingSandbox() {
     // Simply set the local state to the hardcoded default prompt
     setCorePrompt(INITIAL_DEFAULT_SYSTEM_PROMPT);
     toast({
-        title: "Reset",
-        description: "Editor reset to default prompt. Save to apply.", // Clarify that save is needed
+      title: "Reset",
+      description: "Editor reset to default prompt. Save to apply.", // Clarify that save is needed
     });
     // No API call needed here anymore
   };
@@ -296,18 +339,18 @@ export default function PromptEditingSandbox() {
   const handleSaveVapiAgent = async () => {
     try {
       // First save the template to our database
-      const templateResponse = await fetch('/api/voice-agent-template', {
-        method: 'POST',
+      const templateResponse = await fetch("/api/voice-agent-template", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          template: vapiConfig.systemPrompt
-        })
+          template: vapiConfig.systemPrompt,
+        }),
       });
 
       if (!templateResponse.ok) {
-        throw new Error('Failed to save voice agent template');
+        throw new Error("Failed to save voice agent template");
       }
 
       // Then update the VAPI agent configuration
@@ -315,15 +358,15 @@ export default function PromptEditingSandbox() {
 
       toast({
         title: "Template Saved",
-        description: "Voice agent template saved successfully. This template will be used for all patient calls with dynamic patient data.",
+        description:
+          "Voice agent template saved successfully. This template will be used for all patient calls with dynamic patient data.",
       });
-
     } catch (error) {
-      console.error('Error saving voice agent template:', error);
+      console.error("Error saving voice agent template:", error);
       toast({
         title: "Error",
         description: "Failed to save voice agent template. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -336,7 +379,7 @@ export default function PromptEditingSandbox() {
         systemPrompt: agent.model?.messages?.[0]?.content || "",
         voiceProvider: agent.voice?.provider || "playht",
         voiceId: agent.voice?.voiceId || "jennifer",
-        model: agent.model?.model || "gpt-4"
+        model: agent.model?.model || "gpt-4",
       });
     }
     toast({
@@ -371,44 +414,47 @@ CALL INSTRUCTIONS:
 
 IMPORTANT: You have access to their latest health data and personalized care recommendations above. Use this information throughout the conversation to provide relevant, personalized care.`;
 
-    setVapiConfig(prev => ({
+    setVapiConfig((prev) => ({
       ...prev,
-      systemPrompt: defaultSystemPrompt
+      systemPrompt: defaultSystemPrompt,
     }));
 
     toast({
       title: "Reset to Default",
-      description: "System prompt reset to default template with patient placeholders. Save to apply changes.",
+      description:
+        "System prompt reset to default template with patient placeholders. Save to apply changes.",
     });
   };
 
   const handleTestCall = () => {
-    if (!testPhoneNumber || testPhoneNumber.trim() === '') {
+    if (!testPhoneNumber || testPhoneNumber.trim() === "") {
       toast({
         title: "Phone Number Required",
         description: "Please enter a phone number for the test call",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     // Basic phone number validation
-    const cleanPhone = testPhoneNumber.replace(/\D/g, '');
+    const cleanPhone = testPhoneNumber.replace(/\D/g, "");
     if (cleanPhone.length < 10 || cleanPhone.length > 15) {
       toast({
         title: "Invalid Phone Number",
         description: "Please enter a valid phone number (10-15 digits)",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     // Format phone number to E.164 format
-    const formattedPhone = cleanPhone.startsWith('1') ? `+${cleanPhone}` : `+1${cleanPhone}`;
+    const formattedPhone = cleanPhone.startsWith("1")
+      ? `+${cleanPhone}`
+      : `+1${cleanPhone}`;
 
     testCallMutation.mutate({
       phoneNumber: formattedPhone,
-      config: vapiConfig
+      config: vapiConfig,
     });
   };
 
@@ -418,7 +464,8 @@ IMPORTANT: You have access to their latest health data and personalized care rec
         <div>
           <h1 className="text-3xl font-bold">Prompt Editing</h1>
           <p className="text-gray-600 mt-2">
-            Customize AI prompts for triage, companion calls, and monthly reports
+            Customize AI prompts for triage, companion calls, and monthly
+            reports
           </p>
         </div>
       </div>
@@ -431,332 +478,450 @@ IMPORTANT: You have access to their latest health data and personalized care rec
           </TabsTrigger>
           <TabsTrigger value="voice" className="flex items-center gap-2">
             <Volume2 className="w-4 h-4" />
-            AI Companion
+            Companion Prompts
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="triage">
           <Card>
-        <CardHeader>
-          <CardTitle>Core Prompt Editor</CardTitle>
-          <CardDescription>
-            Edit the core AI prompt that generates patient reports. After saving, go to the Triage section to see your changes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Textarea
-              placeholder="Loading prompt..."
-              value={corePrompt}
-              onChange={(e) => setCorePrompt(e.target.value)}
-              className="min-h-[400px] font-mono text-sm"
-              disabled={isPromptLoading}
-            />
-          </div>
+            <CardHeader>
+              <CardTitle>Core Prompt Editor</CardTitle>
+              <CardDescription>
+                Edit the core AI prompt that generates patient reports. After
+                saving, go to the Triage section to see your changes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Loading prompt..."
+                  value={corePrompt}
+                  onChange={(e) => setCorePrompt(e.target.value)}
+                  className="min-h-[400px] font-mono text-sm"
+                  disabled={isPromptLoading}
+                />
+              </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSaveSystemPrompt}
-              disabled={updateSystemPromptMutation.isPending || isPromptLoading}
-              className="bg-gradient-to-r from-green-500 to-emerald-700 hover:from-green-600 hover:to-emerald-800"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save Prompt
-            </Button>
-            <Button
-              onClick={handleResetToDefault}
-              // Disable button only while initial prompt is loading
-              disabled={isPromptLoading}
-              variant="outline"
-            >
-              <Undo2 className="w-4 h-4 mr-2" />
-              Reset to Default
-            </Button>
-            <Button
-              onClick={handleRegeneratePrompts}
-              disabled={regeneratePromptsMutation.isPending || updateSystemPromptMutation.isPending}
-              variant="outline"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Regenerate All Patient Reports
-            </Button>
-          </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveSystemPrompt}
+                  disabled={
+                    updateSystemPromptMutation.isPending || isPromptLoading
+                  }
+                  className="bg-gradient-to-r from-green-500 to-emerald-700 hover:from-green-600 hover:to-emerald-800"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Prompt
+                </Button>
+                <Button
+                  onClick={handleResetToDefault}
+                  // Disable button only while initial prompt is loading
+                  disabled={isPromptLoading}
+                  variant="outline"
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Reset to Default
+                </Button>
+                <Button
+                  onClick={handleRegeneratePrompts}
+                  disabled={
+                    regeneratePromptsMutation.isPending ||
+                    updateSystemPromptMutation.isPending
+                  }
+                  variant="outline"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Regenerate All Patient Reports
+                </Button>
+              </div>
 
-          {(updateSystemPromptMutation.isPending || regeneratePromptsMutation.isPending) && (
-            <Alert>
-              <AlertDescription>
-                {updateSystemPromptMutation.isPending
-                  ? "Saving your custom prompt..."
-                  : "Regenerating all patient reports..."}
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
+              {(updateSystemPromptMutation.isPending ||
+                regeneratePromptsMutation.isPending) && (
+                <Alert>
+                  <AlertDescription>
+                    {updateSystemPromptMutation.isPending
+                      ? "Saving your custom prompt..."
+                      : "Regenerating all patient reports..."}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="voice">
           <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Volume2 className="w-5 h-5" />
-            AI Voice Agent Configuration
-          </CardTitle>
-          <CardDescription>
-            Configure your AI voice agent's behavior, voice, and responses for patient calls.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* First Message Configuration */}
-          <div className="space-y-2">
-            <Label htmlFor="firstMessage">First Message (Greeting)</Label>
-            <Textarea
-              id="firstMessage"
-              placeholder="Hello, this is your healthcare assistant calling with an update..."
-              value={vapiConfig.firstMessage}
-              onChange={(e) => setVapiConfig(prev => ({ ...prev, firstMessage: e.target.value }))}
-              className="min-h-[100px]"
-              disabled={isVapiLoading}
-            />
-            <p className="text-sm text-gray-500">
-              The greeting message your AI agent will speak when calls are answered.
-            </p>
-          </div>
-
-          {/* System Prompt Configuration */}
-          <div className="space-y-2">
-            <Label htmlFor="vapiSystemPrompt">AI Agent System Prompt</Label>
-            <Textarea
-              id="vapiSystemPrompt"
-              placeholder="You are a professional healthcare assistant. Speak clearly and compassionately..."
-              value={vapiConfig.systemPrompt}
-              onChange={(e) => setVapiConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
-              className="min-h-[200px] font-mono text-sm"
-              disabled={isVapiLoading}
-            />
-            <p className="text-sm text-gray-500">
-              Instructions that define your AI agent's personality, role, and conversation guidelines.
-            </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
-              <p className="text-sm font-medium text-blue-800 mb-2">💡 Dynamic Patient Context</p>
-              <p className="text-sm text-blue-700 mb-2">
-                Use these placeholders in your prompt to automatically inject patient-specific information:
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs text-blue-600 font-mono">
-                <div><code>PATIENT_NAME</code> - Patient's full name</div>
-                <div><code>PATIENT_AGE</code> - Patient's age</div>
-                <div><code>PATIENT_CONDITION</code> - Patient's medical condition</div>
-                <div><code>PATIENT_PROMPT</code> - Latest generated care prompt</div>
-                <div><code>CONVERSATION_HISTORY</code> - Previous call history</div>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Volume2 className="w-5 h-5" />
+                AI Voice Agent Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure your AI voice agent's behavior, voice, and responses
+                for patient calls.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* First Message Configuration */}
+              <div className="space-y-2">
+                <Label htmlFor="firstMessage">First Message (Greeting)</Label>
+                <Textarea
+                  id="firstMessage"
+                  placeholder="Hello, this is your healthcare assistant calling with an update..."
+                  value={vapiConfig.firstMessage}
+                  onChange={(e) =>
+                    setVapiConfig((prev) => ({
+                      ...prev,
+                      firstMessage: e.target.value,
+                    }))
+                  }
+                  className="min-h-[100px]"
+                  disabled={isVapiLoading}
+                />
+                <p className="text-sm text-gray-500">
+                  The greeting message your AI agent will speak when calls are
+                  answered.
+                </p>
               </div>
-              <p className="text-xs text-blue-600 mt-2">
-                ⚠️ Note: These placeholders will be replaced with actual patient data when making calls.
-              </p>
-            </div>
-          </div>
 
-          {/* Voice and Model Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="voiceProvider">Voice Provider</Label>
-              <Select
-                value={vapiConfig.voiceProvider}
-                onValueChange={(value) => {
-                  // Reset voice ID when provider changes to avoid invalid combinations
-                  const defaultVoices = {
-                    vapi: "Kylie",
-                    playht: "jennifer",
-                    aws: "joanna",
-                    azure: "jenny",
-                    deepgram: "aura-asteria-en"
-                  };
-                  setVapiConfig(prev => ({
-                    ...prev,
-                    voiceProvider: value,
-                    voiceId: defaultVoices[value as keyof typeof defaultVoices] || "jennifer"
-                  }));
-                }}
-                disabled={isVapiLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vapi">Vapi (Current)</SelectItem>
-                  <SelectItem value="playht">PlayHT</SelectItem>
-                  <SelectItem value="aws">Amazon Polly</SelectItem>
-                  <SelectItem value="azure">Azure Speech</SelectItem>
-                  <SelectItem value="deepgram">Deepgram</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              {/* System Prompt Configuration */}
+              <div className="space-y-2">
+                <Label htmlFor="vapiSystemPrompt">AI Agent System Prompt</Label>
+                <Textarea
+                  id="vapiSystemPrompt"
+                  placeholder="You are a professional healthcare assistant. Speak clearly and compassionately..."
+                  value={vapiConfig.systemPrompt}
+                  onChange={(e) =>
+                    setVapiConfig((prev) => ({
+                      ...prev,
+                      systemPrompt: e.target.value,
+                    }))
+                  }
+                  className="min-h-[200px] font-mono text-sm"
+                  disabled={isVapiLoading}
+                />
+                <p className="text-sm text-gray-500">
+                  Instructions that define your AI agent's personality, role,
+                  and conversation guidelines.
+                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                  <p className="text-sm font-medium text-blue-800 mb-2">
+                    💡 Dynamic Patient Context
+                  </p>
+                  <p className="text-sm text-blue-700 mb-2">
+                    Use these placeholders in your prompt to automatically
+                    inject patient-specific information:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-blue-600 font-mono">
+                    <div>
+                      <code>PATIENT_NAME</code> - Patient's full name
+                    </div>
+                    <div>
+                      <code>PATIENT_AGE</code> - Patient's age
+                    </div>
+                    <div>
+                      <code>PATIENT_CONDITION</code> - Patient's medical
+                      condition
+                    </div>
+                    <div>
+                      <code>PATIENT_PROMPT</code> - Latest generated care prompt
+                    </div>
+                    <div>
+                      <code>CONVERSATION_HISTORY</code> - Previous call history
+                    </div>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">
+                    ⚠️ Note: These placeholders will be replaced with actual
+                    patient data when making calls.
+                  </p>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="voiceId">Voice ID</Label>
-              <Select
-                value={vapiConfig.voiceId}
-                onValueChange={(value) => setVapiConfig(prev => ({ ...prev, voiceId: value }))}
-                disabled={isVapiLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select voice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vapiConfig.voiceProvider === "vapi" && (
-                    <>
-                      <SelectItem value="Kylie">Kylie (Female)</SelectItem>
-                      <SelectItem value="Elliot">Elliot (Male)</SelectItem>
-                      <SelectItem value="Rohan">Rohan (Male)</SelectItem>
-                      <SelectItem value="Lily">Lily (Female)</SelectItem>
-                      <SelectItem value="Savannah">Savannah (Female)</SelectItem>
-                      <SelectItem value="Hana">Hana (Female)</SelectItem>
-                      <SelectItem value="Thomas">Thomas (Male)</SelectItem>
-                      <SelectItem value="Henry">Henry (Male)</SelectItem>
-                      <SelectItem value="Paige">Paige (Female)</SelectItem>
-                      <SelectItem value="Spencer">Spencer (Male)</SelectItem>
-                    </>
-                  )}
-                  {vapiConfig.voiceProvider === "playht" && (
-                    <>
-                      <SelectItem value="jennifer">Jennifer (Female, Natural)</SelectItem>
-                      <SelectItem value="melissa">Melissa (Female, Professional)</SelectItem>
-                      <SelectItem value="will">Will (Male, Warm)</SelectItem>
-                      <SelectItem value="chris">Chris (Male, Clear)</SelectItem>
-                      <SelectItem value="matt">Matt (Male, Friendly)</SelectItem>
-                      <SelectItem value="ruby">Ruby (Female, Energetic)</SelectItem>
-                    </>
-                  )}
-                  {vapiConfig.voiceProvider === "aws" && (
-                    <>
-                      <SelectItem value="joanna">Joanna (Female, US English)</SelectItem>
-                      <SelectItem value="matthew">Matthew (Male, US English)</SelectItem>
-                      <SelectItem value="ivy">Ivy (Female, US English)</SelectItem>
-                      <SelectItem value="justin">Justin (Male, US English)</SelectItem>
-                      <SelectItem value="kendra">Kendra (Female, US English)</SelectItem>
-                      <SelectItem value="kimberly">Kimberly (Female, US English)</SelectItem>
-                      <SelectItem value="salli">Salli (Female, US English)</SelectItem>
-                      <SelectItem value="joey">Joey (Male, US English)</SelectItem>
-                    </>
-                  )}
-                  {vapiConfig.voiceProvider === "azure" && (
-                    <>
-                      <SelectItem value="jenny">Jenny (Female, Neural)</SelectItem>
-                      <SelectItem value="guy">Guy (Male, Neural)</SelectItem>
-                      <SelectItem value="aria">Aria (Female, Neural)</SelectItem>
-                      <SelectItem value="davis">Davis (Male, Neural)</SelectItem>
-                      <SelectItem value="jane">Jane (Female, Neural)</SelectItem>
-                      <SelectItem value="jason">Jason (Male, Neural)</SelectItem>
-                    </>
-                  )}
-                  {vapiConfig.voiceProvider === "deepgram" && (
-                    <>
-                      <SelectItem value="aura-asteria-en">Asteria (Female, Conversational)</SelectItem>
-                      <SelectItem value="aura-luna-en">Luna (Female, Warm)</SelectItem>
-                      <SelectItem value="aura-stella-en">Stella (Female, Professional)</SelectItem>
-                      <SelectItem value="aura-athena-en">Athena (Female, Clear)</SelectItem>
-                      <SelectItem value="aura-hera-en">Hera (Female, Confident)</SelectItem>
-                      <SelectItem value="aura-orion-en">Orion (Male, Strong)</SelectItem>
-                      <SelectItem value="aura-arcas-en">Arcas (Male, Friendly)</SelectItem>
-                      <SelectItem value="aura-perseus-en">Perseus (Male, Professional)</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500">
-                Voice options vary by provider. PlayHT recommended for best quality.
-              </p>
-            </div>
+              {/* Voice and Model Configuration */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="voiceProvider">Voice Provider</Label>
+                  <Select
+                    value={vapiConfig.voiceProvider}
+                    onValueChange={(value) => {
+                      // Reset voice ID when provider changes to avoid invalid combinations
+                      const defaultVoices = {
+                        vapi: "Kylie",
+                        playht: "jennifer",
+                        aws: "joanna",
+                        azure: "jenny",
+                        deepgram: "aura-asteria-en",
+                      };
+                      setVapiConfig((prev) => ({
+                        ...prev,
+                        voiceProvider: value,
+                        voiceId:
+                          defaultVoices[value as keyof typeof defaultVoices] ||
+                          "jennifer",
+                      }));
+                    }}
+                    disabled={isVapiLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vapi">Vapi (Current)</SelectItem>
+                      <SelectItem value="playht">PlayHT</SelectItem>
+                      <SelectItem value="aws">Amazon Polly</SelectItem>
+                      <SelectItem value="azure">Azure Speech</SelectItem>
+                      <SelectItem value="deepgram">Deepgram</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="model">AI Model</Label>
-              <Select
-                value={vapiConfig.model}
-                onValueChange={(value) => setVapiConfig(prev => ({ ...prev, model: value }))}
-                disabled={isVapiLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gpt-4o-mini">GPT-4o Mini (Current - Fast & Cost-Effective)</SelectItem>
-                  <SelectItem value="gpt-4">GPT-4 (Advanced)</SelectItem>
-                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Fast & Advanced)</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Standard)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500">
-                GPT-4 provides better conversation quality for healthcare scenarios.
-              </p>
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="voiceId">Voice ID</Label>
+                  <Select
+                    value={vapiConfig.voiceId}
+                    onValueChange={(value) =>
+                      setVapiConfig((prev) => ({ ...prev, voiceId: value }))
+                    }
+                    disabled={isVapiLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select voice" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vapiConfig.voiceProvider === "vapi" && (
+                        <>
+                          <SelectItem value="Kylie">Kylie (Female)</SelectItem>
+                          <SelectItem value="Elliot">Elliot (Male)</SelectItem>
+                          <SelectItem value="Rohan">Rohan (Male)</SelectItem>
+                          <SelectItem value="Lily">Lily (Female)</SelectItem>
+                          <SelectItem value="Savannah">
+                            Savannah (Female)
+                          </SelectItem>
+                          <SelectItem value="Hana">Hana (Female)</SelectItem>
+                          <SelectItem value="Thomas">Thomas (Male)</SelectItem>
+                          <SelectItem value="Henry">Henry (Male)</SelectItem>
+                          <SelectItem value="Paige">Paige (Female)</SelectItem>
+                          <SelectItem value="Spencer">
+                            Spencer (Male)
+                          </SelectItem>
+                        </>
+                      )}
+                      {vapiConfig.voiceProvider === "playht" && (
+                        <>
+                          <SelectItem value="jennifer">
+                            Jennifer (Female, Natural)
+                          </SelectItem>
+                          <SelectItem value="melissa">
+                            Melissa (Female, Professional)
+                          </SelectItem>
+                          <SelectItem value="will">
+                            Will (Male, Warm)
+                          </SelectItem>
+                          <SelectItem value="chris">
+                            Chris (Male, Clear)
+                          </SelectItem>
+                          <SelectItem value="matt">
+                            Matt (Male, Friendly)
+                          </SelectItem>
+                          <SelectItem value="ruby">
+                            Ruby (Female, Energetic)
+                          </SelectItem>
+                        </>
+                      )}
+                      {vapiConfig.voiceProvider === "aws" && (
+                        <>
+                          <SelectItem value="joanna">
+                            Joanna (Female, US English)
+                          </SelectItem>
+                          <SelectItem value="matthew">
+                            Matthew (Male, US English)
+                          </SelectItem>
+                          <SelectItem value="ivy">
+                            Ivy (Female, US English)
+                          </SelectItem>
+                          <SelectItem value="justin">
+                            Justin (Male, US English)
+                          </SelectItem>
+                          <SelectItem value="kendra">
+                            Kendra (Female, US English)
+                          </SelectItem>
+                          <SelectItem value="kimberly">
+                            Kimberly (Female, US English)
+                          </SelectItem>
+                          <SelectItem value="salli">
+                            Salli (Female, US English)
+                          </SelectItem>
+                          <SelectItem value="joey">
+                            Joey (Male, US English)
+                          </SelectItem>
+                        </>
+                      )}
+                      {vapiConfig.voiceProvider === "azure" && (
+                        <>
+                          <SelectItem value="jenny">
+                            Jenny (Female, Neural)
+                          </SelectItem>
+                          <SelectItem value="guy">
+                            Guy (Male, Neural)
+                          </SelectItem>
+                          <SelectItem value="aria">
+                            Aria (Female, Neural)
+                          </SelectItem>
+                          <SelectItem value="davis">
+                            Davis (Male, Neural)
+                          </SelectItem>
+                          <SelectItem value="jane">
+                            Jane (Female, Neural)
+                          </SelectItem>
+                          <SelectItem value="jason">
+                            Jason (Male, Neural)
+                          </SelectItem>
+                        </>
+                      )}
+                      {vapiConfig.voiceProvider === "deepgram" && (
+                        <>
+                          <SelectItem value="aura-asteria-en">
+                            Asteria (Female, Conversational)
+                          </SelectItem>
+                          <SelectItem value="aura-luna-en">
+                            Luna (Female, Warm)
+                          </SelectItem>
+                          <SelectItem value="aura-stella-en">
+                            Stella (Female, Professional)
+                          </SelectItem>
+                          <SelectItem value="aura-athena-en">
+                            Athena (Female, Clear)
+                          </SelectItem>
+                          <SelectItem value="aura-hera-en">
+                            Hera (Female, Confident)
+                          </SelectItem>
+                          <SelectItem value="aura-orion-en">
+                            Orion (Male, Strong)
+                          </SelectItem>
+                          <SelectItem value="aura-arcas-en">
+                            Arcas (Male, Friendly)
+                          </SelectItem>
+                          <SelectItem value="aura-perseus-en">
+                            Perseus (Male, Professional)
+                          </SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">
+                    Voice options vary by provider. PlayHT recommended for best
+                    quality.
+                  </p>
+                </div>
 
-          {/* Test Call Section */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold mb-4">Test Your Voice Agent</h3>
-            <div className="flex gap-2">
-              <Input
-                type="tel"
-                placeholder="Your phone number (555) 123-4567"
-                value={testPhoneNumber}
-                onChange={(e) => setTestPhoneNumber(e.target.value)}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleTestCall}
-                disabled={testCallMutation.isPending}
-                variant="outline"
-                className="flex-shrink-0"
-              >
-                <Phone className="w-4 h-4 mr-2" />
-                Test Call
-              </Button>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              Enter your phone number to receive a test call with your current agent configuration.
-              <br />
-              <span className="text-amber-600 font-medium">⚠️ Note:</span> Any dynamic patient context placeholders (PATIENT_NAME, PATIENT_AGE, etc.) will be spoken literally since no patient batch is attached to test calls.
-            </p>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="model">AI Model</Label>
+                  <Select
+                    value={vapiConfig.model}
+                    onValueChange={(value) =>
+                      setVapiConfig((prev) => ({ ...prev, model: value }))
+                    }
+                    disabled={isVapiLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gpt-4o-mini">
+                        GPT-4o Mini (Current - Fast & Cost-Effective)
+                      </SelectItem>
+                      <SelectItem value="gpt-4">GPT-4 (Advanced)</SelectItem>
+                      <SelectItem value="gpt-4-turbo">
+                        GPT-4 Turbo (Fast & Advanced)
+                      </SelectItem>
+                      <SelectItem value="gpt-3.5-turbo">
+                        GPT-3.5 Turbo (Standard)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">
+                    GPT-4 provides better conversation quality for healthcare
+                    scenarios.
+                  </p>
+                </div>
+              </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              onClick={handleSaveVapiAgent}
-              disabled={updateVapiAgentMutation.isPending || isVapiLoading}
-              className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save Agent Config
-            </Button>
-            <Button
-              onClick={handleResetVapiAgent}
-              disabled={isVapiLoading}
-              variant="outline"
-            >
-              <Undo2 className="w-4 h-4 mr-2" />
-              Reset to Saved
-            </Button>
-            <Button
-              onClick={handleResetVapiToDefault}
-              disabled={isVapiLoading}
-              variant="outline"
-              className="border-orange-300 text-orange-600 hover:bg-orange-50"
-            >
-              <Undo2 className="w-4 h-4 mr-2" />
-              Reset to Default Template
-            </Button>
-          </div>
+              {/* Test Call Section */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">
+                  Test Your Voice Agent
+                </h3>
+                <div className="flex gap-2">
+                  <Input
+                    type="tel"
+                    placeholder="Your phone number (555) 123-4567"
+                    value={testPhoneNumber}
+                    onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handleTestCall}
+                    disabled={testCallMutation.isPending}
+                    variant="outline"
+                    className="flex-shrink-0"
+                  >
+                    <Phone className="w-4 h-4 mr-2" />
+                    Test Call
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  Enter your phone number to receive a test call with your
+                  current agent configuration.
+                  <br />
+                  <span className="text-amber-600 font-medium">
+                    ⚠️ Note:
+                  </span>{" "}
+                  Any dynamic patient context placeholders (PATIENT_NAME,
+                  PATIENT_AGE, etc.) will be spoken literally since no patient
+                  batch is attached to test calls.
+                </p>
+              </div>
 
-          {(updateVapiAgentMutation.isPending || testCallMutation.isPending) && (
-            <Alert>
-              <AlertDescription>
-                {updateVapiAgentMutation.isPending
-                  ? "Saving voice agent configuration..."
-                  : "Initiating test call..."}
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
+              {/* Action Buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  onClick={handleSaveVapiAgent}
+                  disabled={updateVapiAgentMutation.isPending || isVapiLoading}
+                  className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Agent Config
+                </Button>
+                <Button
+                  onClick={handleResetVapiAgent}
+                  disabled={isVapiLoading}
+                  variant="outline"
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Reset to Saved
+                </Button>
+                <Button
+                  onClick={handleResetVapiToDefault}
+                  disabled={isVapiLoading}
+                  variant="outline"
+                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Reset to Default Template
+                </Button>
+              </div>
+
+              {(updateVapiAgentMutation.isPending ||
+                testCallMutation.isPending) && (
+                <Alert>
+                  <AlertDescription>
+                    {updateVapiAgentMutation.isPending
+                      ? "Saving voice agent configuration..."
+                      : "Initiating test call..."}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
