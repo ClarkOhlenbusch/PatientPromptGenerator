@@ -138,27 +138,27 @@ export default function AuthPage() {
             <div className="grid grid-cols-1 gap-4 md:gap-6 text-white">
               {/* Removed duplicate heading that appeared in the screenshot */}
               <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
-                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">1. Upload Excel Data</h3>
-                <p className="opacity-90 text-xs md:text-sm">
-                  Import patient data from Excel files to start the prompt generation workflow.
-                </p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
-                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">2. AI-Powered Triage</h3>
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">1. AI-Powered Care Triage</h3>
                 <p className="opacity-90 text-xs md:text-sm">
                   Automatically prioritize patients based on health metrics and send SMS alerts.
                 </p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
-                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">3. AI-Prompt Editing</h3>
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">2. AI-Prompt Companion Care</h3>
                 <p className="opacity-90 text-xs md:text-sm">
-                  Edit and customize prompt templates in a secure sandbox environment.
+                  Initiate caring, personalized conversations with patients using AI voice companions.
                 </p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
-                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">4. AI-Powered Monthly Reports</h3>
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">3. AI-Prompt Health Reports</h3>
                 <p className="opacity-90 text-xs md:text-sm">
                   Generate comprehensive monthly analysis reports with patient trends and insights.
+                </p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm p-3 md:p-4 rounded-lg">
+                <h3 className="font-semibold text-base md:text-lg mb-1 md:mb-2">4. Ask Me Anything!</h3>
+                <p className="opacity-90 text-xs md:text-sm">
+                  Get help and guidance on using Cali's AI health assistance features.
                 </p>
               </div>
             </div>
