@@ -62,7 +62,7 @@ export default function AICompanionCalls() {
     onSuccess: (data) => {
       toast({
         title: "Call Initiated Successfully",
-        description: `AI voice call started for ${data.patientName} with full patient context.`,
+        description: `AI companion call started for ${data.patientName} with full patient context.`,
       });
       // Reset form
       setSelectedPatient("");
@@ -172,7 +172,7 @@ export default function AICompanionCalls() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Heart className="w-8 h-8 text-red-500" />
-            AI Voice Calls
+            AI Companion Calls
           </h1>
           <p className="text-gray-600 mt-2">
             Initiate intelligent, context-aware voice conversations with patients using their complete triage assessment data
@@ -186,7 +186,7 @@ export default function AICompanionCalls() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Phone className="w-5 h-5" />
-              Initiate AI Voice Call
+              Initiate AI Companion Call
             </CardTitle>
             <CardDescription>
               All calls now include full patient context from triage data. Uses your Voice Agent configuration from Prompt Editing with dynamic patient data injection.
@@ -245,12 +245,12 @@ export default function AICompanionCalls() {
                 {isInitiatingCall ? (
                   <>
                     <Phone className="w-4 h-4 mr-2 animate-pulse" />
-                    Initiating Call...
+                    Initiating Companion Call...
                   </>
                 ) : (
                   <>
                     <Phone className="w-4 h-4 mr-2" />
-                    Start AI Voice Call
+                    Start AI Companion Call
                   </>
                 )}
               </Button>
@@ -325,14 +325,14 @@ export default function AICompanionCalls() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
-            Recent AI Voice Calls
+            Recent AI Companion Calls
           </CardTitle>
         </CardHeader>
         <CardContent>
           {recentCalls.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No voice calls yet. Start your first call above!</p>
+              <p>No companion calls yet. Start your first call above!</p>
             </div>
           ) : (
             <div className="space-y-3">
