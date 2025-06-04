@@ -67,7 +67,7 @@ export default function Header() {
               </Link>
               <Link href="/monthly-reports">
                 <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                  Monthly Reports
+                  Trend Reports
                 </span>
               </Link>
               <Link href="/settings">
@@ -149,7 +149,7 @@ export default function Header() {
                 </Link>
                 <Link href="/monthly-reports" onClick={() => setMobileMenuOpen(false)}>
                   <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                    Monthly Reports
+                    Trend Reports
                   </span>
                 </Link>
                 <Link href="/settings" onClick={() => setMobileMenuOpen(false)}>
