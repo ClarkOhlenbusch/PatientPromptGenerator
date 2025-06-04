@@ -437,20 +437,30 @@ IMPORTANT: You have access to their latest health data and personalized care rec
     }
 
     // Basic phone number validation
-    const cleanPhone = testPhoneNumber.replace(/\D/g, "");
-    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+    const cleanPhone = testPhoneNumber.replace(/[^\d+]/g, ""); // Keep the + for international numbers
+    
+    // Check if it's a valid E.164 format (starts with + and 7-15 digits total)
+    if (!cleanPhone.startsWith('+')) {
       toast({
         title: "Invalid Phone Number",
-        description: "Please enter a valid phone number (10-15 digits)",
+        description: "Please enter a phone number in international format (starting with +)",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const digitsOnly = cleanPhone.substring(1); // Remove the +
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid international phone number (7-15 digits after country code)",
         variant: "destructive",
       });
       return;
     }
 
-    // Format phone number to E.164 format
-    const formattedPhone = cleanPhone.startsWith("1")
-      ? `+${cleanPhone}`
-      : `+1${cleanPhone}`;
+    // Use the phone number as-is since it's already in E.164 format
+    const formattedPhone = cleanPhone;
 
     testCallMutation.mutate({
       phoneNumber: formattedPhone,
@@ -854,7 +864,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                 <div className="flex gap-2">
                   <Input
                     type="tel"
-                    placeholder="Your phone number (555) 123-4567"
+                    placeholder="+1234567890 (US) or +40753837147 (Romania)"
                     value={testPhoneNumber}
                     onChange={(e) => setTestPhoneNumber(e.target.value)}
                     className="flex-1"
@@ -870,8 +880,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                   </Button>
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
-                  Enter your phone number to receive a test call with your
-                  current agent configuration.
+                  Enter your phone number in international format starting with country code (e.g., +1 for US, +40 for Romania).
                   <br />
                   <span className="text-amber-600 font-medium">
                     ⚠️ Note:

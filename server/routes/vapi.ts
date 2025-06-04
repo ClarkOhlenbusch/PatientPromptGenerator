@@ -79,11 +79,23 @@ function formatPhoneNumberE164(phoneNumber: string): string {
   // Remove all non-digit characters except +
   let cleaned = phoneNumber.replace(/[^\d+]/g, "");
 
-  // If it doesn't start with +, assume US number
-  if (!cleaned.startsWith("+")) {
-    // Remove any leading 1 if present, then add +1
-    cleaned = cleaned.replace(/^1/, "");
+  // If it already starts with +, it should be in E.164 format - just return it
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+
+  // If it doesn't start with +, only assume US number if it looks like a US number
+  // (10 digits, or 11 digits starting with 1)
+  if (cleaned.length === 10) {
+    // 10 digits, assume US number
     cleaned = "+1" + cleaned;
+  } else if (cleaned.length === 11 && cleaned.startsWith("1")) {
+    // 11 digits starting with 1, assume US number
+    cleaned = "+" + cleaned;
+  } else {
+    // For other patterns, require the user to provide the + prefix
+    // This prevents us from incorrectly formatting international numbers
+    throw new Error("Phone number must be in international format starting with + (e.g., +40753837147 for Romania, +1234567890 for US)");
   }
 
   return cleaned;
