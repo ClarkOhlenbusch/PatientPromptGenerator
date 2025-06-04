@@ -1,0 +1,106 @@
+2025-06-04T11:59:58Z info: Deployment: 3c754dcd-7621-467a-a9ce-e5373c878a15
+2025-06-04T11:59:58Z info: Build: 32d5b08c-9218-45dd-99d9-50ad45a61954
+2025-06-04T11:59:58Z info: Connecting to builder
+2025-06-04T11:59:58Z info: Deployment: 3c754dcd-7621-467a-a9ce-e5373c878a15
+2025-06-04T11:59:58Z info: Build: 32d5b08c-9218-45dd-99d9-50ad45a61954
+2025-06-04T11:59:58Z info: Connecting to builder
+2025-06-04T11:59:59Z info: Builder connected
+2025-06-04T12:00:00Z info: Installing packages
+2025-06-04T12:00:00Z info: Starting Build
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+
+
+added 766 packages, and audited 767 packages in 19s
+
+
+147 packages are looking for funding
+  run `npm fund` for details
+
+
+9 vulnerabilities (8 moderate, 1 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.4.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.4.1
+npm notice To update run: npm install -g npm@11.4.1
+npm notice
+
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+
+vite v5.4.14 building for production...
+
+transforming...
+
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+✓ 1913 modules transformed.
+
+rendering chunks...
+
+computing gzip size...
+
+../dist/public/index.html                   1.60 kB │ gzip:   0.63 kB
+../dist/public/assets/index-CNv_xc0g.css   87.76 kB │ gzip:  14.14 kB
+
+../dist/public/assets/index-LqjwduST.js   654.11 kB │ gzip: 195.95 kB
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+✓ built in 5.72s
+
+
+  dist/index.js  200.8kb
+
+⚡ Done in 184ms
+
+2025-06-04T12:00:26Z info: Pushing pid1 binary layer...
+2025-06-04T12:00:28Z info: Created pid1 binary layer
+2025-06-04T12:00:28Z info: Pushing Repl layer...
+2025-06-04T12:00:28Z info: Pushing hosting layer...
+2025-06-04T12:00:28Z info: Nix layers for this Repl are uncached.
+2025-06-04T12:00:28Z info: Pushing nix-0 layer...
+2025-06-04T12:00:29Z info: Created hosting layer
+2025-06-04T12:01:24Z info: Created Repl layer
+2025-06-04T12:01:51Z info: Created nix-0 layer
+2025-06-04T12:01:51Z info: uploading image for cached layer
+2025-06-04T12:01:52Z info: pushed cache image manifest
+2025-06-04T12:01:52Z info: pushed cache soci index manifest
+2025-06-04T12:01:53Z info: uploading cached layer
+2025-06-04T12:01:53Z info: successfully uploaded cached layer
+2025-06-04T12:01:54Z info: Pushed image manifest
+2025-06-04T12:01:54Z info: Pushed soci index manifest
+2025-06-04T12:03:04Z info: Creating Autoscale service
+2025-06-04T12:05:51Z error: The deployment failed to initialize due to a configuration or code error. Check the logs tab for more information. For additional support, contact us at support@replit.com. 
