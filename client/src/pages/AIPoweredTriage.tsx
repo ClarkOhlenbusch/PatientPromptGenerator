@@ -597,7 +597,7 @@ export default function AIPoweredTriage() {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Generated Patient Prompts</h1>
+          <h1 className="text-3xl font-bold">Generated Triage Messages</h1>
           <p className="text-gray-600 mt-2">
             Total patients: {uniquePatientPrompts.length || 0}
             {effectiveBatchId && (
