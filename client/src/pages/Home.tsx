@@ -7,6 +7,7 @@ import { FileUploadResponse } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileUp, Loader2, CheckCircle2, Heart, Phone, MessageSquare, BarChart3 } from "lucide-react";
+import caliCatImage from "@/assets/cali-cat.png";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -62,10 +63,18 @@ export default function Home() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Patient Care Dashboard</h1>
-      <p className="text-gray-600 mb-8">
-        Comprehensive AI-powered patient care management system
-      </p>
+      {/* Header with Cat Image */}
+      <div className="text-center mb-8">
+        <img 
+          src={caliCatImage} 
+          alt="Cali - Your AI Health Assistant" 
+          className="w-20 h-20 mx-auto mb-4 rounded-full shadow-lg"
+        />
+        <h1 className="text-3xl font-bold mb-2">Patient Care Dashboard</h1>
+        <p className="text-gray-600">
+          Comprehensive AI-powered patient care management system
+        </p>
+      </div>
 
       {/* Quick Actions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -160,7 +169,7 @@ export default function Home() {
                   onChange={handleFileChange}
                 />
               </label>
-      </div>
+            </div>
 
             {file && (
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -187,13 +196,13 @@ export default function Home() {
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Uploading...
-        </>
-      ) : (
+                  </>
+                ) : (
                   <>
                     <FileUp className="mr-2 h-4 w-4" />
                     Upload File
                   </>
-      )}
+                )}
               </Button>
             </div>
           </div>

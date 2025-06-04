@@ -33,7 +33,7 @@ export default function Header() {
                 <span className="text-[#3498DB] font-medium italic text-2xl">care</span>
               </div>
             </div>
-            <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">Caretaker Prompt Generator</h1>
+            <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">Cali AI Health Assistant</h1>
           </div>
         </Link>
 

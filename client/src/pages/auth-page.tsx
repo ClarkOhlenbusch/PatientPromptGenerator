@@ -8,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect } from "wouter";
+import caliCatImage from "@/assets/cali-cat.png";
 
 // Form validation schema for admin login
 const authSchema = z.object({
@@ -128,6 +129,15 @@ export default function AuthPage() {
       <div className="relative hidden w-0 flex-1 lg:block">
         <div className="absolute inset-0 h-full bg-gradient-to-br from-[#3498DB] to-[#F5A443] flex flex-col justify-center overflow-y-auto">
           <div className="p-6 md:p-8 lg:p-12 max-w-xl mx-auto">
+            {/* Cute Cat Image */}
+            <div className="text-center mb-6">
+              <img 
+                src={caliCatImage} 
+                alt="Cali - Your AI Health Assistant" 
+                className="w-32 h-32 mx-auto mb-4 rounded-full shadow-lg bg-white/20 backdrop-blur-sm p-2"
+              />
+            </div>
+            
             <div className="text-center text-white">
               <h1 className="text-3xl md:text-4xl font-bold mb-4 md:mb-6">How can I help you today</h1>
               <p className="text-lg md:text-xl mb-6 md:mb-8">
