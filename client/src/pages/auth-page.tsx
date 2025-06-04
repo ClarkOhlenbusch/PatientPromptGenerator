@@ -53,12 +53,7 @@ export default function AuthPage() {
       <div className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <div className="mb-8">
-            <div className="flex items-center mb-4">
-              <img 
-                src="/assets/cali-logo.png" 
-                alt="Cali Logo" 
-                className="h-12 w-auto mr-3"
-              />
+            <div className="flex items-center">
               <div className="flex items-baseline">
                 <span className="text-[#F5A443] font-bold text-3xl">calico</span>
                 <span className="text-[#3498DB] font-medium italic text-3xl">care</span>
