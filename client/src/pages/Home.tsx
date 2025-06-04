@@ -62,7 +62,16 @@ export default function Home() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Patient Care Dashboard</h1>
+      <div className="flex items-center mb-6">
+        <img 
+          src="/assets/cali-logo.png" 
+          alt="Cali Logo" 
+          className="h-12 w-auto mr-4"
+        />
+        <div>
+          <h1 className="text-3xl font-bold">Patient Care Dashboard</h1>
+        </div>
+      </div>
       <p className="text-gray-600 mb-8">
         Comprehensive AI-powered patient care management system
       </p>

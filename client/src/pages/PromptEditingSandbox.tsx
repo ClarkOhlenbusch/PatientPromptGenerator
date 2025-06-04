@@ -461,12 +461,19 @@ IMPORTANT: You have access to their latest health data and personalized care rec
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Prompt Editing</h1>
-          <p className="text-gray-600 mt-2">
-            Customize AI prompts for triage, companion calls, and monthly
-            reports
-          </p>
+        <div className="flex items-center">
+          <img 
+            src="/assets/cali-logo.png" 
+            alt="Cali Logo" 
+            className="h-12 w-auto mr-4"
+          />
+          <div>
+            <h1 className="text-3xl font-bold">Prompt Editing</h1>
+            <p className="text-gray-600 mt-2">
+              Customize AI prompts for triage, companion calls, and monthly
+              reports
+            </p>
+          </div>
         </div>
       </div>
 

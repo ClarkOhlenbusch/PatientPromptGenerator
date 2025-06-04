@@ -28,6 +28,11 @@ export default function Header() {
         <Link href="/">
           <div className="flex items-center cursor-pointer">
             <div className="flex items-center">
+              <img 
+                src="/assets/cali-logo.png" 
+                alt="Cali Logo" 
+                className="h-10 w-auto mr-2"
+              />
               <div className="flex items-baseline">
                 <span className="text-[#F5A443] font-bold text-2xl">calico</span>
                 <span className="text-[#3498DB] font-medium italic text-2xl">care</span>
