@@ -38,8 +38,8 @@
 
 ### External Services & APIs
 - **Vapi AI**: Voice AI platform for automated calls
-  - Assistant ID: `d289d8be-be92-444e-bb94-b4d25b601f82` (CalicoCareAgent)
-  - Phone Number ID: `f412bd32-9764-4d70-94e7-90f87f84ef08`
+  - Assistant ID: (CalicoCareAgent)
+  - Phone Number ID:
   - API Base: `https://api.vapi.ai`
 - **OpenAI GPT-4o-mini**: AI text processing and summarization
 - **Twilio 5.5.2**: SMS notifications and alerts
