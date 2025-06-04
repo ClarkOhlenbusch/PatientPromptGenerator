@@ -431,7 +431,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
           </TabsTrigger>
           <TabsTrigger value="voice" className="flex items-center gap-2">
             <Volume2 className="w-4 h-4" />
-            Voice Agent
+            AI Companion
           </TabsTrigger>
         </TabsList>
 
