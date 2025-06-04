@@ -644,7 +644,7 @@ export default function AIPoweredTriage() {
                 <TableHead>Patient Name</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead>Condition</TableHead>
-                <TableHead className="w-[30%]">Generated Prompt</TableHead>
+                <TableHead className="w-[30%]">Generated Triage Messages</TableHead>
                 <TableHead className="w-[180px]">Phone Number</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
