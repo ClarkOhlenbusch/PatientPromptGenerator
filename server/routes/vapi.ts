@@ -345,10 +345,25 @@ export function registerVapiRoutes(app: Express): void {
                 console.log(
                   `⏳ Call ${callId}: Starting delayed fetch for complete call details (10s delay).`,
                 );
-                const vapiToken =
-                  process.env.VAPI_PRIVATE_KEY ||
-                  process.env.VAPI_PUBLIC_KEY ||
-                  "19ae21bd-8010-47ab-bd79-2a3c1e71e447";
+                const vapiToken = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY;
+                
+                if (!vapiToken) {
+                  console.error(`❌ Call ${callId} (deferred fetch): No VAPI token available in environment variables`);
+                  await storeCallHistoryWithDetails(
+                    callId,
+                    patientId,
+                    patientName,
+                    phoneNumber,
+                    0,
+                    callEndedReason,
+                    transcript,
+                    summary,
+                    call.endedAt || new Date().toISOString(),
+                    call.metadata,
+                    "missing_vapi_token",
+                  );
+                  return;
+                }
                 const vapiCallDetailsResponse = await fetch(
                   `https://api.vapi.ai/call/${callId}`,
                   {
