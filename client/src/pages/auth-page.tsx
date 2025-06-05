@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect } from "wouter";
 import caliCatImage from "@/assets/cali-cat.png";
+import calicoCareLogo from "@/assets/calico-care-logo.png";
 
 // Form validation schema for admin login
 const authSchema = z.object({
@@ -55,10 +57,11 @@ export default function AuthPage() {
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <div className="mb-8">
             <div className="flex items-center">
-              <div className="flex items-baseline">
-                <span className="text-[#F5A443] font-bold text-3xl">calico</span>
-                <span className="text-[#3498DB] font-medium italic text-3xl">care</span>
-              </div>
+              <img 
+                src={calicoCareLogo} 
+                alt="CalicoCare" 
+                className="h-15 w-auto"
+              />
             </div>
             <h2 className="mt-6 text-2xl font-bold tracking-tight text-gray-900">
               Welcome to Cali your AI Health Assistant

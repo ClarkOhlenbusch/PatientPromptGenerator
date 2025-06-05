@@ -70,28 +70,14 @@ export default function Home() {
           alt="Cali - Your AI Health Assistant" 
           className="w-20 h-20 mx-auto mb-4 rounded-full shadow-lg"
         />
-        <h1 className="text-3xl font-bold mb-2">Patient Care Dashboard</h1>
+        <h1 className="text-3xl font-bold mb-2">Ask Cali</h1>
         <p className="text-gray-600">
           Comprehensive AI-powered patient care management system
         </p>
       </div>
 
       {/* Quick Actions Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/prompt-editing")}>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="w-5 h-5 text-blue-600" />
-              Prompt Editing
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600">
-              Customize AI prompts for triage, companion calls, and reports
-            </p>
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 justify-items-center">
         <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/triage")}>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">

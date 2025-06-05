@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut, User, Loader2, Menu, X, Settings } from "lucide-react";
+import calicoCareLogo from "@/assets/calico-care-logo.png";
+import ccIconLogo from "@/assets/CC-Icon-Logo.png";
 
 export default function Header() {
   const { user, logoutMutation, isLoading } = useAuth();
@@ -28,10 +30,11 @@ export default function Header() {
         <Link href="/">
           <div className="flex items-center cursor-pointer">
             <div className="flex items-center">
-              <div className="flex items-baseline">
-                <span className="text-[#F5A443] font-bold text-2xl">calico</span>
-                <span className="text-[#3498DB] font-medium italic text-2xl">care</span>
-              </div>
+              <img 
+                src={user ? ccIconLogo : calicoCareLogo} 
+                alt="CalicoCare" 
+                className={user ? "h-12 w-auto" : "h-10"}
+              />
             </div>
             <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">Cali AI Health Assistant</h1>
           </div>
