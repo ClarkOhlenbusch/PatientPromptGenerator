@@ -36,7 +36,7 @@ export default function Header() {
                 className={user ? "h-12 w-auto" : "h-10"}
               />
             </div>
-            <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">AI Care Assistant</h1>
+            <h1 className="ml-4 text-xl font-bold text-gray-800 border-l-2 border-gray-300 pl-4">Cali Care Assistant</h1>
           </div>
         </Link>
 
