@@ -72,7 +72,7 @@ export default function Home() {
         />
         <h1 className="text-3xl font-bold mb-2">Ask Cali</h1>
         <p className="text-gray-600">
-          Comprehensive AI-powered patient care management system
+          Automated Patient Care Management System
         </p>
       </div>
 
