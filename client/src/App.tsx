@@ -31,7 +31,7 @@ function Router() {
             <ProtectedRoute path="/triage" component={AIPoweredTriage} />
             <ProtectedRoute path="/companion-calls" component={AICompanionCalls} />
             <ProtectedRoute path="/call-history" component={CallHistory} />
-            <ProtectedRoute path="/monthly-reports" component={MonthlyReports} />
+            <ProtectedRoute path="/trend-reports" component={MonthlyReports} />
             <ProtectedRoute path="/settings" component={SettingsPage} />
             <Route path="/auth" component={AuthPage} />
             <Route path="/faq" component={FAQ} />

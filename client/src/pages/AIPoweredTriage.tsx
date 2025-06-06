@@ -172,8 +172,8 @@ export default function AIPoweredTriage() {
     queryFn: async () => {
       if (!allBatches?.length) return null;
       
-      // Try each batch in reverse order (newest to oldest)
-      for (const batch of [...allBatches].reverse()) {
+      // Try each batch in order (newest to oldest, since database now returns them sorted)
+      for (const batch of allBatches) {
         try {
           const res = await apiRequest("GET", `/api/patient-prompts/${batch.batchId}`);
           const data = await res.json();

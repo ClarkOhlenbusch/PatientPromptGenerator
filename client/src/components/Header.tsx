@@ -68,8 +68,8 @@ export default function Header() {
                   Call History
                 </span>
               </Link>
-              <Link href="/monthly-reports">
-                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
+              <Link href="/trend-reports">
+                <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/trend-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
                   Trend Reports
                 </span>
               </Link>

@@ -72,8 +72,8 @@ export default function MonthlyReports() {
     // If we have the latest batch but no prompts found, try to find the most recent batch with prompts
     async function findBatchWithPrompts() {
       if (allBatches && allBatches.length > 0 && !batchWithPrompts) {
-        // Try each batch in reverse order (newest to oldest) until we find one with prompts
-        for (const batch of [...allBatches].reverse()) {
+        // Try each batch in order (newest to oldest, since database now returns them sorted)
+        for (const batch of allBatches) {
           try {
             const response = await fetch(`/api/patient-prompts/${batch.batchId}`, {
               method: 'GET',
