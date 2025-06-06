@@ -139,7 +139,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllPatientBatches(): Promise<PatientBatch[]> {
-    return await db.select().from(patientBatches).orderBy(patientBatches.createdAt);
+    return await db.select().from(patientBatches).orderBy(desc(patientBatches.createdAt));
   }
 
   async createPatientPrompt(insertPrompt: InsertPatientPrompt): Promise<PatientPrompt> {
