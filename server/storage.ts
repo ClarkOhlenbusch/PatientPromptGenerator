@@ -231,6 +231,7 @@ export class DatabaseStorage implements IStorage {
     const updateData: Record<string, any> = {};
 
     if (updates.prompt) updateData.prompt = updates.prompt;
+    if (updates.patientMessage) updateData.patientMessage = updates.patientMessage;
     if (updates.reasoning) updateData.reasoning = updates.reasoning;
     if (updates.isAlert !== undefined) updateData.isAlert = updates.isAlert ? "true" : "false";
     if (updates.healthStatus) updateData.healthStatus = updates.healthStatus;

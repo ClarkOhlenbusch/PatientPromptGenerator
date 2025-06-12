@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
-import { generatePrompt, extractReasoning, getDefaultSystemPrompt, getTokenUsageStats } from "../lib/openai";
+import { generatePrompt, generateDualMessages, extractReasoning, getDefaultSystemPrompt, getTokenUsageStats } from "../lib/openai";
 import { createObjectCsvStringifier } from "csv-writer";
 import { db } from "../db";
 import { patientPrompts } from "@shared/schema";
@@ -592,13 +592,19 @@ export function registerPromptRoutes(app: Express): void {
             }
           }
 
-          // Generate new prompt
-          const newPrompt = await generatePrompt(patientData, batchId, customSystemPrompt);
-          const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+          // Generate both caregiver and patient messages using dual message system
+          const { caregiverMessage, patientMessage } = await generateDualMessages(
+            patientData, 
+            batchId, 
+            customSystemPrompt, 
+            customPatientSystemPrompt
+          );
+          const { displayPrompt, reasoning } = extractReasoning(caregiverMessage);
 
-          // Update in the database with both the full prompt and the extracted reasoning
+          // Update in the database with both messages and reasoning
           await storage.updatePatientPrompt(prompt.id, {
-            prompt: newPrompt,
+            prompt: caregiverMessage,
+            patientMessage: patientMessage,
             reasoning: reasoning
           });
           successCount++;
