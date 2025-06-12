@@ -543,7 +543,11 @@ export function registerPromptRoutes(app: Express): void {
       const systemPrompt = await storage.getSystemPrompt(batchId);
       const customSystemPrompt = systemPrompt?.prompt;
 
-      console.log(`Regenerating ${prompts.length} prompts with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
+      // Fetch the custom patient system prompt for this batch if available
+      const patientSystemPrompt = await storage.getPatientSystemPrompt(batchId);
+      const customPatientSystemPrompt = patientSystemPrompt?.prompt;
+
+      console.log(`Regenerating ${prompts.length} prompts with ${customSystemPrompt ? 'custom' : 'default'} system prompt and ${customPatientSystemPrompt ? 'custom' : 'default'} patient system prompt`);
 
       // Create a map to get unique patients by name
       const patientMap = new Map<string, typeof prompts[0]>();
