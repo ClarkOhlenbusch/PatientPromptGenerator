@@ -55,6 +55,10 @@ export interface IStorage {
   getSystemPrompt(batchId?: string): Promise<SystemPrompt | null>;
   updateSystemPrompt(prompt: string, batchId?: string): Promise<SystemPrompt>;
 
+  // Patient System Prompt methods
+  getPatientSystemPrompt(batchId?: string): Promise<PatientSystemPrompt | null>;
+  updatePatientSystemPrompt(prompt: string, batchId?: string): Promise<PatientSystemPrompt>;
+
   // Template Variables methods
   getTemplateVariables(batchId?: string): Promise<TemplateVariable[]>;
   createTemplateVariable(variable: InsertTemplateVariable): Promise<TemplateVariable>;

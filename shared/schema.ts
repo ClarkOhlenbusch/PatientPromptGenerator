@@ -53,6 +53,7 @@ export const patientPrompts = pgTable("patient_prompts", {
   isAlert: text("is_alert").default("false"),
   healthStatus: text("health_status").default("alert"),
   prompt: text("prompt").notNull(),
+  patientMessage: text("patient_message"), // Patient-directed message
   reasoning: text("reasoning"),
   template: text("template"), // Store custom template for this patient
   rawData: jsonb("raw_data"), // Store issues and alert reasons in rawData
@@ -88,7 +89,19 @@ export const systemPrompts = pgTable("system_prompts", {
   updatedAt: text("updated_at"),
 });
 
+export const patientSystemPrompts = pgTable("patient_system_prompts", {
+  id: serial("id").primaryKey(),
+  batchId: text("batch_id"),
+  prompt: text("prompt").notNull(),
+  createdAt: text("created_at").default(new Date().toISOString()),
+  updatedAt: text("updated_at"),
+});
+
 export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
+  id: true,
+});
+
+export const insertPatientSystemPromptSchema = createInsertSchema(patientSystemPrompts).omit({
   id: true,
 });
 
@@ -116,6 +129,9 @@ export const templateVariableSchema = z.object({
 
 export type SystemPrompt = typeof systemPrompts.$inferSelect;
 export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
+
+export type PatientSystemPrompt = typeof patientSystemPrompts.$inferSelect;
+export type InsertPatientSystemPrompt = z.infer<typeof insertPatientSystemPromptSchema>;
 
 export type TemplateVariable = typeof templateVariables.$inferSelect;
 export type InsertTemplateVariable = z.infer<
