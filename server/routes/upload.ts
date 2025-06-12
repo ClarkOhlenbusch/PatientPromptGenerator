@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import { nanoid } from "nanoid";
 import { processExcelFile } from "../lib/excelProcessor";
-import { generatePrompt, extractReasoning } from "../lib/openai";
+import { generatePrompt, extractReasoning, generateDualMessages } from "../lib/openai";
 import { storage } from "../storage";
 import { db } from "../db";
 import { sql as SQL } from "drizzle-orm";
@@ -135,12 +135,12 @@ export function registerUploadRoutes(app: Express): void {
               variables: patient.variables || {},
             };
 
-            console.log(`Generating prompt for patient ID: ${patientId}...`);
-            // Generate a prompt for the patient
-            const prompt = await generatePrompt(patientWithMetadata, batchId);
+            console.log(`Generating dual messages for patient ID: ${patientId}...`);
+            // Generate both caregiver and patient messages
+            const { caregiverMessage, patientMessage } = await generateDualMessages(patientWithMetadata, batchId);
 
-            // Extract reasoning from the generated prompt
-            const { displayPrompt, reasoning } = extractReasoning(prompt);
+            // Extract reasoning from the caregiver message
+            const { displayPrompt, reasoning } = extractReasoning(caregiverMessage);
 
             console.log(`Storing prompt for patient ${patientId}...`);
             console.log(`Attempting to create prompt record for patient ${patientId} in batch ${batchId}`);
@@ -151,7 +151,8 @@ export function registerUploadRoutes(app: Express): void {
               name: patient.name || "Unknown",
               age: patient.age || 0,
               condition: patient.condition || "Unknown",
-              prompt,
+              prompt: caregiverMessage,
+              patientMessage: patientMessage,
               reasoning,
               isAlert: patient.isAlert ? "true" : "false",
               healthStatus: patient.healthStatus || "healthy",

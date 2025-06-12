@@ -181,10 +181,59 @@ export async function generateDualMessages(
   // Generate caregiver message
   const caregiverMessage = await generatePrompt(patient, batchId, customSystemPrompt);
   
-  // Generate patient message
-  const patientMessage = await generatePatientMessage(patient, batchId, customPatientSystemPrompt);
+  // Generate patient message - this function is defined below
+  const patientMessage = await generatePatientMessageInternal(patient, batchId, customPatientSystemPrompt);
   
   return { caregiverMessage, patientMessage };
+}
+
+/**
+ * Internal function to generate patient messages
+ */
+async function generatePatientMessageInternal(
+  patient: PatientData,
+  batchId?: string,
+  customPatientSystemPrompt?: string,
+): Promise<string> {
+  try {
+    // Use custom patient system prompt if provided, otherwise use default
+    const systemPrompt = customPatientSystemPrompt || defaultPatientSystemPrompt;
+
+    // Generate a new patient message using OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: `Generate a personalized health message for the following patient:
+
+Patient ID: ${patient.patientId}
+Name: ${patient.name}
+Age: ${patient.age}
+Condition: ${patient.condition}
+Health Status: ${patient.healthStatus || "unknown"}
+${patient.isAlert ? "Alert: Yes" : "Alert: No"}
+${patient.issues?.length ? `Issues: ${patient.issues.join(", ")}` : ""}
+${patient.alertReasons?.length ? `Alert Reasons: ${patient.alertReasons.join(", ")}` : ""}
+${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables, null, 2)}` : ""}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const fullMessage =
+      completion.choices[0]?.message?.content || "No message generated";
+
+    return fullMessage;
+  } catch (error) {
+    console.error("Error generating patient message:", error);
+    throw error;
+  }
 }
 
 /**
@@ -297,6 +346,58 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
     return fullPrompt;
   } catch (error) {
     console.error("Error generating prompt:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generates a personalized patient message
+ */
+export async function generatePatientMessage(
+  patient: PatientData,
+  batchId?: string,
+  customPatientSystemPrompt?: string,
+): Promise<string> {
+  try {
+    // Use custom patient system prompt if provided, otherwise use default
+    const systemPrompt = customPatientSystemPrompt || defaultPatientSystemPrompt;
+
+    // Generate a new patient message using OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: `Generate a personalized health message for the following patient:
+
+Patient ID: ${patient.patientId}
+Name: ${patient.name}
+Age: ${patient.age}
+Condition: ${patient.condition}
+Health Status: ${patient.healthStatus || "unknown"}
+${patient.isAlert ? "Alert: Yes" : "Alert: No"}
+${patient.issues?.length ? `Issues: ${patient.issues.join(", ")}` : ""}
+${patient.alertReasons?.length ? `Alert Reasons: ${patient.alertReasons.join(", ")}` : ""}
+${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables, null, 2)}` : ""}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const fullMessage =
+      completion.choices[0]?.message?.content || "No message generated";
+
+    // Extract reasoning from the message
+    const { displayPrompt } = extractReasoning(fullMessage);
+
+    return fullMessage; // Return full message for consistency with generatePrompt
+  } catch (error) {
+    console.error("Error generating patient message:", error);
     throw error;
   }
 }
