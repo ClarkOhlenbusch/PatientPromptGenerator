@@ -505,4 +505,131 @@ export function registerPromptRoutes(app: Express): void {
       });
     }
   });
+
+  // ROUTE 4: Regenerate all prompts using query parameters - used by frontend
+  app.post("/api/prompts/regenerate-all", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({
+          success: false,
+          data: null,
+          error: "Authentication required"
+        });
+      }
+
+      const batchId = req.query.batchId as string;
+      if (!batchId) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          error: "batchId query parameter is required"
+        });
+      }
+
+      console.log(`Regenerating all prompts for batch ${batchId}`);
+
+      const prompts = await storage.getPatientPromptsByBatchId(batchId);
+
+      if (!prompts.length) {
+        console.log(`No prompts found for batch ${batchId}, returning empty success`);
+        return res.status(200).json({
+          success: true,
+          data: { regenerated: 0, total: 0, failedPrompts: [] },
+          message: `No prompts found for batch ${batchId}. This batch exists but has no associated prompts.`,
+        });
+      }
+
+      // Fetch the custom system prompt for this batch if available
+      const systemPrompt = await storage.getSystemPrompt(batchId);
+      const customSystemPrompt = systemPrompt?.prompt;
+
+      console.log(`Regenerating ${prompts.length} prompts with ${customSystemPrompt ? 'custom' : 'default'} system prompt`);
+
+      // Create a map to get unique patients by name
+      const patientMap = new Map<string, typeof prompts[0]>();
+
+      // Get the most recent prompt for each patient (by ID)
+      for (const prompt of prompts) {
+        const patientName = prompt.name;
+
+        if (!patientMap.has(patientName) || patientMap.get(patientName)!.id < prompt.id) {
+          patientMap.set(patientName, prompt);
+        }
+      }
+
+      // Convert the map values to an array of unique patient prompts
+      const uniquePrompts = Array.from(patientMap.values());
+      console.log(`Found ${uniquePrompts.length} unique patients to regenerate prompts for`);
+
+      let successCount = 0;
+      const failedPrompts: Array<{id: number, name: string, error: string}> = [];
+
+      for (const prompt of uniquePrompts) {
+        try {
+          console.log(`Processing prompt ${prompt.id} for patient [REDACTED] (${prompt.patientId})`);
+
+          // Get the raw patient data
+          let patientData: any = {
+            patientId: prompt.patientId,
+            name: prompt.name,
+            age: prompt.age,
+            condition: prompt.condition,
+            healthStatus: prompt.healthStatus || "alert",
+            isAlert: prompt.isAlert === "true"
+          };
+
+          // Extract raw data if available
+          if (prompt.rawData) {
+            const parsedData = typeof prompt.rawData === "string"
+              ? JSON.parse(prompt.rawData)
+              : prompt.rawData;
+
+            if (parsedData) {
+              patientData = {
+                ...patientData,
+                ...parsedData
+              };
+            }
+          }
+
+          // Generate new prompt
+          const newPrompt = await generatePrompt(patientData, batchId, customSystemPrompt);
+          const { displayPrompt, reasoning } = extractReasoning(newPrompt);
+
+          // Update in the database with both the full prompt and the extracted reasoning
+          await storage.updatePatientPrompt(prompt.id, {
+            prompt: newPrompt,
+            reasoning: reasoning
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Error regenerating prompt for patient [REDACTED] (ID: ${prompt.patientId}):`, err);
+          failedPrompts.push({
+            id: prompt.id,
+            name: prompt.name,
+            error: err instanceof Error ? err.message : String(err)
+          });
+        }
+      }
+
+      console.log(`Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `, ${failedPrompts.length} failed` : ''}`);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          regenerated: successCount,
+          total: uniquePrompts.length,
+          failedPrompts: failedPrompts.length > 0 ? failedPrompts : []
+        },
+        message: `Successfully regenerated ${successCount} of ${uniquePrompts.length} prompts${failedPrompts.length > 0 ? `. ${failedPrompts.length} failed.` : '.'}`
+      });
+    } catch (err) {
+      console.error("Error regenerating prompts:", err);
+      res.status(500).json({
+        success: false,
+        data: null,
+        error: `Error regenerating prompts: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
 }
