@@ -201,7 +201,7 @@ async function generatePatientMessageInternal(
 
     // Generate a new patient message using OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
