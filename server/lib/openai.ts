@@ -257,7 +257,7 @@ export async function generatePrompt(
 
     // Generate a new prompt using OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-nano",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",

@@ -564,7 +564,7 @@ export default function AIPoweredTriage() {
   // Add CSV export function
   const handleExportCSV = () => {
     // Create CSV header
-    const headers = ['Patient Name', 'Age', 'Condition', 'Status', 'Generated Prompt', 'Reasoning'];
+    const headers = ['Patient Name', 'Age', 'Condition', 'Status', 'Generated Prompt', 'Patient Message', 'Reasoning'];
 
     // Convert prompts to CSV rows
     const csvRows = [
@@ -582,6 +582,7 @@ export default function AIPoweredTriage() {
           escapeCsvField(prompt.condition),
           escapeCsvField(prompt.status),
           escapeCsvField(prompt.promptText),
+          escapeCsvField((prompt as any).patientMessage || 'No patient message generated'),
           escapeCsvField(prompt.reasoning || 'No reasoning provided')
         ].join(',');
       })
@@ -656,7 +657,8 @@ export default function AIPoweredTriage() {
                 <TableHead>Patient Name</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead>Condition</TableHead>
-                <TableHead className="w-[30%]">Generated Triage Messages</TableHead>
+                <TableHead className="w-[25%]">Generated Triage Messages</TableHead>
+                <TableHead className="w-[25%]">Patient Messages</TableHead>
                 <TableHead className="w-[180px]">Phone Number</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -664,7 +666,7 @@ export default function AIPoweredTriage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     <div className="flex justify-center items-center gap-2">
                       <RotateCw className="w-6 h-6 animate-spin text-gray-400" />
                       <span className="text-gray-500">Loading patient prompts...</span>
@@ -673,19 +675,19 @@ export default function AIPoweredTriage() {
                 </TableRow>
               ) : batchError || promptsError ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-red-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-red-500">
                     Error loading data. Please try refreshing the page.
                   </TableCell>
                 </TableRow>
               ) : !effectiveBatchId ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     No batch found. Please upload a patient data file first.
                   </TableCell>
                 </TableRow>
               ) : !processedPrompts || processedPrompts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     {effectiveBatchId ? 
                       "No prompts found in the current batch. Try uploading patient data or generating prompts." :
                       "No prompts available."
@@ -694,7 +696,7 @@ export default function AIPoweredTriage() {
                 </TableRow>
               ) : filteredPrompts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     No prompts match your search criteria.
                   </TableCell>
                 </TableRow>
@@ -714,6 +716,11 @@ export default function AIPoweredTriage() {
                     <TableCell className="max-w-md">
                       <div className="truncate relative">
                         {prompt.promptText}
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-md">
+                      <div className="truncate relative">
+                        {(prompt as any).patientMessage || 'No patient message generated'}
                       </div>
                     </TableCell>
                     <TableCell>
