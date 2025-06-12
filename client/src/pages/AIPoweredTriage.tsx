@@ -115,6 +115,7 @@ export default function AIPoweredTriage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPrompt, setSelectedPrompt] = useState<PatientPrompt | null>(null);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [patientMessageDialogOpen, setPatientMessageDialogOpen] = useState(false);
   const [reasoningDialogOpen, setReasoningDialogOpen] = useState(false);
   const [processedPrompts, setProcessedPrompts] = useState<PatientPrompt[]>([]);
   const [phoneNumbers, setPhoneNumbers] = useState<Record<number, string>>({});
@@ -508,6 +509,12 @@ export default function AIPoweredTriage() {
     setReasoningDialogOpen(true);
   };
 
+  // Handle opening the patient message dialog
+  const handleViewPatientMessage = (prompt: PatientPrompt) => {
+    setSelectedPrompt(prompt);
+    setPatientMessageDialogOpen(true);
+  };
+
   // Handle phone number changes
   const handlePhoneNumberChange = (patientId: number, phoneNumber: string) => {
     setPhoneNumbers(prev => ({
@@ -747,13 +754,24 @@ export default function AIPoweredTriage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleViewFullPrompt(prompt)}
+                          title="View Generated Triage Message"
                         >
                           <Maximize2 className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => handleViewPatientMessage(prompt)}
+                          title="View Patient Message"
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleViewReasoning(prompt)}
+                          title="View Reasoning"
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -851,6 +869,38 @@ export default function AIPoweredTriage() {
               </Button>
             )}
             </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Patient Message Dialog */}
+      <Dialog open={patientMessageDialogOpen} onOpenChange={setPatientMessageDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedPrompt?.patientName} - Patient Message
+            </DialogTitle>
+            <DialogDescription>
+              Age: {selectedPrompt?.age} - Condition: {selectedPrompt?.condition}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 bg-blue-50 p-4 rounded-md prose prose-sm max-w-none">
+            <ReactMarkdown>{(selectedPrompt as any)?.patientMessage || "No patient message generated"}</ReactMarkdown>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setPatientMessageDialogOpen(false)}
+            >
+              Close
+            </Button>
+            <Button 
+              onClick={() => selectedPrompt && handleCopyPrompt((selectedPrompt as any)?.patientMessage || "")}
+            >
+              <Copy className="w-4 h-4 mr-2" /> Copy Text
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
