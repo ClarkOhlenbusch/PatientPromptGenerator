@@ -51,6 +51,7 @@ The prompt should be detailed but concise, focusing on the most important aspect
 
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
+  const [patientPrompt, setPatientPrompt] = useState<string>("");
   const [vapiConfig, setVapiConfig] = useState({
     firstMessage:
       "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
@@ -62,6 +63,21 @@ export default function PromptEditingSandbox() {
   });
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const { toast } = useToast();
+
+  // Default patient prompt
+  const INITIAL_DEFAULT_PATIENT_PROMPT = `You are generating a personalized health message directly for a patient. This message should be warm, reassuring, and easy to understand for the patient themselves.
+
+Your task is to:
+1. Create a friendly, encouraging message that speaks directly to the patient
+2. Use simple, non-medical language that patients can easily understand
+3. Focus on positive health actions they can take
+4. Keep the message supportive and empowering
+5. Include specific, actionable steps they can follow
+6. Address their condition with empathy and understanding
+
+The message should be around 100-150 words and written in a warm, caring tone that helps patients feel supported in their health journey.
+
+Important: This message is FOR the patient, not about them. Write as if you're speaking directly to them.`;
 
   // Query to get the current default system prompt initially
   const { data: defaultSystemPrompt, isLoading: isPromptLoading } = useQuery({
@@ -120,6 +136,26 @@ export default function PromptEditingSandbox() {
     },
   });
 
+  // Query to get the current patient system prompt
+  const { data: defaultPatientPrompt, isLoading: isPatientPromptLoading } = useQuery({
+    queryKey: ["/api/patient-system-prompt"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/patient-system-prompt");
+        const data = await res.json();
+        return data.prompt || INITIAL_DEFAULT_PATIENT_PROMPT;
+      } catch (error) {
+        console.error("Failed to fetch patient system prompt:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load patient system prompt, using default.",
+          variant: "destructive",
+        });
+        return INITIAL_DEFAULT_PATIENT_PROMPT;
+      }
+    },
+  });
+
   // Update system prompt mutation (still needed for saving)
   const updateSystemPromptMutation = useMutation({
     mutationFn: async (prompt: string) => {
@@ -138,6 +174,29 @@ export default function PromptEditingSandbox() {
       toast({
         title: "Error",
         description: `Failed to update system prompt: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update patient system prompt mutation
+  const updatePatientPromptMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      const res = await apiRequest("POST", "/api/patient-system-prompt", { prompt });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description:
+          "Patient system prompt updated successfully! Your changes will be applied to all new patient messages.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/patient-system-prompt"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update patient system prompt: ${error.message}`,
         variant: "destructive",
       });
     },
@@ -303,6 +362,13 @@ export default function PromptEditingSandbox() {
   }, [defaultSystemPrompt]);
 
   useEffect(() => {
+    // Initialize the patient prompt editor with the fetched or default prompt
+    if (defaultPatientPrompt) {
+      setPatientPrompt(defaultPatientPrompt);
+    }
+  }, [defaultPatientPrompt]);
+
+  useEffect(() => {
     // Initialize Vapi config when agent data is loaded
     if (vapiAgentConfig && vapiAgentConfig.success) {
       const agent = vapiAgentConfig.data;
@@ -329,6 +395,19 @@ export default function PromptEditingSandbox() {
       description: "Editor reset to default prompt. Save to apply.", // Clarify that save is needed
     });
     // No API call needed here anymore
+  };
+
+  const handleSavePatientPrompt = () => {
+    updatePatientPromptMutation.mutate(patientPrompt);
+  };
+
+  const handleResetPatientToDefault = () => {
+    // Simply set the local state to the hardcoded default patient prompt
+    setPatientPrompt(INITIAL_DEFAULT_PATIENT_PROMPT);
+    toast({
+      title: "Reset",
+      description: "Patient prompt reset to default. Save to apply.",
+    });
   };
 
   const handleRegeneratePrompts = () => {
@@ -552,6 +631,55 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                     {updateSystemPromptMutation.isPending
                       ? "Saving your custom prompt..."
                       : "Regenerating all patient reports..."}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Patient Message Prompts</CardTitle>
+              <CardDescription>
+                Edit the AI prompt that generates direct patient messages. These are separate from caregiver prompts and speak directly to patients.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Loading patient message prompt..."
+                  value={patientPrompt}
+                  onChange={(e) => setPatientPrompt(e.target.value)}
+                  className="min-h-[400px] font-mono text-sm"
+                  disabled={isPatientPromptLoading}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSavePatientPrompt}
+                  disabled={
+                    updatePatientPromptMutation.isPending || isPatientPromptLoading
+                  }
+                  className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Patient Prompt
+                </Button>
+                <Button
+                  onClick={handleResetPatientToDefault}
+                  disabled={isPatientPromptLoading}
+                  variant="outline"
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Reset to Default
+                </Button>
+              </div>
+
+              {updatePatientPromptMutation.isPending && (
+                <Alert>
+                  <AlertDescription>
+                    Saving your patient message prompt...
                   </AlertDescription>
                 </Alert>
               )}
