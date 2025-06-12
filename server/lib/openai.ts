@@ -137,14 +137,54 @@ These messages that you are creating should be 150 words or less not including t
 
 The prompt should be detailed but concise, focusing on the most important aspects of the patient's care.`;
 
+// Default patient system prompt for patient-directed messages
+let defaultPatientSystemPrompt = `You are a healthcare assistant that generates personalized health messages for patients. Your task is to create warm, encouraging messages that patients can understand directly. These messages should be 150 words or less and written in simple, compassionate language.
+
+1. Address the patient directly using their first name
+2. Explain their health situation in easy-to-understand terms
+3. Provide clear, actionable health recommendations they can follow
+4. Use encouraging and supportive tone
+5. Focus on empowerment and self-care
+6. Avoid medical jargon - use plain language
+7. Include specific steps they can take to improve their health
+8. IMPORTANT: End your response with a "Reasoning" section that explains why these recommendations will help them. Format it as "**Reasoning:** [your explanation]".
+
+The message should feel personal, caring, and motivating while being medically appropriate.`;
+
 // Set custom system prompt for all future generations
 export function setDefaultSystemPrompt(prompt: string) {
   defaultSystemPrompt = prompt;
 }
 
+export function setDefaultPatientSystemPrompt(prompt: string) {
+  defaultPatientSystemPrompt = prompt;
+}
+
 // Get current system prompt
 export function getDefaultSystemPrompt(): string {
   return defaultSystemPrompt;
+}
+
+export function getDefaultPatientSystemPrompt(): string {
+  return defaultPatientSystemPrompt;
+}
+
+/**
+ * Generates both caregiver and patient messages for a patient
+ */
+export async function generateDualMessages(
+  patient: PatientData,
+  batchId?: string,
+  customSystemPrompt?: string,
+  customPatientSystemPrompt?: string,
+): Promise<{ caregiverMessage: string; patientMessage: string }> {
+  // Generate caregiver message
+  const caregiverMessage = await generatePrompt(patient, batchId, customSystemPrompt);
+  
+  // Generate patient message
+  const patientMessage = await generatePatientMessage(patient, batchId, customPatientSystemPrompt);
+  
+  return { caregiverMessage, patientMessage };
 }
 
 /**

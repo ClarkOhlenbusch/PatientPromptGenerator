@@ -3,6 +3,7 @@ import {
   patientBatches,
   patientPrompts,
   systemPrompts,
+  patientSystemPrompts,
   templateVariables,
   systemSettings,
   callHistory,
@@ -14,6 +15,8 @@ import {
   type InsertPatientPrompt,
   type SystemPrompt,
   type InsertSystemPrompt,
+  type PatientSystemPrompt,
+  type InsertPatientSystemPrompt,
   type TemplateVariable,
   type InsertTemplateVariable,
   type SystemSettings,
@@ -434,6 +437,59 @@ Your Healthcare Provider`;
     }
 
     return sanitized;
+  }
+
+  // Patient System Prompt methods
+  async getPatientSystemPrompt(batchId?: string): Promise<PatientSystemPrompt | null> {
+    try {
+      let prompt: PatientSystemPrompt | undefined;
+
+      // If batch ID is provided, try to get the batch-specific prompt first
+      if (batchId) {
+        [prompt] = await db.select()
+          .from(patientSystemPrompts)
+          .where(eq(patientSystemPrompts.batchId, batchId))
+          .orderBy(desc(patientSystemPrompts.createdAt))
+          .limit(1);
+      }
+
+      // If no batch-specific prompt found or no batch ID provided, get global prompt
+      if (!prompt) {
+        [prompt] = await db.select()
+          .from(patientSystemPrompts)
+          .where(sql`${patientSystemPrompts.batchId} IS NULL`)
+          .orderBy(desc(patientSystemPrompts.createdAt))
+          .limit(1);
+      }
+
+      return prompt || null;
+    } catch (error) {
+      console.error("Error getting patient system prompt:", error);
+      return null;
+    }
+  }
+
+  async updatePatientSystemPrompt(promptText: string, batchId?: string): Promise<PatientSystemPrompt> {
+    try {
+      // Sanitize the prompt
+      const sanitizedPrompt = this.sanitizeSystemPrompt(promptText);
+
+      // Always create a new prompt entry instead of updating existing ones
+      const [newPrompt] = await db.insert(patientSystemPrompts)
+        .values({
+          batchId: batchId || null,
+          prompt: sanitizedPrompt,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+        .returning();
+
+      console.log(`Created new patient system prompt (ID: ${newPrompt.id}, batchId: ${batchId || 'global'})`);
+      return newPrompt;
+    } catch (error) {
+      console.error("Error updating patient system prompt:", error);
+      throw error;
+    }
   }
 
   // Template Variables methods
