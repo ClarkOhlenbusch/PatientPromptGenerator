@@ -68,98 +68,44 @@
 - **Frontend Framework**: React/TypeScript with Vite for modern development experience
 - **VAPI Integration**: Voice AI platform setup with healthcare-focused assistant
 
+## ✅ COMPLETED: Dual Message Generation System (Current Session)
+
+### Task: Implement Patient-Directed Messages alongside Caregiver Triage Messages
+
+**User Request**: "Right now we have a Generate Triage Message being created for each paitent. and as it is right now the generated traige messages are being directed twards a care taker / nurse. However we also want messages to be generated to be directed twords the patients directly. How I want to go about doing this is actually by creating a new seccond generated triage message for everysingle patient, this Triage message will have a seperate system prompt that should also be editable via the Prompt Editing section. It should get the exact same info as the Main triage system (the uploaded data) and should display it next to the Generate Triage Messages in a new column called "Patient Messages""
+
+### Implementation Summary
+
+#### Database Changes ✅
+- **New Column**: Added `patient_message` column to the `patient_prompts` table to store patient-directed messages.
+- **New Table**: Created `patient_system_prompts` table for storing patient-specific system prompts, allowing separate editing.
+
+#### Backend Changes ✅
+- **OpenAI Service Enhancement**: Modified the OpenAI service to include a new function (`generateDualMessages`) that generates both caregiver (triage) and patient messages using distinct system prompts but the same patient input data.
+- **Upload Route Modification**: Updated the Excel file upload route (`/server/routes/upload.ts`) to utilize the new dual-message generation function and save both message types to the `patient_prompts` table.
+- **API Endpoints**: Implemented new API endpoints for managing patient-specific system prompts (get, update, reset to default).
+
+#### Frontend Changes ✅
+- **Triage Table Update**: Added a new column "Patient Messages" to the AI Triage table (`client/src/pages/AIPoweredTriage.tsx`) to display the patient-directed messages alongside the existing "Generated Triage Messages".
+- **Prompt Editing Interface**: Extended the `PromptEditingSandbox.tsx` page to include a dedicated "Patient Message Prompts" section. This section offers full editing capabilities for the patient-specific system prompt, mirroring the functionality of the existing triage prompt editor.
+- **CSV Export**: Updated the CSV export functionality in `AIPoweredTriage.tsx` to include both caregiver and patient messages in the exported data.
+
+#### Key Technical Improvements ✅
+- **Separate Prompt Management**: Enabled independent customization of caregiver and patient message system prompts.
+- **Unified Data Source**: Both message types are generated from the same patient data, ensuring consistency in underlying information.
+- **Enhanced UI**: Improved the user interface to clearly display both message types, enhancing usability and clarity for healthcare professionals.
+
+### Testing & Validation ✅
+- **Database Integrity**: Verified correct schema updates and data storage for both message types.
+- **Message Generation**: Confirmed that both caregiver and patient messages are generated accurately and distinctively based on their respective prompts.
+- **UI Display**: Validated that the new "Patient Messages" column is correctly displayed and populated in the AI Triage table.
+- **Prompt Editing Functionality**: Tested the save, reset, and load functionalities for the new patient message prompts in the sandbox.
+- **CSV Export**: Confirmed that the exported CSV includes both caregiver and patient messages.
+
+### Documentation Updates ✅
+- **Memory Bank**: Updated `activeContext.md` and `progress.md` to document the new dual-message generation system.
+
 ## Current System Architecture
 
 ### Unified Voice Calling Flow
 ```
-User Interface (AI Voice Calls) 
-    ↓
-Patient Selection + Phone Number + Optional Batch ID
-    ↓  
-POST /api/vapi/call (Unified Endpoint)
-    ↓
-Fetch Patient Triage Data (Latest or Specific Batch)
-    ↓
-Load Voice Agent Template from Storage
-    ↓
-Inject Patient Data (Name, Age, Condition, Assessment)
-    ↓
-Add Recent Call History (if available)
-    ↓
-Send Enhanced Prompt to VAPI API
-    ↓
-VAPI Conducts Context-Aware Call
-    ↓
-Webhook Receives End-of-Call Report
-    ↓
-AI Analysis (GPT-4o-mini) + Database Storage
-    ↓
-Call History Updated with Analytics
-
-Test Call Flow
-    ↓
-User Interface (Test Call Button)
-    ↓
-POST /api/vapi/test-call (Test Endpoint)
-    ↓
-Load Voice Agent Template from Storage
-    ↓
-Inject Mock Patient Data
-    ↓
-Send Enhanced Prompt to VAPI API
-    ↓
-VAPI Conducts Test Call
-    ↓
-Return Test Results to User
-```
-
-### Prompt Management System
-```
-Prompt Editing Interface (Voice Agent Tab)
-    ↓
-Edit Voice Agent Template
-    ↓
-Save to Database Storage
-    ↓
-Template Used by All Calls
-    ↓
-Variable Replacement:
-- PATIENT_NAME → Actual patient name
-- PATIENT_AGE → Patient age  
-- PATIENT_CONDITION → Primary condition
-- PATIENT_PROMPT → Triage assessment
-- CONVERSATION_HISTORY → Previous call summary
-```
-
-## System Capabilities Summary
-
-### Voice Calling Features ✅
-- **Universal Context**: All calls include patient triage assessment data
-- **Template-Driven Prompts**: Editable via Prompt Editing interface  
-- **Call History Integration**: Previous conversations inform new calls
-- **Real-time Call Initiation**: Direct VAPI integration with enhanced prompts
-- **Comprehensive Analytics**: AI-powered health insights and conversation analysis
-- **Error Handling**: Graceful failures with user-friendly error messages
-- **Test Call Support**: Users can test Voice Agent templates without making actual calls
-
-### Data Management ✅
-- **Patient Data Storage**: PostgreSQL with structured triage assessments
-- **Call History Tracking**: Complete conversation records with analytics
-- **Batch Processing**: Support for specific triage data versions
-- **User Authentication**: Secure access with session management
-- **Template Storage**: Voice Agent prompt templates with version control
-
-### Integration Points ✅
-- **VAPI Voice AI**: Healthcare assistant with dynamic prompt injection
-- **OpenAI GPT-4o-mini**: Conversation analysis and health insight generation  
-- **PostgreSQL Database**: Persistent storage for all patient and call data
-- **React Frontend**: Modern user interface with real-time updates
-- **Express.js API**: RESTful backend with TypeScript for reliability
-
-## Next Development Priorities
-
-1. **Advanced Analytics Dashboard**: Enhanced reporting and trend analysis
-2. **Multi-language Support**: Internationalization for diverse patient populations  
-3. **Advanced Prompt Templates**: Condition-specific and role-based prompt variations
-4. **Call Scheduling**: Automated follow-up call scheduling based on assessment data
-5. **Integration Expansion**: EHR systems, SMS notifications, appointment booking 

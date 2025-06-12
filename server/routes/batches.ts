@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
-import { getDefaultSystemPrompt, setDefaultSystemPrompt } from "../lib/openai";
+import { getDefaultSystemPrompt, setDefaultSystemPrompt, getDefaultPatientSystemPrompt, setDefaultPatientSystemPrompt } from "../lib/openai";
 
 export function registerBatchRoutes(app: Express): void {
   // Get all patient batches
@@ -195,6 +195,93 @@ export function registerBatchRoutes(app: Express): void {
           success: false,
           message: `Error resetting system prompt: ${err instanceof Error ? err.message : String(err)}`,
         });
+    }
+  });
+
+  // Get patient system prompt - similar to system prompt but for patient messages
+  app.get("/api/patient-system-prompt", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, data: null, error: "Authentication required" });
+      }
+
+      // Get the in-memory prompt directly from openai.ts
+      const inMemoryPrompt = getDefaultPatientSystemPrompt();
+
+      // Also get the database-stored prompt if it exists
+      const patientSystemPrompt = await storage.getPatientSystemPrompt();
+      const dbPrompt = patientSystemPrompt ? patientSystemPrompt.prompt : null;
+
+      console.log("Returning patient system prompt:");
+      console.log(`- In-memory prompt: ${inMemoryPrompt.substring(0, 50)}...`);
+      console.log(`- Database prompt: ${dbPrompt ? dbPrompt.substring(0, 50) + '...' : 'not found'}`);
+
+      // If the database prompt exists and differs from the in-memory one,
+      // return the database version as it's likely more up-to-date
+      const promptToUse = dbPrompt || inMemoryPrompt;
+
+      return res.status(200).json({
+        prompt: promptToUse,
+        inMemoryPrompt: inMemoryPrompt,
+        dbPrompt: dbPrompt,
+        source: dbPrompt ? 'database' : 'in-memory'
+      });
+    } catch (err) {
+      console.error("Error getting patient system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        data: null,
+        error: `Error getting patient system prompt: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Update patient system prompt
+  app.post("/api/patient-system-prompt", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { prompt } = req.body;
+
+      if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt is required and must be a string",
+        });
+      }
+
+      if (prompt.length > 10000) {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt is too long (maximum 10,000 characters)",
+        });
+      }
+
+      // Save to database
+      const updatedPrompt = await storage.updatePatientSystemPrompt(prompt);
+
+      // Also update the in-memory version that's used directly by the OpenAI module
+      setDefaultPatientSystemPrompt(prompt);
+
+      console.log("Patient system prompt updated successfully");
+
+      return res.status(200).json({
+        success: true,
+        message: "Patient system prompt updated successfully",
+        patientSystemPrompt: updatedPrompt,
+      });
+    } catch (err) {
+      console.error("Error updating patient system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating patient system prompt: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   });
 }

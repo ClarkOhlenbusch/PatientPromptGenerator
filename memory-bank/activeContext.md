@@ -181,6 +181,7 @@ Finalizing the AI companion calls functionality by leveraging Vapi AI Voice agen
 
 ### Technical Decisions
 - **Variable-Based Prompts**: Using Vapi's variable system for dynamic patient information
+- **Dual Message Generation**: Implemented separate AI-generated messages for caregivers and patients using distinct system prompts.
 - **Webhook Reliability**: Implementing idempotent webhook processing for call completion
 - **AI Summarization**: OpenAI GPT-4o-mini for cost-effective call analysis
 - **Phone Number Formatting**: E.164 format standardization for international compatibility
@@ -190,6 +191,7 @@ Finalizing the AI companion calls functionality by leveraging Vapi AI Voice agen
 - **Error Messaging**: Clear, actionable error messages for call failures
 - **Real-time Updates**: React Query for immediate UI updates after call initiation
 - **Call History Display**: Comprehensive but scannable call record presentation
+- **Patient Message Visibility**: New dedicated column in UI for patient-directed messages.
 
 ### Integration Considerations
 - **Daily Call Limits**: Managing Vapi free tier limitations gracefully
@@ -228,6 +230,12 @@ const callHistory = await storage.createCallHistory({
   healthConcerns: string[],
   followUpItems: string[]
 });
+// Storing patient messages
+const patientPrompt = await storage.createPatientPrompt({
+  // ... patient data ...
+  prompt: caregiverMessage,
+  patientMessage: patientMessage // New field
+});
 ```
 
 ### Frontend State Management
@@ -243,6 +251,9 @@ const initiateCallMutation = useMutation({
   mutationFn: (callData) => apiRequest("POST", "/api/vapi/companion-call", callData),
   onSuccess: () => queryClient.invalidateQueries(["/api/call-history"])
 });
+
+// State for patient message prompts
+const [patientPrompt, setPatientPrompt] = useState<string>("");
 ```
 
 ## Learnings & Project Insights
