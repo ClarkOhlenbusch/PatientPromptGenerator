@@ -158,6 +158,7 @@ export class DatabaseStorage implements IStorage {
       age: insertPrompt.age,
       condition: insertPrompt.condition,
       prompt: insertPrompt.prompt,
+      patientMessage: insertPrompt.patientMessage || null, // Add the missing patientMessage field
       reasoning: insertPrompt.reasoning || null,
       isAlert: insertPrompt.isAlert ? "true" : "false",
       healthStatus: insertPrompt.healthStatus || "alert",
