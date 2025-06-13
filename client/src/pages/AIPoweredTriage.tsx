@@ -130,7 +130,7 @@ export default function AIPoweredTriage() {
       return data.success && data.data ? data.data : null;
     },
     retry: 2,
-    staleTime: 30000 // Cache for 30 seconds
+    staleTime: 0 // Always fetch the latest batch
   });
 
   // Get all batches - only run if latest batch doesn't have prompts
@@ -143,7 +143,7 @@ export default function AIPoweredTriage() {
       return data.success && data.data ? data.data : [];
     },
     retry: 2,
-    staleTime: 30000 // Cache for 30 seconds
+    staleTime: 0 // Always fetch the latest list of batches
   });
 
   // Check if latest batch has prompts
@@ -164,7 +164,7 @@ export default function AIPoweredTriage() {
     },
     enabled: !!latestBatch?.batchId,
     retry: 1,
-    staleTime: 30000
+    staleTime: 0
   });
 
   // Find batch with prompts (only if latest doesn't have prompts)
@@ -196,7 +196,7 @@ export default function AIPoweredTriage() {
       !isCheckingLatestBatch
     ),
     retry: 1,
-    staleTime: 30000
+    staleTime: 0
   });
 
   // Determine the effective batch ID using a more predictable approach
