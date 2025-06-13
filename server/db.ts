@@ -7,7 +7,6 @@ import * as schema from "@shared/schema";
 neonConfig.webSocketConstructor = ws;
 
 // Import initialization function
-import { initializeDatabase } from './lib/initDb';
 
 // Declare db with the specific NeonDatabase type
 let db: NeonDatabase<typeof schema>;
@@ -30,13 +29,6 @@ try {
   db = drizzle(pool, { schema });
   console.log("Neon database client initialized successfully");
   
-  // Initialize database tables (runs asynchronously)
-  initializeDatabase().then(() => {
-    console.log("Database tables initialized successfully");
-  }).catch(err => {
-    console.error("Failed to initialize database tables:", err);
-    // Optionally, decide if startup should fail here
-  });
 
 } catch (err) {
   console.error("Failed to initialize database client:", err);

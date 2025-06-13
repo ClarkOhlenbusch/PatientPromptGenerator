@@ -1,5 +1,6 @@
 
-import { db } from '../db';
+import type { NeonDatabase } from 'drizzle-orm/neon-serverless';
+import * as schema from '@shared/schema';
 import { users, patientBatches, patientPrompts } from '@shared/schema';
 import { sql } from 'drizzle-orm';
 import { scrypt, randomBytes } from 'crypto';
@@ -19,7 +20,7 @@ async function hashPassword(password: string): Promise<string> {
 /**
  * Initialize database tables and add a test user if needed
  */
-export async function initializeDatabase() {
+export async function initializeDatabase(db: NeonDatabase<typeof schema>) {
   try {
     console.log('Database client initialized successfully');
     
