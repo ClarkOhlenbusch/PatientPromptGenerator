@@ -258,6 +258,24 @@ export default function AIPoweredTriage() {
     staleTime: 0 // Cache for 0 seconds (immediately stale)
   });
 
+  // Poll for new prompts until they appear
+  useEffect(() => {
+    if (!effectiveBatchId) return;
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    if (!prompts || prompts.length === 0) {
+      interval = setInterval(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
+        queryClient.refetchQueries({ queryKey: ["/api/patient-prompts", effectiveBatchId] });
+      }, 3000); // check every 3 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [effectiveBatchId, prompts]);
+
   // Handle error state with useEffect
   useEffect(() => {
     if (promptsError) {
