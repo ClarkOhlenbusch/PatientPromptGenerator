@@ -52,6 +52,7 @@ The prompt should be detailed but concise, focusing on the most important aspect
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
   const [patientPrompt, setPatientPrompt] = useState<string>("");
+  const [trendReportPrompt, setTrendReportPrompt] = useState<string>("");
   const [vapiConfig, setVapiConfig] = useState({
     firstMessage:
       "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
@@ -434,6 +435,13 @@ Condition: \${patient.condition}
   }, [defaultPatientPrompt]);
 
   useEffect(() => {
+    // Initialize the trend report prompt editor with the fetched or default prompt
+    if (defaultTrendReportPrompt) {
+      setTrendReportPrompt(defaultTrendReportPrompt);
+    }
+  }, [defaultTrendReportPrompt]);
+
+  useEffect(() => {
     // Initialize Vapi config when agent data is loaded
     if (vapiAgentConfig && vapiAgentConfig.success) {
       const agent = vapiAgentConfig.data;
@@ -472,6 +480,18 @@ Condition: \${patient.condition}
     toast({
       title: "Reset",
       description: "Patient prompt reset to default. Save to apply.",
+    });
+  };
+
+  const handleSaveTrendReportPrompt = () => {
+    updateTrendReportPromptMutation.mutate(trendReportPrompt);
+  };
+
+  const handleResetTrendReportToDefault = () => {
+    setTrendReportPrompt(INITIAL_DEFAULT_TREND_REPORT_PROMPT);
+    toast({
+      title: "Reset",
+      description: "Trend report prompt reset to default. Save to apply.",
     });
   };
 
@@ -625,7 +645,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       </div>
 
       <Tabs defaultValue="triage" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="triage" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
             Triage Prompts
@@ -633,6 +653,10 @@ IMPORTANT: You have access to their latest health data and personalized care rec
           <TabsTrigger value="voice" className="flex items-center gap-2">
             <Volume2 className="w-4 h-4" />
             Companion Prompts
+          </TabsTrigger>
+          <TabsTrigger value="trends" className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" />
+            Trend Reports
           </TabsTrigger>
         </TabsList>
 
