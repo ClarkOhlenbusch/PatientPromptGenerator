@@ -97,11 +97,23 @@ export const patientSystemPrompts = pgTable("patient_system_prompts", {
   updatedAt: text("updated_at"),
 });
 
+export const trendSystemPrompts = pgTable("trend_system_prompts", {
+  id: serial("id").primaryKey(),
+  batchId: text("batch_id"),
+  prompt: text("prompt").notNull(),
+  createdAt: text("created_at").default(new Date().toISOString()),
+  updatedAt: text("updated_at"),
+});
+
 export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
   id: true,
 });
 
 export const insertPatientSystemPromptSchema = createInsertSchema(patientSystemPrompts).omit({
+  id: true,
+});
+
+export const insertTrendSystemPromptSchema = createInsertSchema(trendSystemPrompts).omit({
   id: true,
 });
 
@@ -132,6 +144,9 @@ export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
 
 export type PatientSystemPrompt = typeof patientSystemPrompts.$inferSelect;
 export type InsertPatientSystemPrompt = z.infer<typeof insertPatientSystemPromptSchema>;
+
+export type TrendSystemPrompt = typeof trendSystemPrompts.$inferSelect;
+export type InsertTrendSystemPrompt = z.infer<typeof insertTrendSystemPromptSchema>;
 
 export type TemplateVariable = typeof templateVariables.$inferSelect;
 export type InsertTemplateVariable = z.infer<

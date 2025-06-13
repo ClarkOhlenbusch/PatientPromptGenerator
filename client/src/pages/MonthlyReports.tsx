@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   FileUp, 
   Loader2, 
@@ -24,6 +25,7 @@ interface Patient extends PatientData {
 
 export default function MonthlyReports() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>("all");
+  const [trendPrompt, setTrendPrompt] = useState<string>("");
   const { toast } = useToast();
   
   // Query to get the latest batch
@@ -143,22 +145,15 @@ export default function MonthlyReports() {
   
   // Mutation for generating a PDF report from the latest upload data
   const generateReportMutation = useMutation({
-    mutationFn: async (patientId?: string) => {
-      // If patientId is provided, generate report for just that patient
-      const endpoint = patientId 
-        ? `/api/monthly-report?patientId=${patientId}`
-        : `/api/monthly-report`;
-      
-      // For direct PDF response, we need to open in a new tab/window
-      window.open(endpoint, '_blank');
-      
-      // Return success since we're handling the download through window.open
-      return { success: true };
+    mutationFn: async (patientId: string) => {
+      const res = await apiRequest('POST', '/api/trend-report-prompt', { patientId });
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      setTrendPrompt(data.prompt || "");
       toast({
         title: "Success",
-        description: "Trend report generated successfully. If your PDF doesn't open automatically, please check your popup blocker settings.",
+        description: "Trend report generated successfully!",
       });
     },
     onError: (error: Error) => {
@@ -175,8 +170,11 @@ export default function MonthlyReports() {
     if (selectedPatientId && selectedPatientId !== "all") {
       generateReportMutation.mutate(selectedPatientId);
     } else {
-      // Pass undefined explicitly to use the default value
-      generateReportMutation.mutate(undefined);
+      toast({
+        title: "Select a Patient",
+        description: "Please choose a patient to generate a trend report.",
+        variant: "destructive"
+      });
     }
   };
   
@@ -261,8 +259,8 @@ export default function MonthlyReports() {
               </div>
             </div>
             
-            <Button 
-              className="w-full" 
+            <Button
+              className="w-full"
               size="lg"
               onClick={handleGenerateReport}
               disabled={generateReportMutation.isPending}
@@ -279,6 +277,13 @@ export default function MonthlyReports() {
                 </>
               )}
             </Button>
+
+            {trendPrompt && (
+              <div className="mt-4 space-y-2">
+                <label className="text-sm font-medium">Generated Trend Report</label>
+                <Textarea value={trendPrompt} readOnly className="min-h-[200px]" />
+              </div>
+            )}
             
             <p className="text-xs text-center text-muted-foreground">
               Reports use only your most recently uploaded data.

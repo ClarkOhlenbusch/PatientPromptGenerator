@@ -1,5 +1,6 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
+import { generateTrendReportPrompt, getDefaultTrendSystemPrompt } from "../lib/openai";
 import ExcelJS from "exceljs";
 
 export function registerReportRoutes(app: Express): void {
@@ -44,6 +45,46 @@ export function registerReportRoutes(app: Express): void {
       return res.status(500).json({
         success: false,
         message: `Error generating trend report: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Generate trend report prompt for a patient
+  app.post("/api/trend-report-prompt", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { patientId } = req.body;
+
+      if (!patientId) {
+        return res.status(400).json({
+          success: false,
+          message: "patientId is required",
+        });
+      }
+
+      const patient = await storage.getLatestPatientPrompt(patientId);
+
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found",
+        });
+      }
+
+      const customPrompt = (await storage.getTrendSystemPrompt())?.prompt;
+      const prompt = await generateTrendReportPrompt(patient as any, customPrompt);
+
+      return res.status(200).json({ success: true, prompt });
+    } catch (err) {
+      console.error("Error generating trend report prompt:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error generating trend report prompt: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });

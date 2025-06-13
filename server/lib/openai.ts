@@ -151,6 +151,9 @@ let defaultPatientSystemPrompt = `You are a healthcare assistant that generates 
 
 The message should feel personal, caring, and motivating while being medically appropriate.`;
 
+// Default trend system prompt for trend report summaries
+let defaultTrendSystemPrompt = `You are a medical data analyst creating concise trend summaries for clinicians. Using the patient's history and latest measurements, describe noteworthy improvements or concerns and provide brief recommendations in under 150 words.`;
+
 // Set custom system prompt for all future generations
 export function setDefaultSystemPrompt(prompt: string) {
   defaultSystemPrompt = prompt;
@@ -160,6 +163,10 @@ export function setDefaultPatientSystemPrompt(prompt: string) {
   defaultPatientSystemPrompt = prompt;
 }
 
+export function setDefaultTrendSystemPrompt(prompt: string) {
+  defaultTrendSystemPrompt = prompt;
+}
+
 // Get current system prompt
 export function getDefaultSystemPrompt(): string {
   return defaultSystemPrompt;
@@ -167,6 +174,10 @@ export function getDefaultSystemPrompt(): string {
 
 export function getDefaultPatientSystemPrompt(): string {
   return defaultPatientSystemPrompt;
+}
+
+export function getDefaultTrendSystemPrompt(): string {
+  return defaultTrendSystemPrompt;
 }
 
 /**
@@ -398,6 +409,36 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
     return fullMessage; // Return full message for consistency with generatePrompt
   } catch (error) {
     console.error("Error generating patient message:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generates a trend report summary for a patient
+ */
+export async function generateTrendReportPrompt(
+  patient: PatientData,
+  customTrendSystemPrompt?: string,
+): Promise<string> {
+  try {
+    const systemPrompt = customTrendSystemPrompt || defaultTrendSystemPrompt;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-nano",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Generate a short trend report for the following patient:\n\nPatient ID: ${patient.patientId}\nName: ${patient.name}\nAge: ${patient.age}\nCondition: ${patient.condition}\n${patient.healthStatus ? `Health Status: ${patient.healthStatus}` : ""}\n${patient.issues?.length ? `Issues: ${patient.issues.join(", ")}` : ""}\n${patient.alertReasons?.length ? `Alert Reasons: ${patient.alertReasons.join(", ")}` : ""}\n${patient.variables ? `Variables: ${JSON.stringify(patient.variables, null, 2)}` : ""}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    return completion.choices[0]?.message?.content || "No report generated";
+  } catch (error) {
+    console.error("Error generating trend report:", error);
     throw error;
   }
 }

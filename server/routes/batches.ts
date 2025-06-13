@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
-import { getDefaultSystemPrompt, setDefaultSystemPrompt, getDefaultPatientSystemPrompt, setDefaultPatientSystemPrompt } from "../lib/openai";
+import { getDefaultSystemPrompt, setDefaultSystemPrompt, getDefaultPatientSystemPrompt, setDefaultPatientSystemPrompt, getDefaultTrendSystemPrompt, setDefaultTrendSystemPrompt } from "../lib/openai";
 
 export function registerBatchRoutes(app: Express): void {
   // Get all patient batches
@@ -281,6 +281,81 @@ export function registerBatchRoutes(app: Express): void {
       return res.status(500).json({
         success: false,
         message: `Error updating patient system prompt: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Get trend system prompt
+  app.get("/api/trend-system-prompt", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, data: null, error: "Authentication required" });
+      }
+
+      const inMemoryPrompt = getDefaultTrendSystemPrompt();
+      const trendPrompt = await storage.getTrendSystemPrompt();
+      const dbPrompt = trendPrompt ? trendPrompt.prompt : null;
+
+      const promptToUse = dbPrompt || inMemoryPrompt;
+
+      return res.status(200).json({
+        prompt: promptToUse,
+        inMemoryPrompt,
+        dbPrompt,
+        source: dbPrompt ? 'database' : 'in-memory'
+      });
+    } catch (err) {
+      console.error("Error getting trend system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        data: null,
+        error: `Error getting trend system prompt: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  });
+
+  // Update trend system prompt
+  app.post("/api/trend-system-prompt", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Authentication required" });
+      }
+
+      const { prompt } = req.body;
+
+      if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt is required and must be a string",
+        });
+      }
+
+      if (prompt.length > 10000) {
+        return res.status(400).json({
+          success: false,
+          message: "Prompt is too long (maximum 10,000 characters)",
+        });
+      }
+
+      const updatedPrompt = await storage.updateTrendSystemPrompt(prompt);
+      setDefaultTrendSystemPrompt(prompt);
+
+      console.log("Trend system prompt updated successfully");
+
+      return res.status(200).json({
+        success: true,
+        message: "Trend system prompt updated successfully",
+        trendSystemPrompt: updatedPrompt,
+      });
+    } catch (err) {
+      console.error("Error updating trend system prompt:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Error updating trend system prompt: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
   });

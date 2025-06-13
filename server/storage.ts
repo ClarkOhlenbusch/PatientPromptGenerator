@@ -4,6 +4,7 @@ import {
   patientPrompts,
   systemPrompts,
   patientSystemPrompts,
+  trendSystemPrompts,
   templateVariables,
   systemSettings,
   callHistory,
@@ -17,6 +18,8 @@ import {
   type InsertSystemPrompt,
   type PatientSystemPrompt,
   type InsertPatientSystemPrompt,
+  type TrendSystemPrompt,
+  type InsertTrendSystemPrompt,
   type TemplateVariable,
   type InsertTemplateVariable,
   type SystemSettings,
@@ -61,6 +64,10 @@ export interface IStorage {
   // Patient System Prompt methods
   getPatientSystemPrompt(batchId?: string): Promise<PatientSystemPrompt | null>;
   updatePatientSystemPrompt(prompt: string, batchId?: string): Promise<PatientSystemPrompt>;
+
+  // Trend System Prompt methods
+  getTrendSystemPrompt(batchId?: string): Promise<TrendSystemPrompt | null>;
+  updateTrendSystemPrompt(prompt: string, batchId?: string): Promise<TrendSystemPrompt>;
 
   // Template Variables methods
   getTemplateVariables(batchId?: string): Promise<TemplateVariable[]>;
@@ -490,6 +497,55 @@ Your Healthcare Provider`;
       return newPrompt;
     } catch (error) {
       console.error("Error updating patient system prompt:", error);
+      throw error;
+    }
+  }
+
+  // Trend System Prompt methods
+  async getTrendSystemPrompt(batchId?: string): Promise<TrendSystemPrompt | null> {
+    try {
+      let prompt: TrendSystemPrompt | undefined;
+
+      if (batchId) {
+        [prompt] = await db.select()
+          .from(trendSystemPrompts)
+          .where(eq(trendSystemPrompts.batchId, batchId))
+          .orderBy(desc(trendSystemPrompts.createdAt))
+          .limit(1);
+      }
+
+      if (!prompt) {
+        [prompt] = await db.select()
+          .from(trendSystemPrompts)
+          .where(sql`${trendSystemPrompts.batchId} IS NULL`)
+          .orderBy(desc(trendSystemPrompts.createdAt))
+          .limit(1);
+      }
+
+      return prompt || null;
+    } catch (error) {
+      console.error("Error getting trend system prompt:", error);
+      return null;
+    }
+  }
+
+  async updateTrendSystemPrompt(promptText: string, batchId?: string): Promise<TrendSystemPrompt> {
+    try {
+      const sanitizedPrompt = this.sanitizeSystemPrompt(promptText);
+
+      const [newPrompt] = await db.insert(trendSystemPrompts)
+        .values({
+          batchId: batchId || null,
+          prompt: sanitizedPrompt,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+        .returning();
+
+      console.log(`Created new trend system prompt (ID: ${newPrompt.id}, batchId: ${batchId || 'global'})`);
+      return newPrompt;
+    } catch (error) {
+      console.error("Error updating trend system prompt:", error);
       throw error;
     }
   }
