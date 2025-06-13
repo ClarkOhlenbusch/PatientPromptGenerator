@@ -52,7 +52,7 @@ export default function TrendReports() {
   
   // Query to get patients from the effective batch
   const { data: patients, isLoading: isPatientsLoading } = useQuery({
-    queryKey: ["/api/patients", effectiveBatchId],
+    queryKey: ["/api/patient-prompts", effectiveBatchId],
     queryFn: async () => {
       if (!effectiveBatchId) return [];
       
@@ -61,6 +61,9 @@ export default function TrendReports() {
         const responseData = await res.json();
         const allPatients = responseData.success && responseData.data ? responseData.data : [];
         
+        console.log("Loaded patients for trend reports:", allPatients);
+        console.log("Effective batch ID:", effectiveBatchId);
+        console.log("Patient data structure:", allPatients[0]);
         return allPatients;
       } catch (error) {
         console.error("Error fetching patients:", error);
