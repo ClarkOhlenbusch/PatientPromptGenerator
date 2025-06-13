@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { 
-  FileUp, 
+  BarChart3, 
   Loader2, 
   Activity,
-  PlusCircle
+  Sparkles
 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -23,7 +24,8 @@ interface Patient extends PatientData {
 }
 
 export default function MonthlyReports() {
-  const [selectedPatientId, setSelectedPatientId] = useState<string>("all");
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [generatedReport, setGeneratedReport] = useState<string>("");
   const { toast } = useToast();
   
   // Query to get the latest batch
