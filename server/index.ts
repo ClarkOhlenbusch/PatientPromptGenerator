@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { setupRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { db } from "./db";
 import cors from 'cors';
 import { initializeDatabase } from "./lib/initDb";
 
@@ -83,7 +84,7 @@ app.use((req, res, next) => {
 
   // Initialize database
   try {
-    await initializeDatabase();
+    await initializeDatabase(db);
   } catch (err) {
     console.error('Failed to initialize database:', err);
     process.exit(1);
