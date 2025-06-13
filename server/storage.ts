@@ -7,6 +7,7 @@ import {
   templateVariables,
   systemSettings,
   callHistory,
+  trendReportPrompts,
   type User,
   type InsertUser,
   type PatientBatch,
@@ -21,7 +22,9 @@ import {
   type InsertTemplateVariable,
   type SystemSettings,
   type CallHistory,
-  type InsertCallHistory
+  type InsertCallHistory,
+  type TrendReportPrompt,
+  type InsertTrendReportPrompt
 } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -102,6 +105,10 @@ export interface IStorage {
   // Voice agent template methods
   getVoiceAgentTemplate(): Promise<string>;
   updateVoiceAgentTemplate(template: string): Promise<void>;
+
+  // Trend report prompt methods
+  getTrendReportPrompt(batchId?: string): Promise<TrendReportPrompt | null>;
+  updateTrendReportPrompt(prompt: string, batchId?: string): Promise<TrendReportPrompt>;
 
   // Session store
   sessionStore: session.Store;

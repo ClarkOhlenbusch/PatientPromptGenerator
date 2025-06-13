@@ -208,3 +208,21 @@ export const phoneSchema = z
     /^\+[1-9]\d{1,14}$/,
     "Phone number must be in E.164 format (e.g., +1234567890)",
   );
+
+// Trend Report Prompts schema
+export const trendReportPrompts = pgTable("trend_report_prompts", {
+  id: serial("id").primaryKey(),
+  prompt: text("prompt").notNull(),
+  batchId: text("batch_id"), // Optional batch-specific prompt
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertTrendReportPromptSchema = createInsertSchema(trendReportPrompts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type TrendReportPrompt = typeof trendReportPrompts.$inferSelect;
+export type InsertTrendReportPrompt = z.infer<typeof insertTrendReportPromptSchema>;
