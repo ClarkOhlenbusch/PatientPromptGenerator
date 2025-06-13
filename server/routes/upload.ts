@@ -135,9 +135,21 @@ export function registerUploadRoutes(app: Express): void {
               variables: patient.variables || {},
             };
 
+            // Get the system prompts for this batch if they exist
+            const systemPrompt = await storage.getSystemPrompt(batchId);
+            const systemPromptText = systemPrompt ? systemPrompt.prompt : getDefaultSystemPrompt();
+
+            const patientSystemPrompt = await storage.getPatientSystemPrompt(batchId);
+            const patientSystemPromptText = patientSystemPrompt?.prompt;
+
             console.log(`Generating dual messages for patient ID: ${patientId}...`);
             // Generate both caregiver and patient messages
-            const { caregiverMessage, patientMessage } = await generateDualMessages(patientWithMetadata, batchId);
+            const { caregiverMessage, patientMessage } = await generateDualMessages(
+              patientWithMetadata,
+              batchId,
+              systemPromptText,
+              patientSystemPromptText
+            );
 
             // Extract reasoning from the caregiver message
             const { displayPrompt, reasoning } = extractReasoning(caregiverMessage);

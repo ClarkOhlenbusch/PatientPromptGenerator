@@ -178,11 +178,21 @@ export async function generateDualMessages(
   customSystemPrompt?: string,
   customPatientSystemPrompt?: string,
 ): Promise<{ caregiverMessage: string; patientMessage: string }> {
+  // If no custom patient system prompt provided, fetch from database
+  let finalPatientSystemPrompt = customPatientSystemPrompt;
+  
+  if (!finalPatientSystemPrompt && batchId) {
+    const { DatabaseStorage } = await import("../storage");
+    const storage = new DatabaseStorage();
+    const savedPrompt = await storage.getPatientSystemPrompt(batchId);
+    finalPatientSystemPrompt = savedPrompt?.prompt;
+  }
+  
   // Generate caregiver message
   const caregiverMessage = await generatePrompt(patient, batchId, customSystemPrompt);
   
-  // Generate patient message - this function is defined below
-  const patientMessage = await generatePatientMessageInternal(patient, batchId, customPatientSystemPrompt);
+  // Generate patient message with the correct prompt
+  const patientMessage = await generatePatientMessageInternal(patient, batchId, finalPatientSystemPrompt);
   
   return { caregiverMessage, patientMessage };
 }
@@ -196,8 +206,18 @@ async function generatePatientMessageInternal(
   customPatientSystemPrompt?: string,
 ): Promise<string> {
   try {
-    // Use custom patient system prompt if provided, otherwise use default
-    const systemPrompt = customPatientSystemPrompt || defaultPatientSystemPrompt;
+    // Get saved patient system prompt from database if no custom prompt provided
+    let systemPrompt = customPatientSystemPrompt;
+    
+    if (!systemPrompt && batchId) {
+      const { DatabaseStorage } = await import("../storage");
+      const storage = new DatabaseStorage();
+      const savedPrompt = await storage.getPatientSystemPrompt(batchId);
+      systemPrompt = savedPrompt?.prompt;
+    }
+    
+    // Fall back to default if no saved prompt found
+    systemPrompt = systemPrompt || defaultPatientSystemPrompt;
 
     // Generate a new patient message using OpenAI
     const completion = await openai.chat.completions.create({
@@ -359,8 +379,18 @@ export async function generatePatientMessage(
   customPatientSystemPrompt?: string,
 ): Promise<string> {
   try {
-    // Use custom patient system prompt if provided, otherwise use default
-    const systemPrompt = customPatientSystemPrompt || defaultPatientSystemPrompt;
+    // Get saved patient system prompt from database if no custom prompt provided
+    let systemPrompt = customPatientSystemPrompt;
+    
+    if (!systemPrompt && batchId) {
+      const { DatabaseStorage } = await import("../storage");
+      const storage = new DatabaseStorage();
+      const savedPrompt = await storage.getPatientSystemPrompt(batchId);
+      systemPrompt = savedPrompt?.prompt;
+    }
+    
+    // Fall back to default if no saved prompt found
+    systemPrompt = systemPrompt || defaultPatientSystemPrompt;
 
     // Generate a new patient message using OpenAI
     const completion = await openai.chat.completions.create({
