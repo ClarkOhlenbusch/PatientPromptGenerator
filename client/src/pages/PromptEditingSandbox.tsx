@@ -245,6 +245,28 @@ Condition: \${patient.condition}
     },
   });
 
+  // Update trend report prompt mutation
+  const updateTrendReportPromptMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      const res = await apiRequest("POST", "/api/trend-report-prompt", { prompt });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Trend report prompt updated successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/trend-report-prompt"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update trend report prompt: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Get the latest batch ID for regeneration (still needed)
   const { data: latestBatch, isLoading: isBatchLoading } = useQuery({
     queryKey: ["/api/batches/latest"],
