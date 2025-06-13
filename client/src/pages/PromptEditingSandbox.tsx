@@ -79,6 +79,29 @@ The message should be around 100-150 words and written in a warm, caring tone th
 
 Important: This message is FOR the patient, not about them. Write as if you're speaking directly to them.`;
 
+// Default trend report prompt
+const INITIAL_DEFAULT_TREND_REPORT_PROMPT = `role: "system"
+Senior Health Report, 250 words, easy to understand. 
+You are a care team assistant that delivers reports based on the senior's unique health/activity data.
+The goal is to provide a health and activity summary, highlighting data trends, improvements and also problematic points.
+Your task is to:
+1. Create a generic summary of around 100 words, the generated summary should be encased between the beginning start tag of <summary> and end tag of </summary>. 
+   Analyze the provided measurements and look for trends and connections between data points.
+   At the end make a small recommendation on what the care team's next steps should be with this patient (e.g.: continue monitoring, call in for a in person assessment etc)
+2. Create a data submission compliance paragraph of around 30 words, the generated summary should be encased between the beginning start tag of <compliance> and end tag of </compliance>. 
+   Taking into consideration that the patient needs to answer some questions, and make device measurements (as smart blood pressure cuff or sp02 devices) so that we have data to analyze, evaluate the patient's data submission compliance behavior.
+   Point specific weaknesses or strong points when it comes to data submission consistency and clearly state the variables names for this situations (e.g.: Data appears consistent with all days having submission for blood pressure and heart rate).    
+3. Create an insights paragraph of around 30 words, the generated summary should be encased between the beginning start tag of <insights> and end tag of </insights>. 
+   For the provided data, extract a final insights paragraph that should make reference to the patient's condition.
+ 
+role: "user"
+Generate a personalized health report for the following patient:
+Name: \${patient.name}
+Age: \${patient.age}
+Condition: \${patient.condition}
+\${patient.isAlert ? 'Alert: Yes' : 'Alert: No'}
+\${patient.variables ? \`Additional Variables: \${JSON.stringify(patient.variables, null, 2)}\` : ''} <-- in here we send a summary of the health and activity data for the selected period`;
+
   // Query to get the current default system prompt initially
   const { data: defaultSystemPrompt, isLoading: isPromptLoading } = useQuery({
     queryKey: ["/api/system-prompt"],
@@ -152,6 +175,26 @@ Important: This message is FOR the patient, not about them. Write as if you're s
           variant: "destructive",
         });
         return INITIAL_DEFAULT_PATIENT_PROMPT;
+      }
+    },
+  });
+
+  // Query to get the current trend report prompt
+  const { data: defaultTrendReportPrompt, isLoading: isTrendPromptLoading } = useQuery({
+    queryKey: ["/api/trend-report-prompt"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/trend-report-prompt");
+        const data = await res.json();
+        return data.data?.prompt || INITIAL_DEFAULT_TREND_REPORT_PROMPT;
+      } catch (error) {
+        console.error("Failed to fetch trend system prompt:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load trend report prompt, using default.",
+          variant: "destructive",
+        });
+        return INITIAL_DEFAULT_TREND_REPORT_PROMPT;
       }
     },
   });

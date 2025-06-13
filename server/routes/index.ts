@@ -9,6 +9,7 @@ import { registerVapiRoutes } from "./vapi";
 import { registerReportRoutes } from "./reports";
 import { registerSettingsRoutes } from "./settings";
 import { registerCallRoutes } from "./calls";
+import { registerTrendReportRoutes } from "./trendReports";
 
 /**
  * Register all application routes
@@ -38,6 +39,9 @@ export function registerAllRoutes(app: Express): void {
   
   // Monthly reports routes
   registerReportRoutes(app);
+  
+  // Trend report AI generation routes
+  registerTrendReportRoutes(app);
   
   // System settings routes
   registerSettingsRoutes(app);

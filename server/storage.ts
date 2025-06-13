@@ -1508,6 +1508,84 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       };
     }
   }
+
+  // Trend Report Prompt methods
+  async getTrendReportPrompt(batchId?: string): Promise<TrendReportPrompt | null> {
+    try {
+      let prompt;
+      
+      if (batchId) {
+        // Try to get batch-specific prompt first
+        [prompt] = await db.select().from(trendReportPrompts)
+          .where(eq(trendReportPrompts.batchId, batchId))
+          .orderBy(desc(trendReportPrompts.id))
+          .limit(1);
+      }
+      
+      if (!prompt) {
+        // Get global prompt (where batchId is null)
+        [prompt] = await db.select().from(trendReportPrompts)
+          .where(sql`${trendReportPrompts.batchId} IS NULL`)
+          .orderBy(desc(trendReportPrompts.id))
+          .limit(1);
+      }
+      
+      return prompt || null;
+    } catch (error) {
+      console.error("Error fetching trend report prompt:", error);
+      return null;
+    }
+  }
+
+  async updateTrendReportPrompt(promptText: string, batchId?: string): Promise<TrendReportPrompt> {
+    const timestamp = new Date().toISOString();
+    
+    const [prompt] = await db.insert(trendReportPrompts).values({
+      prompt: this.sanitizeTrendReportPrompt(promptText),
+      batchId: batchId || null,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }).returning();
+    
+    return prompt;
+  }
+
+  sanitizeTrendReportPrompt(prompt: string): string {
+    if (!prompt || typeof prompt !== 'string') return this.getDefaultTrendReportPrompt();
+    
+    // Remove potentially harmful content while preserving medical terminology
+    const cleaned = prompt
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+      .replace(/javascript:/gi, '') // Remove javascript: URLs
+      .replace(/on\w+\s*=/gi, '') // Remove event handlers
+      .trim();
+    
+    return cleaned || this.getDefaultTrendReportPrompt();
+  }
+
+  getDefaultTrendReportPrompt(): string {
+    return `role: "system"
+Senior Health Report, 250 words, easy to understand. 
+You are a care team assistant that delivers reports based on the senior's unique health/activity data.
+The goal is to provide a health and activity summary, highlighting data trends, improvements and also problematic points.
+Your task is to:
+1. Create a generic summary of around 100 words, the generated summary should be encased between the beginning start tag of <summary> and end tag of </summary>. 
+   Analyze the provided measurements and look for trends and connections between data points.
+   At the end make a small recommendation on what the care team's next steps should be with this patient (e.g.: continue monitoring, call in for a in person assessment etc)
+2. Create a data submission compliance paragraph of around 30 words, the generated summary should be encased between the beginning start tag of <compliance> and end tag of </compliance>. 
+   Taking into consideration that the patient needs to answer some questions, and make device measurements (as smart blood pressure cuff or sp02 devices) so that we have data to analyze, evaluate the patient's data submission compliance behavior.
+   Point specific weaknesses or strong points when it comes to data submission consistency and clearly state the variables names for this situations (e.g.: Data appears consistent with all days having submission for blood pressure and heart rate).    
+3. Create an insights paragraph of around 30 words, the generated summary should be encased between the beginning start tag of <insights> and end tag of </insights>. 
+   For the provided data, extract a final insights paragraph that should make reference to the patient's condition.
+ 
+role: "user"
+Generate a personalized health report for the following patient:
+Name: \${patient.name}
+Age: \${patient.age}
+Condition: \${patient.condition}
+\${patient.isAlert ? 'Alert: Yes' : 'Alert: No'}
+\${patient.variables ? \`Additional Variables: \${JSON.stringify(patient.variables, null, 2)}\` : ''} <-- in here we send a summary of the health and activity data for the selected period`;
+  }
 }
 
 // Export an instance of DatabaseStorage
