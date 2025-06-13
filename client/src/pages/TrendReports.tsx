@@ -118,9 +118,6 @@ export default function TrendReports() {
         const responseData = await res.json();
         const allPatients = responseData.success && responseData.data ? responseData.data : [];
         
-        console.log("Loaded patients for trend reports:", allPatients);
-        console.log("Effective batch ID:", effectiveBatchId);
-        console.log("Patient data structure:", allPatients[0]);
         return allPatients;
       } catch (error) {
         console.error("Error fetching patients:", error);
@@ -137,8 +134,12 @@ export default function TrendReports() {
       return await res.json();
     },
     onSuccess: (data: any) => {
+      console.log("Trend report API response:", data);
       if (data.success) {
-        setGeneratedReport(data.report);
+        // Handle nested data structure
+        const report = data.data?.report || data.report;
+        console.log("Setting generated report:", report);
+        setGeneratedReport(report);
         toast({
           title: "Success",
           description: "AI trend report generated successfully!",
