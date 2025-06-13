@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,8 +32,27 @@ export default function TrendReports() {
   const { data: latestBatch } = useQuery({
     queryKey: ["/api/latest-batch"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/batches/latest");
-      return await res.json();
+      try {
+        // Fetch all batches and sort by most recent to determine the latest
+        const res = await apiRequest("GET", "/api/batches");
+        const responseData = await res.json();
+
+        const batches =
+          responseData.success && responseData.data ? responseData.data : [];
+
+        if (batches && batches.length > 0) {
+          const sortedBatches = [...batches].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
+          );
+          return sortedBatches[0];
+        }
+        return null;
+      } catch (error) {
+        console.error("Failed to fetch latest batch:", error);
+        return null;
+      }
     },
   });
 
@@ -47,8 +66,46 @@ export default function TrendReports() {
     },
   });
 
-  // Use the latest batch with prompts
-  const effectiveBatchId = latestBatch?.batchId;
+  // Find the most recent batch that has prompts
+  const [batchWithPrompts, setBatchWithPrompts] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function findBatchWithPrompts() {
+      if (allBatches && allBatches.length > 0 && !batchWithPrompts) {
+        for (const batch of allBatches) {
+          try {
+            const response = await fetch(`/api/patient-prompts/${batch.batchId}`, {
+              method: "GET",
+              credentials: "include",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (response.ok) {
+              const responseData = await response.json();
+              const prompts =
+                responseData.success && responseData.data
+                  ? responseData.data
+                  : [];
+              if (prompts && prompts.length > 0) {
+                console.log(`Found prompts in batch: ${batch.batchId}`);
+                setBatchWithPrompts(batch.batchId);
+                break;
+              }
+            }
+          } catch (error) {
+            console.error(`Error checking batch ${batch.batchId}:`, error);
+          }
+        }
+      }
+    }
+
+    findBatchWithPrompts();
+  }, [allBatches, batchWithPrompts]);
+
+  // Use either the batch with prompts or the latest batch
+  const effectiveBatchId = batchWithPrompts || latestBatch?.batchId;
   
   // Query to get patients from the effective batch
   const { data: patients, isLoading: isPatientsLoading } = useQuery({
