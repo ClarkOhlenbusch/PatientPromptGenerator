@@ -1150,6 +1150,67 @@ IMPORTANT: You have access to their latest health data and personalized care rec
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="trends">
+          <Card>
+            <CardHeader>
+              <CardTitle>Trend Report Prompt Editor</CardTitle>
+              <CardDescription>
+                Edit the AI prompt that generates personalized health trend reports. This prompt is used by the AI Trend Reports feature to analyze patient data and create comprehensive health summaries.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Loading trend report prompt..."
+                  value={trendReportPrompt}
+                  onChange={(e) => setTrendReportPrompt(e.target.value)}
+                  className="min-h-[400px] font-mono text-sm"
+                  disabled={isTrendPromptLoading}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveTrendReportPrompt}
+                  disabled={updateTrendReportPromptMutation.isPending || isTrendPromptLoading}
+                  className="bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Trend Report Prompt
+                </Button>
+                <Button
+                  onClick={handleResetTrendReportToDefault}
+                  disabled={isTrendPromptLoading}
+                  variant="outline"
+                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Reset to Default
+                </Button>
+              </div>
+
+              {updateTrendReportPromptMutation.isPending && (
+                <Alert>
+                  <AlertDescription>
+                    Saving trend report prompt...
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-900 mb-2">Trend Report Template Variables</h4>
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p><code className="bg-blue-100 px-1 rounded">{'${patient.name}'}</code> - Patient's full name</p>
+                  <p><code className="bg-blue-100 px-1 rounded">{'${patient.age}'}</code> - Patient's calculated age</p>
+                  <p><code className="bg-blue-100 px-1 rounded">{'${patient.condition}'}</code> - Patient's primary health condition</p>
+                  <p><code className="bg-blue-100 px-1 rounded">{'${patient.isAlert}'}</code> - Alert status (true/false)</p>
+                  <p><code className="bg-blue-100 px-1 rounded">{'${patient.variables}'}</code> - Additional health data and measurements</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
