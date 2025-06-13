@@ -26,6 +26,7 @@ import {
   Phone,
   Volume2,
   BarChart3,
+  Activity,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -52,6 +53,7 @@ The prompt should be detailed but concise, focusing on the most important aspect
 export default function PromptEditingSandbox() {
   const [corePrompt, setCorePrompt] = useState<string>("");
   const [patientPrompt, setPatientPrompt] = useState<string>("");
+  const [trendPrompt, setTrendPrompt] = useState<string>("");
   const [vapiConfig, setVapiConfig] = useState({
     firstMessage:
       "Hello, this is your healthcare assistant calling with an important update about your health. Do you have a moment to speak?",
@@ -65,7 +67,7 @@ export default function PromptEditingSandbox() {
   const { toast } = useToast();
 
   // Default patient prompt
-  const INITIAL_DEFAULT_PATIENT_PROMPT = `You are generating a personalized health message directly for a patient. This message should be warm, reassuring, and easy to understand for the patient themselves.
+const INITIAL_DEFAULT_PATIENT_PROMPT = `You are generating a personalized health message directly for a patient. This message should be warm, reassuring, and easy to understand for the patient themselves.
 
 Your task is to:
 1. Create a friendly, encouraging message that speaks directly to the patient
@@ -78,6 +80,9 @@ Your task is to:
 The message should be around 100-150 words and written in a warm, caring tone that helps patients feel supported in their health journey.
 
 Important: This message is FOR the patient, not about them. Write as if you're speaking directly to them.`;
+
+  // Default trend prompt
+  const INITIAL_DEFAULT_TREND_PROMPT = `You are a medical data analyst summarizing patient trends for clinicians. Provide a short overview of the patient's recent progress, highlighting improvements or deteriorations and giving brief recommendations.`;
 
   // Query to get the current default system prompt initially
   const { data: defaultSystemPrompt, isLoading: isPromptLoading } = useQuery({
@@ -156,6 +161,26 @@ Important: This message is FOR the patient, not about them. Write as if you're s
     },
   });
 
+  // Query to get the current trend system prompt
+  const { data: defaultTrendPrompt, isLoading: isTrendPromptLoading } = useQuery({
+    queryKey: ["/api/trend-system-prompt"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/trend-system-prompt");
+        const data = await res.json();
+        return data.prompt || INITIAL_DEFAULT_TREND_PROMPT;
+      } catch (error) {
+        console.error("Failed to fetch trend system prompt:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load trend system prompt, using default.",
+          variant: "destructive",
+        });
+        return INITIAL_DEFAULT_TREND_PROMPT;
+      }
+    },
+  });
+
   // Update system prompt mutation (still needed for saving)
   const updateSystemPromptMutation = useMutation({
     mutationFn: async (prompt: string) => {
@@ -197,6 +222,28 @@ Important: This message is FOR the patient, not about them. Write as if you're s
       toast({
         title: "Error",
         description: `Failed to update patient system prompt: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update trend system prompt mutation
+  const updateTrendPromptMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      const res = await apiRequest("POST", "/api/trend-system-prompt", { prompt });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Trend system prompt updated successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/trend-system-prompt"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update trend system prompt: ${error.message}`,
         variant: "destructive",
       });
     },
@@ -369,6 +416,12 @@ Important: This message is FOR the patient, not about them. Write as if you're s
   }, [defaultPatientPrompt]);
 
   useEffect(() => {
+    if (defaultTrendPrompt) {
+      setTrendPrompt(defaultTrendPrompt);
+    }
+  }, [defaultTrendPrompt]);
+
+  useEffect(() => {
     // Initialize Vapi config when agent data is loaded
     if (vapiAgentConfig && vapiAgentConfig.success) {
       const agent = vapiAgentConfig.data;
@@ -401,12 +454,24 @@ Important: This message is FOR the patient, not about them. Write as if you're s
     updatePatientPromptMutation.mutate(patientPrompt);
   };
 
+  const handleSaveTrendPrompt = () => {
+    updateTrendPromptMutation.mutate(trendPrompt);
+  };
+
   const handleResetPatientToDefault = () => {
     // Simply set the local state to the hardcoded default patient prompt
     setPatientPrompt(INITIAL_DEFAULT_PATIENT_PROMPT);
     toast({
       title: "Reset",
       description: "Patient prompt reset to default. Save to apply.",
+    });
+  };
+
+  const handleResetTrendToDefault = () => {
+    setTrendPrompt(INITIAL_DEFAULT_TREND_PROMPT);
+    toast({
+      title: "Reset",
+      description: "Trend prompt reset to default. Save to apply.",
     });
   };
 
@@ -560,7 +625,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
       </div>
 
       <Tabs defaultValue="triage" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="triage" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
             Triage Prompts
@@ -568,6 +633,10 @@ IMPORTANT: You have access to their latest health data and personalized care rec
           <TabsTrigger value="voice" className="flex items-center gap-2">
             <Volume2 className="w-4 h-4" />
             Companion Prompts
+          </TabsTrigger>
+          <TabsTrigger value="trend" className="flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Trend Prompts
           </TabsTrigger>
         </TabsList>
 
@@ -676,18 +745,67 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                 </Button>
               </div>
 
-              {updatePatientPromptMutation.isPending && (
-                <Alert>
-                  <AlertDescription>
-                    Saving your patient message prompt...
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+          {updatePatientPromptMutation.isPending && (
+            <Alert>
+              <AlertDescription>
+                Saving your patient message prompt...
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+      </TabsContent>
 
-        <TabsContent value="voice">
+      <TabsContent value="trend">
+        <Card>
+          <CardHeader>
+            <CardTitle>Trend Report Prompt</CardTitle>
+            <CardDescription>
+              Edit the AI prompt used to generate trend report summaries.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Loading trend prompt..."
+                value={trendPrompt}
+                onChange={(e) => setTrendPrompt(e.target.value)}
+                className="min-h-[400px] font-mono text-sm"
+                disabled={isTrendPromptLoading}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveTrendPrompt}
+                disabled={updateTrendPromptMutation.isPending || isTrendPromptLoading}
+                className="bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save Trend Prompt
+              </Button>
+              <Button
+                onClick={handleResetTrendToDefault}
+                disabled={isTrendPromptLoading}
+                variant="outline"
+              >
+                <Undo2 className="w-4 h-4 mr-2" />
+                Reset to Default
+              </Button>
+            </div>
+
+            {updateTrendPromptMutation.isPending && (
+              <Alert>
+                <AlertDescription>
+                  Saving your trend prompt...
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="voice">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
