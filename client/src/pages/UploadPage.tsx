@@ -157,10 +157,10 @@ export default function UploadPage() {
 
               <div className="flex justify-end">
                 <Button
-                  onClick={() => setLocation("/triage")}
+                  onClick={() => setLocation("/trend-reports")}
                   className="bg-green-600 hover:bg-green-700 text-white px-6"
                 >
-                  Go to Triage →
+                  Go to Trend Reports →
                 </Button>
               </div>
             </div>
