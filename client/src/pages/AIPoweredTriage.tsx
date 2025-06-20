@@ -659,15 +659,15 @@ export default function AIPoweredTriage() {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Patient Name</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Condition</TableHead>
-                <TableHead className="w-[25%]">Generated Triage Messages</TableHead>
-                <TableHead className="w-[25%]">Patient Messages</TableHead>
-                <TableHead className="w-[180px]">Phone Number</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="h-10">
+                <TableHead className="w-12 p-2">ID</TableHead>
+                <TableHead className="w-32 p-2">Patient Name</TableHead>
+                <TableHead className="w-12 p-2">Age</TableHead>
+                <TableHead className="w-28 p-2">Condition</TableHead>
+                <TableHead className="w-[30%] p-2">Generated Triage Messages</TableHead>
+                <TableHead className="w-[30%] p-2">Patient Messages</TableHead>
+                <TableHead className="w-32 p-2">Phone</TableHead>
+                <TableHead className="w-20 p-2 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -709,86 +709,86 @@ export default function AIPoweredTriage() {
                 </TableRow>
               ) : (
                 filteredPrompts.map((prompt) => (
-                  <TableRow key={prompt.id}>
-                    <TableCell>{prompt.id}</TableCell>
-                    <TableCell>{prompt.patientName}</TableCell>
-                    <TableCell>{prompt.age}</TableCell>
-                    <TableCell>
+                  <TableRow key={prompt.id} className="h-24">
+                    <TableCell className="p-2 text-sm">{prompt.id}</TableCell>
+                    <TableCell className="p-2 text-sm font-medium">{prompt.patientName}</TableCell>
+                    <TableCell className="p-2 text-sm">{prompt.age}</TableCell>
+                    <TableCell className="p-2">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                         prompt.status === 'healthy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                       }`}>
                         {prompt.condition}
                       </span>
                     </TableCell>
-                    <TableCell className="max-w-md">
-                      <div className="truncate relative">
-                        {prompt.promptText}
+                    <TableCell className="max-w-xs p-2">
+                      <div className="relative bg-gray-50 rounded-md p-3 min-h-[80px]">
+                        <div className="text-sm text-gray-700 line-clamp-3 pr-8">
+                          {prompt.promptText}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewFullPrompt(prompt)}
+                          className="absolute bottom-1 right-1 h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                        </Button>
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-md">
-                      <div className="truncate relative">
-                        {(prompt as any).patientMessage || 'No patient message generated'}
+                    <TableCell className="max-w-xs p-2">
+                      <div className="relative bg-blue-50 rounded-md p-3 min-h-[80px]">
+                        <div className="text-sm text-gray-700 line-clamp-3 pr-8">
+                          {(prompt as any).patientMessage || 'No patient message generated'}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewPatientMessage(prompt)}
+                          className="absolute bottom-1 right-1 h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                        </Button>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="p-2">
                       <Input
                         type="tel"
-                        placeholder="+1234567890 (US) or +40753837147 (Romania)"
+                        placeholder="+1234567890"
                         value={phoneNumbers[prompt.id] || ''}
                         onChange={(e) => handlePhoneNumberChange(prompt.id, e.target.value)}
-                        className="w-full"
+                        className="w-full text-xs h-8"
                       />
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                    <TableCell className="p-2 text-right">
+                      <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => handleCallPatient(prompt)}
                           disabled={callPatientMutation.isPending}
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          className="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                          title="Call Patient"
                         >
-                          <Phone className="w-4 h-4" />
+                          <Phone className="w-3 h-3" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          onClick={() => handleViewFullPrompt(prompt)}
-                          title="View Generated Triage Message"
-                        >
-                          <Maximize2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleViewPatientMessage(prompt)}
-                          title="View Patient Message"
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => handleViewReasoning(prompt)}
-                          title="View Reasoning"
+                          title="View AI Reasoning"
+                          className="h-6 w-6 p-0"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3 h-3" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          onClick={() => handleCopyPrompt(prompt.promptText)}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => regeneratePromptMutation.mutate(prompt.id)}
                           disabled={regeneratePromptMutation.isPending}
+                          title="Regenerate"
+                          className="h-6 w-6 p-0"
                         >
-                          <RotateCw className={`w-4 h-4 ${
+                          <RotateCw className={`w-3 h-3 ${
                             regeneratePromptMutation.isPending ? 'animate-spin' : ''
                           }`} />
                         </Button>
