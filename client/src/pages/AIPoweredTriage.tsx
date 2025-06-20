@@ -663,7 +663,7 @@ export default function AIPoweredTriage() {
                 <TableHead className="w-12 p-2">ID</TableHead>
                 <TableHead className="w-32 p-2">Patient Name</TableHead>
                 <TableHead className="w-12 p-2">Age</TableHead>
-                <TableHead className="w-28 p-2">Condition</TableHead>
+                <TableHead className="w-36 p-2">Condition</TableHead>
                 <TableHead className="w-[30%] p-2">Generated Triage Messages</TableHead>
                 <TableHead className="w-[30%] p-2">Patient Messages</TableHead>
                 <TableHead className="w-32 p-2">Phone</TableHead>
@@ -714,9 +714,9 @@ export default function AIPoweredTriage() {
                     <TableCell className="p-2 text-sm font-medium">{prompt.patientName}</TableCell>
                     <TableCell className="p-2 text-sm">{prompt.age}</TableCell>
                     <TableCell className="p-2">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium max-w-full truncate ${
                         prompt.status === 'healthy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
+                      }`} title={prompt.condition}>
                         {prompt.condition}
                       </span>
                     </TableCell>
