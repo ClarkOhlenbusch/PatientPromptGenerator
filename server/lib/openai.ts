@@ -249,6 +249,23 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
     const fullMessage =
       completion.choices[0]?.message?.content || "No message generated";
 
+    // Log token usage estimate for patient messages
+    const usageData = estimateSinglePromptUsage(systemPrompt, fullMessage);
+    totalInputTokens += usageData.inputTokens;
+    totalOutputTokens += usageData.outputTokens;
+    totalEstimatedCost += usageData.totalCost;
+    totalApiCalls++;
+
+    console.log(`=== Patient Message OpenAI API Cost Estimate ===`);
+    console.log(
+      `Input tokens: ${usageData.inputTokens} (est. $${usageData.inputCost.toFixed(6)})`,
+    );
+    console.log(
+      `Output tokens: ${usageData.outputTokens} (est. $${usageData.outputCost.toFixed(6)})`,
+    );
+    console.log(`Total estimated cost: $${usageData.totalCost.toFixed(6)}`);
+    console.log(`===============================================`);
+
     return fullMessage;
   } catch (error) {
     console.error("Error generating patient message:", error);
@@ -422,6 +439,23 @@ ${patient.variables ? `Additional Variables: ${JSON.stringify(patient.variables,
     const fullMessage =
       completion.choices[0]?.message?.content || "No message generated";
 
+    // Log token usage estimate for patient messages
+    const usageData = estimateSinglePromptUsage(systemPrompt, fullMessage);
+    totalInputTokens += usageData.inputTokens;
+    totalOutputTokens += usageData.outputTokens;
+    totalEstimatedCost += usageData.totalCost;
+    totalApiCalls++;
+
+    console.log(`=== Patient Message OpenAI API Cost Estimate ===`);
+    console.log(
+      `Input tokens: ${usageData.inputTokens} (est. $${usageData.inputCost.toFixed(6)})`,
+    );
+    console.log(
+      `Output tokens: ${usageData.outputTokens} (est. $${usageData.outputCost.toFixed(6)})`,
+    );
+    console.log(`Total estimated cost: $${usageData.totalCost.toFixed(6)}`);
+    console.log(`===============================================`);
+
     // Extract reasoning from the message
     const { displayPrompt } = extractReasoning(fullMessage);
 
@@ -483,9 +517,6 @@ async function generatePlaceholders(
       const content = response.choices[0]?.message?.content?.trim() || "";
 
       // Estimate tokens and log
-      const { estimateSinglePromptUsage } = await import(
-        "./tokenUsageEstimator"
-      );
       const usageData = estimateSinglePromptUsage(
         systemPrompt + userPrompt,
         content,

@@ -1,8 +1,8 @@
 import { get_encoding } from '@dqbd/tiktoken';
 
-// Constants for GPT-4o model pricing (as of May 2024)
-const GPT4O_INPUT_COST_PER_1K_TOKENS = 0.01;  // $0.01 per 1K input tokens
-const GPT4O_OUTPUT_COST_PER_1K_TOKENS = 0.03; // $0.03 per 1K output tokens
+// Constants for GPT-4.1-nano model pricing
+const GPT41_NANO_INPUT_COST_PER_1K_TOKENS = 0.0001;  // $0.0001 per 1K input tokens
+const GPT41_NANO_OUTPUT_COST_PER_1K_TOKENS = 0.0004; // $0.0004 per 1K output tokens
 
 interface TokenUsage {
   inputTokens: number;
@@ -67,8 +67,8 @@ export function estimateSinglePromptUsage(inputText: string, outputText: string)
   const inputTokens = estimateTokens(inputText);
   const outputTokens = estimateTokens(outputText);
   
-  const inputCost = (inputTokens / 1000) * GPT4O_INPUT_COST_PER_1K_TOKENS;
-  const outputCost = (outputTokens / 1000) * GPT4O_OUTPUT_COST_PER_1K_TOKENS;
+  const inputCost = (inputTokens / 1000) * GPT41_NANO_INPUT_COST_PER_1K_TOKENS;
+  const outputCost = (outputTokens / 1000) * GPT41_NANO_OUTPUT_COST_PER_1K_TOKENS;
   const totalCost = inputCost + outputCost;
   
   return {
