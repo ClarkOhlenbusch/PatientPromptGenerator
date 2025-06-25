@@ -106,7 +106,7 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/monthly-reports")}>
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLocation("/trend-reports")}>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-purple-600" />

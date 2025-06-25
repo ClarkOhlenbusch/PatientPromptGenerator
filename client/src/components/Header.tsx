@@ -150,10 +150,8 @@ export default function Header() {
                     Call History
                   </span>
                 </Link>
-                <Link href="/monthly-reports" onClick={() => setMobileMenuOpen(false)}>
-                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/monthly-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
-                    Trend Reports
-                  </span>
+                <Link href="/trend-reports" onClick={() => setMobileMenuOpen(false)}>
+                  <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/trend-reports" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>Trend Reports</span>
                 </Link>
                 <Link href="/settings" onClick={() => setMobileMenuOpen(false)}>
                   <span className={`text-sm font-medium transition-colors cursor-pointer ${location === "/settings" ? "text-primary" : "text-gray-600 hover:text-primary"}`}>
