@@ -55,6 +55,7 @@ export default function AICompanionCalls() {
   // Unified call mutation - uses the new /api/vapi/call endpoint
   const initiateCallMutation = useMutation({
     mutationFn: async (callData: any) => {
+      console.log("Initiating call with data:", callData);
       const response = await apiRequest("POST", "/api/vapi/call", callData);
       if (!response.ok) throw new Error("Failed to initiate call");
       return response.json();
