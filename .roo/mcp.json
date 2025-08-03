@@ -5,7 +5,22 @@
       "args": [
         "-y",
         "@vapi-ai/mcp-docs-server"
+      ],
+      "alwaysAllow": [
+        "get_api_reference",
+        "search_documentation",
+        "get_examples"
       ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {
+        "DEFAULT_MINIMUM_TOKENS": ""
+      }
     }
   }
 }

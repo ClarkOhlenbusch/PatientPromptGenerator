@@ -870,12 +870,14 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                     value={vapiConfig.voiceProvider}
                     onValueChange={(value) => {
                       // Reset voice ID when provider changes to avoid invalid combinations
+                      // Use API-compliant default values for each provider
                       const defaultVoices = {
                         vapi: "Kylie",
                         playht: "jennifer",
                         aws: "joanna",
                         azure: "jenny",
-                        deepgram: "aura-asteria-en",
+                        // Deepgram requires canonical IDs like "luna", not "aura-luna-en"
+                        deepgram: "luna",
                       };
                       setVapiConfig((prev) => ({
                         ...prev,
@@ -1005,28 +1007,28 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                       )}
                       {vapiConfig.voiceProvider === "deepgram" && (
                         <>
-                          <SelectItem value="aura-asteria-en">
+                          <SelectItem value="asteria">
                             Asteria (Female, Conversational)
                           </SelectItem>
-                          <SelectItem value="aura-luna-en">
+                          <SelectItem value="luna">
                             Luna (Female, Warm)
                           </SelectItem>
-                          <SelectItem value="aura-stella-en">
+                          <SelectItem value="stella">
                             Stella (Female, Professional)
                           </SelectItem>
-                          <SelectItem value="aura-athena-en">
+                          <SelectItem value="athena">
                             Athena (Female, Clear)
                           </SelectItem>
-                          <SelectItem value="aura-hera-en">
+                          <SelectItem value="hera">
                             Hera (Female, Confident)
                           </SelectItem>
-                          <SelectItem value="aura-orion-en">
+                          <SelectItem value="orion">
                             Orion (Male, Strong)
                           </SelectItem>
-                          <SelectItem value="aura-arcas-en">
+                          <SelectItem value="arcas">
                             Arcas (Male, Friendly)
                           </SelectItem>
-                          <SelectItem value="aura-perseus-en">
+                          <SelectItem value="perseus">
                             Perseus (Male, Professional)
                           </SelectItem>
                         </>

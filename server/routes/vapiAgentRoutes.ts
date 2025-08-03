@@ -116,10 +116,53 @@ export function registerVapiAgentRoutes(app: Express): void {
       }
 
       if (voiceProvider !== undefined || voiceId !== undefined) {
-        updatePayload.voice = {
-          provider: voiceProvider !== undefined ? voiceProvider : (currentAgent.voice?.provider || "vapi"),
-          voiceId: voiceId !== undefined ? voiceId : (currentAgent.voice?.voiceId || "Kylie"),
+        // Normalize provider-specific voice IDs where Vapi expects canonical values
+        const normalizeVoice = (provider: string, id: string | undefined) => {
+          const p = (provider || "").toLowerCase();
+
+          if (p === "deepgram") {
+            // Deepgram assistant.voice.voiceId must be one of canonical names (e.g., luna, asteria, ...)
+            const mapAuraToCanonical = (val: string) => {
+              const lower = val.toLowerCase();
+              if (lower.startsWith("aura-")) {
+                const parts = lower.split("-");
+                if (parts.length >= 3) return parts[1]; // aura-luna-en -> luna
+              }
+              return lower;
+            };
+
+            const canonical = id ? mapAuraToCanonical(id) : undefined;
+
+            const allowed = new Set([
+              "asteria","luna","stella","athena","hera","orion","arcas","perseus",
+              "angus","orpheus","helios","zeus","thalia","andromeda","helena","apollo",
+              "aries","amalthea","atlas","aurora","callista","cora","cordelia","delia",
+              "draco","electra","harmonia","hermes","hyperion","iris","janus","juno",
+              "jupiter","mars","minerva","neptune","odysseus","ophelia","pandora",
+              "phoebe","pluto","saturn","selene","theia","vesta"
+            ]);
+
+            if (canonical && allowed.has(canonical)) {
+              return { provider: "deepgram", voiceId: canonical };
+            }
+            if (canonical && !allowed.has(canonical)) {
+              return { provider: "deepgram", voiceId: "luna" };
+            }
+            const fallback = (currentAgent.voice?.voiceId || "luna").toString().toLowerCase();
+            return { provider: "deepgram", voiceId: allowed.has(fallback) ? fallback : "luna" };
+          }
+
+          // Default passthrough for other providers
+          return {
+            provider: provider || (currentAgent.voice?.provider || "vapi"),
+            voiceId: id !== undefined ? id : (currentAgent.voice?.voiceId || "Kylie"),
+          };
         };
+
+        updatePayload.voice = normalizeVoice(
+          voiceProvider !== undefined ? voiceProvider : (currentAgent.voice?.provider || "vapi"),
+          voiceId !== undefined ? voiceId : (currentAgent.voice?.voiceId || "Kylie")
+        );
       }
 
       if (systemPrompt !== undefined || model !== undefined) {

@@ -223,10 +223,35 @@ export function registerVapiTestRoutes(app: Express): void {
               },
             ],
           },
-          voice: {
-            provider: voiceProvider || "vapi",
-            voiceId: voiceId || "Kylie",
-          },
+          // Normalize provider/voiceId combinations for API compliance
+          voice: (() => {
+            const provider = (voiceProvider || "vapi").toLowerCase();
+            let id = voiceId || "Kylie";
+
+            if (provider === "deepgram") {
+              const toCanonical = (val: string) => {
+                const lower = val.toLowerCase();
+                if (lower.startsWith("aura-")) {
+                  const parts = lower.split("-");
+                  if (parts.length >= 3) return parts[1];
+                }
+                return lower;
+              };
+              const canonical = toCanonical(String(id));
+              const allowed = new Set([
+                "asteria","luna","stella","athena","hera","orion","arcas","perseus",
+                "angus","orpheus","helios","zeus","thalia","andromeda","helena","apollo",
+                "aries","amalthea","atlas","aurora","callista","cora","cordelia","delia",
+                "draco","electra","harmonia","hermes","hyperion","iris","janus","juno",
+                "jupiter","mars","minerva","neptune","odysseus","ophelia","pandora",
+                "phoebe","pluto","saturn","selene","theia","vesta"
+              ]);
+              id = allowed.has(canonical) ? canonical : "luna";
+              return { provider: "deepgram", voiceId: id };
+            }
+
+            return { provider, voiceId: id };
+          })(),
         },
         metadata: {
           callType: "test",
