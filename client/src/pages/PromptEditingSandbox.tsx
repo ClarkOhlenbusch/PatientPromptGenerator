@@ -60,7 +60,7 @@ export default function PromptEditingSandbox() {
       "You are a professional healthcare assistant calling a patient. Speak clearly, compassionately, and keep the conversation focused on their health needs. Always be respectful of their time and provide clear, actionable information.",
     voiceProvider: "vapi",
     voiceId: "Kylie",
-    model: "gpt-4o-mini",
+    model: "gpt-4.1",
   });
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const { toast } = useToast();
@@ -465,7 +465,7 @@ Condition: \${patient.condition}
           voiceAgentTemplate || agent.model?.messages?.[0]?.content || "",
         voiceProvider: agent.voice?.provider || "playht",
         voiceId: agent.voice?.voiceId || "jennifer",
-        model: agent.model?.model || "gpt-4",
+        model: agent.model?.model || "gpt-4.1",
       });
     }
   }, [vapiAgentConfig, voiceAgentTemplate]);
@@ -542,7 +542,7 @@ Condition: \${patient.condition}
         systemPrompt: voiceAgentTemplate || agent.model?.messages?.[0]?.content || "",
         voiceProvider: agent.voice?.provider || "playht",
         voiceId: agent.voice?.voiceId || "jennifer",
-        model: agent.model?.model || "gpt-4",
+        model: agent.model?.model || "gpt-4.1",
       });
     }
     toast({
@@ -1052,16 +1052,10 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gpt-4o-mini">
-                        GPT-4o Mini (Current - Fast & Cost-Effective)
-                      </SelectItem>
-                      <SelectItem value="gpt-4">GPT-4 (Advanced)</SelectItem>
-                      <SelectItem value="gpt-4-turbo">
-                        GPT-4 Turbo (Fast & Advanced)
-                      </SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">
-                        GPT-3.5 Turbo (Standard)
-                      </SelectItem>
+                      <SelectItem value="gpt-4">gpt-4</SelectItem>
+                      <SelectItem value="gpt-4.1">gpt-4.1</SelectItem>
+                      <SelectItem value="gpt-4.1-mini">gpt-4.1-mini</SelectItem>
+                      <SelectItem value="gpt-4.1-nano">gpt-4.1-nano</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-gray-500">
