@@ -69,6 +69,14 @@ export function registerVapiAgentRoutes(app: Express): void {
       const { firstMessage, systemPrompt, voiceProvider, voiceId, model } =
         req.body;
 
+      console.log("PATCH /api/vapi/agent - Received payload:", {
+        firstMessage,
+        systemPrompt: systemPrompt ? `${systemPrompt.substring(0, 100)}...` : systemPrompt,
+        voiceProvider,
+        voiceId,
+        model
+      });
+
       const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
       if (!vapiPrivateKey) {
         return res.status(500).json({
@@ -107,18 +115,16 @@ export function registerVapiAgentRoutes(app: Express): void {
         updatePayload.firstMessage = firstMessage;
       }
 
-      if (voiceProvider || voiceId) {
+      if (voiceProvider !== undefined || voiceId !== undefined) {
         updatePayload.voice = {
-          provider: voiceProvider || currentAgent.voice?.provider || "vapi",
-          voiceId: voiceId || currentAgent.voice?.voiceId || "Kylie",
+          provider: voiceProvider !== undefined ? voiceProvider : (currentAgent.voice?.provider || "vapi"),
+          voiceId: voiceId !== undefined ? voiceId : (currentAgent.voice?.voiceId || "Kylie"),
         };
       }
 
-      if (systemPrompt || model) {
-        // Create a system prompt that uses the complete patient prompt as context
-        const enhancedSystemPrompt =
-          systemPrompt ||
-          `You are an empathetic AI voice companion conducting a 15-minute check-in call with a patient.
+      if (systemPrompt !== undefined || model !== undefined) {
+        // Use the user's system prompt directly when provided, otherwise keep existing
+        const finalSystemPrompt = systemPrompt !== undefined ? systemPrompt : currentAgent.model?.messages?.[0]?.content || `You are an empathetic AI voice companion conducting a 15-minute check-in call with a patient.
 
 PATIENT INFORMATION:
 You are calling {{patientName}}, who is {{patientAge}} years old.
@@ -148,7 +154,7 @@ Keep the conversation warm, natural, and personalized based on the care prompt i
           messages: [
             {
               role: "system",
-              content: enhancedSystemPrompt,
+              content: finalSystemPrompt,
             },
           ],
           // Preserve other model settings if they exist

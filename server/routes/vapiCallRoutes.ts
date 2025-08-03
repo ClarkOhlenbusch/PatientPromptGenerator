@@ -2,6 +2,35 @@ import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import { formatPhoneNumberE164 } from "./vapiHelpers";
 
+// Helper function to replace both old and new variable formats
+function replaceVariables(template: string, variables: {
+  patientName: string;
+  patientAge: string;
+  patientCondition: string;
+  patientPrompt: string;
+  conversationHistory: string;
+}): string {
+  let result = template;
+  
+  // Replace old template format (PATIENT_NAME)
+  result = result
+    .replace(/PATIENT_NAME/g, variables.patientName)
+    .replace(/PATIENT_AGE/g, variables.patientAge)
+    .replace(/PATIENT_CONDITION/g, variables.patientCondition)
+    .replace(/PATIENT_PROMPT/g, variables.patientPrompt)
+    .replace(/CONVERSATION_HISTORY/g, variables.conversationHistory);
+    
+  // Replace new VAPI variable format ({{patientName}})
+  result = result
+    .replace(/\{\{patientName\}\}/g, variables.patientName)
+    .replace(/\{\{patientAge\}\}/g, variables.patientAge)
+    .replace(/\{\{patientCondition\}\}/g, variables.patientCondition)
+    .replace(/\{\{patientPrompt\}\}/g, variables.patientPrompt)
+    .replace(/\{\{conversationHistory\}\}/g, variables.conversationHistory);
+    
+  return result;
+}
+
 export function registerVapiCallRoutes(app: Express): void {
   app.post("/api/vapi/triage-call", async (req: Request, res: Response) => {
     try {
@@ -65,31 +94,20 @@ export function registerVapiCallRoutes(app: Express): void {
       // Get voice agent template for proper formatting
       const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
 
-      // Create enhanced system prompt by replacing template variables with actual patient data
-      let enhancedSystemPrompt = voiceAgentTemplate;
-
-      enhancedSystemPrompt = enhancedSystemPrompt
-        .replace(/PATIENT_NAME/g, patientName || patientId)
-        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
-        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
-        .replace(
-          /PATIENT_PROMPT/g,
-          triagePrompt || "No specific care assessment available",
-        )
-        .replace(
-          /CONVERSATION_HISTORY/g,
-          "This is your first conversation with this patient.",
-        );
-
       // Get comprehensive call history context for enhanced patient continuity
       const callHistoryContext = await storage.getCallHistoryContext(
         patientId as string,
         5,
       );
-      enhancedSystemPrompt = enhancedSystemPrompt.replace(
-        /CONVERSATION_HISTORY/g,
-        callHistoryContext.contextText,
-      );
+
+      // Create enhanced system prompt using helper function to support both variable formats
+      const enhancedSystemPrompt = replaceVariables(voiceAgentTemplate, {
+        patientName: patientName || patientId,
+        patientAge: age?.toString() || "unknown age",
+        patientCondition: condition || "general health assessment",
+        patientPrompt: triagePrompt || "No specific care assessment available",
+        conversationHistory: callHistoryContext.contextText,
+      });
 
       console.log("🎯 Enhanced system prompt prepared:", {
         templateLength: voiceAgentTemplate.length,
@@ -292,31 +310,20 @@ export function registerVapiCallRoutes(app: Express): void {
       // Get voice agent template for proper formatting
       const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
 
-      // Create enhanced system prompt by replacing template variables with actual patient data
-      let enhancedSystemPrompt = voiceAgentTemplate;
-
-      enhancedSystemPrompt = enhancedSystemPrompt
-        .replace(/PATIENT_NAME/g, patientName || patientId)
-        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
-        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
-        .replace(
-          /PATIENT_PROMPT/g,
-          triagePrompt || "No specific care assessment available",
-        )
-        .replace(
-          /CONVERSATION_HISTORY/g,
-          "This is your first conversation with this patient.",
-        );
-
       // Get comprehensive call history context for enhanced patient continuity
       const callHistoryContext = await storage.getCallHistoryContext(
         patientId as string,
         5,
       );
-      enhancedSystemPrompt = enhancedSystemPrompt.replace(
-        /CONVERSATION_HISTORY/g,
-        callHistoryContext.contextText,
-      );
+
+      // Create enhanced system prompt using helper function to support both variable formats
+      const enhancedSystemPrompt = replaceVariables(voiceAgentTemplate, {
+        patientName: patientName || patientId,
+        patientAge: age?.toString() || "unknown age",
+        patientCondition: condition || "general health assessment",
+        patientPrompt: triagePrompt || "No specific care assessment available",
+        conversationHistory: callHistoryContext.contextText,
+      });
 
       console.log("🎯 Enhanced system prompt prepared:", {
         templateLength: voiceAgentTemplate.length,
@@ -536,30 +543,21 @@ export function registerVapiCallRoutes(app: Express): void {
 
       // Get voice agent template and create enhanced system prompt (same as triage-call)
       const voiceAgentTemplate = await storage.getVoiceAgentTemplate();
-      let enhancedSystemPrompt = voiceAgentTemplate;
-
-      enhancedSystemPrompt = enhancedSystemPrompt
-        .replace(/PATIENT_NAME/g, patientName || String(patientId))
-        .replace(/PATIENT_AGE/g, age?.toString() || "unknown age")
-        .replace(/PATIENT_CONDITION/g, condition || "general health assessment")
-        .replace(
-          /PATIENT_PROMPT/g,
-          triagePrompt || "No specific care assessment available",
-        )
-        .replace(
-          /CONVERSATION_HISTORY/g,
-          "This is your first conversation with this patient.",
-        );
 
       // Get comprehensive call history context for enhanced patient continuity
       const callHistoryContext = await storage.getCallHistoryContext(
         String(patientId),
         5,
       );
-      enhancedSystemPrompt = enhancedSystemPrompt.replace(
-        /CONVERSATION_HISTORY/g,
-        callHistoryContext.contextText,
-      );
+
+      // Create enhanced system prompt using helper function to support both variable formats
+      const enhancedSystemPrompt = replaceVariables(voiceAgentTemplate, {
+        patientName: patientName || String(patientId),
+        patientAge: age?.toString() || "unknown age",
+        patientCondition: condition || "general health assessment",
+        patientPrompt: triagePrompt || "No specific care assessment available",
+        conversationHistory: callHistoryContext.contextText,
+      });
 
       return res.status(200).json({
         success: true,

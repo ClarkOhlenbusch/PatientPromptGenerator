@@ -70,6 +70,13 @@
 - **Transcriber**: Deepgram nova-3
 
 ### Template Variables (Used in ALL calls)
+- `{{patientName}}` - Patient's full name  
+- `{{patientAge}}` - Patient's age
+- `{{patientCondition}}` - Primary health condition
+- `{{patientPrompt}}` - Complete triage assessment 
+- `{{conversationHistory}}` - Previous call summary or first-time indicator
+
+### Legacy Template Variables (Backward Compatibility)
 - `PATIENT_NAME` - Patient's full name  
 - `PATIENT_AGE` - Patient's age
 - `PATIENT_CONDITION` - Primary health condition

@@ -277,6 +277,20 @@ Condition: \${patient.condition}
     },
   });
 
+  // Update Voice Agent Template mutation (saves to database for call usage)
+  const updateVoiceAgentTemplateMutation = useMutation({
+    mutationFn: async (template: string) => {
+      const res = await apiRequest("POST", "/api/voice-agent-template", { template });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voice-agent-template"] });
+    },
+    onError: (error: Error) => {
+      throw error; // Let the calling function handle the error
+    },
+  });
+
   // Update Vapi agent configuration mutation
   const updateVapiAgentMutation = useMutation({
     mutationFn: async (config: typeof vapiConfig) => {
@@ -286,7 +300,7 @@ Condition: \${patient.condition}
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Voice agent configuration updated successfully!",
+        description: "Voice agent configuration updated successfully! Changes will apply to all new calls.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/vapi/agent"] });
     },
@@ -502,31 +516,16 @@ Condition: \${patient.condition}
   // Vapi Agent handlers
   const handleSaveVapiAgent = async () => {
     try {
-      // First save the template to our database
-      const templateResponse = await fetch("/api/voice-agent-template", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          template: vapiConfig.systemPrompt,
-        }),
-      });
-
-      if (!templateResponse.ok) {
-        throw new Error("Failed to save voice agent template");
+      // First, save the system prompt as Voice Agent Template to database
+      // This ensures the template is used for call variable replacement
+      if (vapiConfig.systemPrompt) {
+        await updateVoiceAgentTemplateMutation.mutateAsync(vapiConfig.systemPrompt);
       }
-
-      // Then update the VAPI agent configuration
+      
+      // Then, update the VAPI agent configuration
       updateVapiAgentMutation.mutate(vapiConfig);
-
-      toast({
-        title: "Template Saved",
-        description:
-          "Voice agent template saved successfully. This template will be used for all patient calls with dynamic patient data.",
-      });
     } catch (error) {
-      console.error("Error saving voice agent template:", error);
+      console.error("Error saving voice agent:", error);
       toast({
         title: "Error",
         description: "Failed to save voice agent template. Please try again.",
@@ -540,7 +539,7 @@ Condition: \${patient.condition}
       const agent = vapiAgentConfig.data;
       setVapiConfig({
         firstMessage: agent.firstMessage || "",
-        systemPrompt: agent.model?.messages?.[0]?.content || "",
+        systemPrompt: voiceAgentTemplate || agent.model?.messages?.[0]?.content || "",
         voiceProvider: agent.voice?.provider || "playht",
         voiceId: agent.voice?.voiceId || "jennifer",
         model: agent.model?.model || "gpt-4",
@@ -553,23 +552,23 @@ Condition: \${patient.condition}
   };
 
   const handleResetVapiToDefault = () => {
-    const defaultSystemPrompt = `You are a healthcare AI assistant calling PATIENT_NAME, a PATIENT_AGE-year-old patient with PATIENT_CONDITION.
+    const defaultSystemPrompt = `You are a healthcare AI assistant calling {{patientName}}, a {{patientAge}}-year-old patient with {{patientCondition}}.
 
 PATIENT INFORMATION:
-- Name: PATIENT_NAME
-- Age: PATIENT_AGE
-- Primary Condition: PATIENT_CONDITION
+- Name: {{patientName}}
+- Age: {{patientAge}}
+- Primary Condition: {{patientCondition}}
 
 LATEST CARE ASSESSMENT:
-PATIENT_PROMPT
+{{patientPrompt}}
 
-CONVERSATION_HISTORY
+{{conversationHistory}}
 
 CALL INSTRUCTIONS:
 - You are calling on behalf of their healthcare team
 - Be warm, professional, and empathetic in your approach
-- Address the patient by their name (PATIENT_NAME)
-- Reference their specific health condition (PATIENT_CONDITION) and any concerns mentioned above
+- Address the patient by their name ({{patientName}})
+- Reference their specific health condition ({{patientCondition}}) and any concerns mentioned above
 - Ask about their current symptoms, medication adherence, and overall well-being
 - Provide appropriate health guidance based on their condition and the care assessment
 - Offer to schedule follow-up appointments if needed
@@ -841,24 +840,23 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                   </p>
                   <div className="grid grid-cols-2 gap-2 text-xs text-blue-600 font-mono">
                     <div>
-                      <code>PATIENT_NAME</code> - Patient's full name
+                      <code>{`{{patientName}}`}</code> - Patient's full name
                     </div>
                     <div>
-                      <code>PATIENT_AGE</code> - Patient's age
+                      <code>{`{{patientAge}}`}</code> - Patient's age
                     </div>
                     <div>
-                      <code>PATIENT_CONDITION</code> - Patient's medical
-                      condition
+                      <code>{`{{patientCondition}}`}</code> - Patient's medical condition
                     </div>
                     <div>
-                      <code>PATIENT_PROMPT</code> - Latest generated care prompt
+                      <code>{`{{patientPrompt}}`}</code> - Latest generated care prompt
                     </div>
                     <div>
-                      <code>CONVERSATION_HISTORY</code> - Previous call history
+                      <code>{`{{conversationHistory}}`}</code> - Previous call history
                     </div>
                   </div>
                   <p className="text-xs text-blue-600 mt-2">
-                    ⚠️ Note: These placeholders will be replaced with actual
+                    ⚠️ Note: These variables will be replaced with actual
                     patient data when making calls.
                   </p>
                 </div>
@@ -1102,8 +1100,8 @@ IMPORTANT: You have access to their latest health data and personalized care rec
                   <span className="text-amber-600 font-medium">
                     ⚠️ Note:
                   </span>{" "}
-                  Any dynamic patient context placeholders (PATIENT_NAME,
-                  PATIENT_AGE, etc.) will be spoken literally since no patient
+                  Any dynamic patient context variables ({`{{patientName}}`},{" "}
+                  {`{{patientAge}}`}, etc.) will be spoken literally since no patient
                   batch is attached to test calls.
                 </p>
               </div>
@@ -1112,7 +1110,7 @@ IMPORTANT: You have access to their latest health data and personalized care rec
               <div className="flex gap-2 flex-wrap">
                 <Button
                   onClick={handleSaveVapiAgent}
-                  disabled={updateVapiAgentMutation.isPending || isVapiLoading}
+                  disabled={updateVapiAgentMutation.isPending || updateVoiceAgentTemplateMutation.isPending || isVapiLoading}
                   className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
                 >
                   <Save className="w-4 h-4 mr-2" />
@@ -1138,10 +1136,11 @@ IMPORTANT: You have access to their latest health data and personalized care rec
               </div>
 
               {(updateVapiAgentMutation.isPending ||
+                updateVoiceAgentTemplateMutation.isPending ||
                 testCallMutation.isPending) && (
                 <Alert>
                   <AlertDescription>
-                    {updateVapiAgentMutation.isPending
+                    {updateVapiAgentMutation.isPending || updateVoiceAgentTemplateMutation.isPending
                       ? "Saving voice agent configuration..."
                       : "Initiating test call..."}
                   </AlertDescription>
