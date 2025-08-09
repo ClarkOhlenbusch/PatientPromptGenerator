@@ -15,6 +15,7 @@
 - **Legacy Support**: Maintained `/api/vapi/triage-call` for backward compatibility
 - **Improved Error Handling**: Better user feedback and graceful failure handling
 - **Test Call Endpoint**: Added `/api/vapi/test-call` for testing Voice Agent templates with mock patient data
+- **Model Defaults Update**: Set default OpenAI model to `gpt-5-mini` for AI Triage prompt generation and Trend Reports.
 
 #### Frontend Changes ✅  
 - **Simplified Interface**: Removed duplicate companion/triage call sections

@@ -42,7 +42,7 @@ Your task is to:
    For the provided data, extract a final insights paragraph that should make reference to the patient's condition.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",

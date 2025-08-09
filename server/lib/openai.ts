@@ -221,7 +221,7 @@ async function generatePatientMessageInternal(
 
     // Generate a new patient message using OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-nano",
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",
@@ -294,7 +294,7 @@ export async function generatePrompt(
 
     // Generate a new prompt using OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-nano",
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",
@@ -411,7 +411,7 @@ export async function generatePatientMessage(
 
     // Generate a new patient message using OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-nano",
+      model: "gpt-5-mini",
       messages: [
         {
           role: "system",
@@ -504,7 +504,7 @@ async function generatePlaceholders(
       totalApiCalls++;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4.1-nano",
+        model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

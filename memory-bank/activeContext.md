@@ -66,7 +66,7 @@
 - **Assistant ID**: d289d8be-be92-444e-bb94-b4d25b601f82
 - **Phone Number**: +16174020024 (ID: f412bd32-9764-4d70-94e7-90f87f84ef08)
 - **Voice**: "Kylie" with eleven_turbo_v2_5
-- **Model**: GPT-4o-mini for conversations
+- **Model**: GPT-4o-mini for conversations; GPT-5-Mini as default for AI Triage prompt generation and Trend Reports
 - **Transcriber**: Deepgram nova-3
 
 ### Template Variables (Used in ALL calls)
@@ -96,7 +96,7 @@
 - ✅ Voice Agent template management and editing
 - ✅ Real-time VAPI call initiation with enhanced prompts
 - ✅ Webhook processing for call completion analytics  
-- ✅ AI-powered conversation summarization (GPT-4o-mini)
+- ✅ AI-powered conversation summarization (GPT-4o-mini) and default model set to GPT-5-Mini for triage prompts and trend reports
 - ✅ Call history storage with health insights
 - ✅ Patient data management and batch processing
 - ✅ Context preview functionality

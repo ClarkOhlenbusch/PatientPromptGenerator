@@ -41,7 +41,9 @@
   - Assistant ID: (CalicoCareAgent)
   - Phone Number ID:
   - API Base: `https://api.vapi.ai`
-- **OpenAI GPT-4o-mini**: AI text processing and summarization
+- **OpenAI**:
+  - GPT-5-Mini: Default for AI Triage prompt generation and Trend Reports
+  - GPT-4o-mini: Conversation summarization
 - **Twilio 5.5.2**: SMS notifications and alerts
 - **WebSocket (ws 8.18.0)**: Real-time communication
 

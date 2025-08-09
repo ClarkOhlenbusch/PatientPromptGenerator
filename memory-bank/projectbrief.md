@@ -23,7 +23,7 @@ This is a healthcare AI system that provides comprehensive patient care through 
 - **Backend**: Node.js + Express + TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
 - **Voice AI**: Vapi AI Voice agents with webhooks
-- **AI Processing**: OpenAI GPT-4o-mini for text analysis and summaries
+ - **AI Processing**: OpenAI GPT-5-Mini for AI Triage and Trend Reports; GPT-4o-mini for conversation summaries
 - **SMS**: Twilio for healthcare alerts
 - **Authentication**: Express sessions with passport
 

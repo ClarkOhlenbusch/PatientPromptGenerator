@@ -9,7 +9,8 @@
       "alwaysAllow": [
         "get_api_reference",
         "search_documentation",
-        "get_examples"
+        "get_examples",
+        "get_guides"
       ]
     },
     "context7": {
