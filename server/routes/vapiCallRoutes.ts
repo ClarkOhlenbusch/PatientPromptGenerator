@@ -243,6 +243,11 @@ export function registerVapiCallRoutes(app: Express): void {
   // Unified call endpoint - replaces both companion and triage calls
   app.post("/api/vapi/call", async (req: Request, res: Response) => {
     try {
+      // Log the complete incoming request data
+      console.log("🎯 [DEBUG] Incoming request to /api/vapi/call:");
+      console.log("🎯 [DEBUG] Request body:", JSON.stringify(req.body, null, 2));
+      console.log("🎯 [DEBUG] Request headers:", JSON.stringify(req.headers, null, 2));
+
       if (!req.isAuthenticated()) {
         return res.status(401).json({
           success: false,
@@ -405,6 +410,15 @@ export function registerVapiCallRoutes(app: Express): void {
 
       console.log(`🔑 Using VAPI ${keyType} key for unified call`);
 
+      // Log the complete data being sent to VAPI API
+      console.log("🚀 [DEBUG] Data being sent to VAPI API:");
+      console.log("🚀 [DEBUG] VAPI request payload:", JSON.stringify(callRequest, null, 2));
+      console.log("🚀 [DEBUG] VAPI endpoint:", "https://api.vapi.ai/call");
+      console.log("🚀 [DEBUG] VAPI headers:", {
+        "Authorization": `Bearer ${apiKey?.substring(0, 10)}...`,
+        "Content-Type": "application/json"
+      });
+
       // Make call to VAPI
       const vapiResponse = await fetch("https://api.vapi.ai/call", {
         method: "POST",
@@ -415,8 +429,13 @@ export function registerVapiCallRoutes(app: Express): void {
         body: JSON.stringify(callRequest),
       });
 
+      // Log VAPI response details
+      console.log("📡 [DEBUG] VAPI response status:", vapiResponse.status);
+      console.log("📡 [DEBUG] VAPI response headers:", Object.fromEntries(vapiResponse.headers));
+
       if (!vapiResponse.ok) {
         const errorData = await vapiResponse.json();
+        console.error("❌ [DEBUG] VAPI unified call error response:", JSON.stringify(errorData, null, 2));
         console.error(`❌ VAPI unified call error:`, {
           status: vapiResponse.status,
           statusText: vapiResponse.statusText,
@@ -432,6 +451,7 @@ export function registerVapiCallRoutes(app: Express): void {
       }
 
       const callData = await vapiResponse.json();
+      console.log("✅ [DEBUG] VAPI success response:", JSON.stringify(callData, null, 2));
       console.log("📞 ✅ Unified call initiated successfully:", callData.id);
 
       return res.status(200).json({
